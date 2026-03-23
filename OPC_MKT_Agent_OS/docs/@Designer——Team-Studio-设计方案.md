@@ -1,0 +1,420 @@
+# Team Studio 统一视图设计方案
+
+> 完成时间: 2026-03-23
+> 参与人员: @Designer (UI设计师)
+> 目标: 将 Monitor + 执行模式合并为统一的 Team Studio 视图，提升直观性和操作效率
+
+---
+
+## 背景分析
+
+### 现有问题
+1. Monitor 和执行模式是两个独立 Tab，切换割裂，信息不连贯
+2. 执行模式卡片太小，9 个 Agent 挤在一起不够直观
+3. Agent 间的调度关系（CEO → 子 Agent）没有可视化呈现
+4. 命令输入、Agent 状态、产出内容分散在不同区域
+
+### 设计目标
+- 一屏内同时看到：命令输入 + 全部 Agent 状态 + 实时产出
+- Agent 间调度关系可视化
+- 点击 Agent 可展开详细内容
+- 保持 Cotify 暗色主题一致性
+
+---
+
+## 方案 A — Dashboard Monitor 风格（作战指挥室）
+
+### 1. 页面布局
+
+#### 整体结构（Desktop 1280px+）
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ HEADER BAR                                                         │
+│ [Logo] Team Studio    [Status: 9 Agents Online]   [Settings] [?]   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌─────────────────────── HERO COMMAND BAR ──────────────────────┐  │
+│  │  $ 输入你的营销需求，CEO 将自动拆解并调度团队执行...   [发送]  │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+│  ┌─── CEO 核心卡片（居中大卡）──────────────────────────────────┐  │
+│  │  [CEO像素头像]  CEO 营销总监                                   │  │
+│  │  状态: 思考中... | 已调度: XHS, Growth, Reviewer              │  │
+│  │  ──────── 调度连线 ────────                                    │  │
+│  │     ↓         ↓         ↓                                      │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+│  ┌─────────── 子 Agent 卡片网格 (3x3) ──────────────────────────┐  │
+│  │                                                                 │  │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐          │  │
+│  │  │  XHS    │  │ Analyst │  │ Growth  │  │Reviewer │          │  │
+│  │  │ ●运行中 │  │ ○空闲   │  │ ●运行中 │  │ ○等待   │          │  │
+│  │  │ 写笔记  │  │         │  │ 选题中  │  │         │          │  │
+│  │  │ ━━━━░░ │  │         │  │ ━━━░░░ │  │         │          │  │
+│  │  └─────────┘  └─────────┘  └─────────┘  └─────────┘          │  │
+│  │                                                                 │  │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐          │  │
+│  │  │ Podcast │  │X-Twitter│  │ Visual  │  │Strategst│          │  │
+│  │  │ ○离线   │  │ ○离线   │  │ ○离线   │  │ ○离线   │          │  │
+│  │  └─────────┘  └─────────┘  └─────────┘  └─────────┘          │  │
+│  │                                                                 │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+│  ┌──── 底部面板（可折叠）───────────────────────────────────────┐  │
+│  │ [Terminal 日志]  |  [选中 Agent 的详细产出]                    │  │
+│  │  14:30:02 [CEO] 分配任务给 XHS...                             │  │
+│  │  14:30:05 [XHS] 开始撰写笔记...                               │  │
+│  │  14:30:12 [Growth] 完成选题分析                                │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Tablet (768px - 1279px)
+
+```
+┌──────────────────────────────────┐
+│ HEADER BAR                        │
+├──────────────────────────────────┤
+│ [COMMAND BAR - 全宽]              │
+├──────────────────────────────────┤
+│ [CEO 卡片 - 全宽横条]            │
+│  CEO → XHS, Growth, Reviewer     │
+├──────────────────────────────────┤
+│ ┌────────┐ ┌────────┐ ┌────────┐│
+│ │  XHS   │ │Analyst │ │ Growth ││
+│ └────────┘ └────────┘ └────────┘│
+│ ┌────────┐ ┌────────┐ ┌────────┐│
+│ │Reviewer│ │Podcast │ │X-Twit  ││
+│ └────────┘ └────────┘ └────────┘│
+│ ┌────────┐ ┌────────┐           │
+│ │ Visual │ │Strateg │           │
+│ └────────┘ └────────┘           │
+├──────────────────────────────────┤
+│ [底部面板 - 全宽]                │
+└──────────────────────────────────┘
+```
+
+#### Mobile (375px)
+
+```
+┌──────────────────┐
+│ Team Studio   [≡]│
+├──────────────────┤
+│ [COMMAND BAR]    │
+├──────────────────┤
+│ [CEO 卡片]       │
+│   ↓ 调度 3 个    │
+├──────────────────┤
+│ [XHS] ● 运行中  │
+│ [Analyst] ○ 空闲 │
+│ [Growth] ● 运行  │
+│ [Reviewer] ○ 等待│
+│ ... 可滚动       │
+├──────────────────┤
+│ [日志面板-折叠]  │
+└──────────────────┘
+```
+
+### 2. 组件规范
+
+| 组件 | 样式描述 | Tailwind 类名参考 | 交互状态 |
+|------|----------|-------------------|----------|
+| **Hero Command Bar** | 居中大输入框，monospace 字体，左侧 `$` 提示符，紫色发光边框 | `mx-auto max-w-3xl px-6 py-4 rounded-2xl border border-[rgba(167,139,250,0.2)] bg-[#0a0a0f]` | focus: `border-[#a78bfa] shadow-[0_0_20px_rgba(167,139,250,0.15)]`; disabled 时 opacity-50 |
+| **CEO Core Card** | 全宽大卡片，顶部红色边框，内含调度关系连线动画 | `w-full p-6 rounded-2xl bg-[#0a0a0f] border border-[rgba(255,255,255,0.08)] border-t-[3px] border-t-[#e74c3c]` | running: 呼吸光晕 `radial-gradient(#e74c3c12, transparent)` |
+| **Agent Grid Card** | 固定高度卡片，顶部品牌色边框，含像素头像 + 状态灯 + 进度条 + 当前任务 | `p-4 rounded-xl bg-[#0a0a0f] border border-[rgba(255,255,255,0.08)] border-t-[3px] min-h-[140px]` | hover: `border-[rgba(255,255,255,0.12)] -translate-y-1 shadow-[0_20px_60px_rgba(0,0,0,0.4)]`; click: 展开底部面板显示该 Agent 详情 |
+| **Status Dot** | 圆形状态指示灯 | `w-2.5 h-2.5 rounded-full` | idle: `bg-[#22c55e]`; running: `bg-[#fbbf24] animate-pulse`; done: `bg-[#22c55e]`; error: `bg-[#ef4444]`; offline: `bg-[rgba(255,255,255,0.15)]` |
+| **Progress Bar** | 窄进度条在卡片内 | `h-1 rounded-full bg-[rgba(255,255,255,0.06)]` 内部 `h-full rounded-full` | running: 渐变动画; done: `bg-[#22c55e]`; error: `bg-[#ef4444]` |
+| **调度连线** | CEO 到子 Agent 的虚线连接，running 时有流光动画 | CSS 伪元素或 SVG path, `stroke-dasharray: 4 4; stroke: agent.color; opacity: 0.3` | active: `opacity: 0.8; animation: dash-flow 1.5s linear infinite` |
+| **底部面板** | 左右分栏：Terminal 日志 + Agent 产出内容 | `h-[200px] bg-[rgba(10,10,15,0.9)] backdrop-blur-xl border-t border-[rgba(255,255,255,0.06)]` | 可拖拽调整高度; 可折叠 |
+| **Terminal 日志行** | monospace 字体，时间戳 + Agent 标签 + 消息 | `text-xs font-mono leading-relaxed px-3 py-[3px]` | agent-to-agent 消息有左侧品牌色边框 |
+
+### 3. 配色方案
+
+沿用 Cotify 暗色主题：
+
+| 用途 | 色值 | CSS 变量/说明 |
+|------|------|---------------|
+| 页面背景 | `#030305` | `--background` |
+| 卡片背景 | `#0a0a0f` | `--card` |
+| 主 Accent | `#a78bfa` | `--primary` 紫色 |
+| 边框 | `rgba(255,255,255,0.08)` | `--border` |
+| 正文白 | `#ffffff` | `--foreground` |
+| 次要文字 | `rgba(255,255,255,0.6)` | `--muted-foreground` |
+| 弱化文字 | `rgba(255,255,255,0.3)` | 时间戳、辅助信息 |
+| 成功/空闲 | `#22c55e` | 状态灯、完成标记 |
+| 运行中 | `#fbbf24` | 进度条、工作状态 |
+| 错误 | `#ef4444` | 错误提示 |
+| Agent 品牌色 | 各自定义 | CEO `#e74c3c`, XHS `#ff2442`, Analyst `#22d3ee`, Growth `#00cec9`, Reviewer `#a855f7`, Podcast `#f59e0b`, X-Twitter `#1da1f2`, Visual `#ec4899`, Strategist `#8b5cf6` |
+
+### 4. 字体层级
+
+| 层级 | 字号 | 字重 | 行高 | 用途 |
+|------|------|------|------|------|
+| 页面标题 | 18px / `text-lg` | 700 | 1.4 | "Team Studio" Header |
+| 卡片名称 | 15px / `text-[15px]` | 600 | 1.3 | Agent 名称 |
+| 状态文字 | 13px / `text-[13px]` | 500 | 1.5 | "运行中"、当前任务 |
+| Mono 小字 | 12px / `text-xs` | 400 | 1.6 | Terminal 日志、时间戳、工具名 |
+| 输入框 | 15px / `text-[15px]` | 400 | 1.5 | Command Bar 输入文字 |
+
+全部使用 `font-sans` (Geist Sans)，Terminal 区域使用 `font-mono` (Geist Mono)。
+
+### 5. 交互设计
+
+#### 5.1 命令发送流程
+1. 用户在 Hero Command Bar 输入需求，按 Enter 或点击发送
+2. CEO 卡片立即切换为 `running` 状态，呼吸光晕激活
+3. CEO 分析完毕后，调度连线动画从 CEO 流向被调度的子 Agent
+4. 子 Agent 卡片依次切换为 `running`，进度条开始流动
+5. Agent 完成后状态变为 `done`，进度条满格绿色
+
+#### 5.2 Agent 卡片点击
+- 单击 Agent 卡片 → 底部面板右侧切换为该 Agent 的实时产出流
+- 产出区域显示 Markdown 格式的内容，自动滚动到最新
+- 再次点击同一卡片 → 取消选中，底部面板恢复为全局概览
+
+#### 5.3 调度连线动画
+- CEO 到子 Agent 之间画虚线 SVG 路径
+- idle 状态：浅灰虚线 `opacity: 0.15`
+- 调度激活时：虚线变为 Agent 品牌色，流光动画 `stroke-dashoffset` 循环
+- 使用 `@keyframes dash-flow { to { stroke-dashoffset: -20px } }` 1.5s linear infinite
+
+#### 5.4 状态变化过渡
+- 所有状态切换使用 `transition-all duration-300 ease-out`
+- running 卡片：border-color 渐变到 `agent.color + 40`，box-shadow 出现发光
+- done 卡片：进度条变绿，绿色对勾图标 scale-in `animate-in zoom-in duration-300`
+- error 卡片：shake 动画 0.4s + 红色闪烁
+
+#### 5.5 底部面板
+- 默认高度 200px，可通过拖拽 handle 调整（min 40px, max 400px）
+- 折叠态只显示标题栏 "Terminal | 3 events"
+- 左侧 Terminal 日志自动滚动，用户上滚后暂停自动滚动
+
+#### 5.6 加载/空/错误状态
+- **空状态**: Agent 网格全部显示 `offline`，底部面板显示 "等待指令..."
+- **加载中**: 被调度的 Agent 卡片显示 skeleton pulse
+- **错误**: 卡片 shake + 红色 border + 底部面板显示错误详情
+- **全部完成**: 所有卡片变为 `done`，底部面板显示最终汇总
+
+### 6. 响应式适配
+
+| 断点 | 布局变化 |
+|------|----------|
+| Desktop (>= 1280px) | CEO 大卡居中 + 子 Agent 4 列网格 + 底部双栏面板 |
+| Tablet (768-1279px) | CEO 横条 + 子 Agent 3 列网格 + 底部单栏面板（Tab 切换日志/产出） |
+| Mobile (< 768px) | Command Bar 全宽 + CEO 卡片 + Agent 列表（单列卡片）+ 底部面板折叠为 sheet |
+
+Agent 网格：
+- `grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3`
+
+---
+
+## 方案 B — 协作工作流风格（项目管理工具）
+
+### 1. 页面布局
+
+#### 整体结构（Desktop 1280px+）
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ HEADER BAR                                                         │
+│ [Logo] Team Studio    [Status: 9 Online]         [Settings] [?]    │
+├──────────┬──────────────────────────────┬──────────────────────────┤
+│          │                              │                          │
+│  AGENT   │     TASK TIMELINE            │   AGENT DETAIL PANEL     │
+│  LIST    │     (中间主区域)              │   (右侧详情面板)          │
+│          │                              │                          │
+│ ┌──────┐ │  ┌─ 14:30 ──────────────┐   │  ┌──────────────────┐   │
+│ │●CEO  │ │  │ CEO 接收需求          │   │  │ [XHS 像素头像]   │   │
+│ │ 调度中│ │  │ "帮我写小红书笔记"   │   │  │ 小红书创作专家   │   │
+│ ├──────┤ │  └───────────────────────┘   │  │ ● 运行中         │   │
+│ │●XHS  │ │  ┌─ 14:31 ──────────────┐   │  ├──────────────────┤   │
+│ │ 写笔记│ │  │ CEO → Growth: 选题   │   │  │ 当前任务:        │   │
+│ ├──────┤ │  │ CEO → XHS: 创作      │   │  │ 撰写种草笔记     │   │
+│ │○Anlst│ │  │ CEO → Reviewer: 待命  │   │  ├──────────────────┤   │
+│ │ 空闲  │ │  └───────────────────────┘   │  │ 实时产出:        │   │
+│ ├──────┤ │  ┌─ 14:32 ──────────────┐   │  │ # 标题           │   │
+│ │●Grwth│ │  │ XHS 开始创作          │   │  │ 这款面膜真的     │   │
+│ │ 选题  │ │  │ ⚙ 使用工具: Read     │   │  │ 绝了！...        │   │
+│ ├──────┤ │  └───────────────────────┘   │  │ ▌(光标闪烁)      │   │
+│ │○Revwr│ │  ┌─ 14:33 ──────────────┐   │  ├──────────────────┤   │
+│ │ 等待  │ │  │ Growth 完成选题分析   │   │  │ 工具调用:        │   │
+│ ├──────┤ │  │ ✓ 输出 3 个选题方向   │   │  │ ⚙ Read x3       │   │
+│ │○Pdcst│ │  └───────────────────────┘   │  │ ⚙ Write x1      │   │
+│ │ 离线  │ │                              │  └──────────────────┘   │
+│ ├──────┤ │                              │                          │
+│ │○X-Twt│ │                              │                          │
+│ │ 离线  │ │                              │                          │
+│ ├──────┤ │                              │                          │
+│ │○Visul│ │                              │                          │
+│ │ 离线  │ │                              │                          │
+│ ├──────┤ │                              │                          │
+│ │○Strat│ │                              │                          │
+│ │ 离线  │ │                              │                          │
+│ └──────┘ │                              │                          │
+│          │                              │                          │
+├──────────┴──────────────────────────────┴──────────────────────────┤
+│ COMMAND BAR (底部固定)                                              │
+│ $ 输入你的营销需求...                                    [发送]    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Tablet (768px - 1279px)
+
+```
+┌────────────────────────────────────┐
+│ HEADER                              │
+├─────────┬──────────────────────────┤
+│ AGENT   │  TASK TIMELINE            │
+│ LIST    │  (全高)                    │
+│ (窄)    │                            │
+│ ● CEO   │  14:30 CEO 接收需求...     │
+│ ● XHS   │  14:31 CEO → Growth...     │
+│ ○ Anlst │  14:32 XHS 创作中...       │
+│ ...     │                            │
+├─────────┴──────────────────────────┤
+│ [点击 Agent 后弹出底部 Sheet 显示详情] │
+├────────────────────────────────────┤
+│ $ COMMAND BAR                       │
+└────────────────────────────────────┘
+```
+
+#### Mobile (375px)
+
+```
+┌──────────────────┐
+│ Team Studio   [≡]│
+├──────────────────┤
+│ [Agent 横向滚动条]│
+│ ●CEO ●XHS ○Anlst│
+├──────────────────┤
+│ TASK TIMELINE    │
+│ (全屏主内容)     │
+│ 14:30 CEO...     │
+│ 14:31 XHS...     │
+│ ...              │
+├──────────────────┤
+│ $ COMMAND BAR    │
+└──────────────────┘
+点击 Agent → 全屏 Sheet
+```
+
+### 2. 组件规范
+
+| 组件 | 样式描述 | Tailwind 类名参考 | 交互状态 |
+|------|----------|-------------------|----------|
+| **Agent List Item** | 左侧窄列表项，含状态灯 + 像素头像 + 名称 + 简短状态文字 | `flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition-all` | hover: `bg-[rgba(255,255,255,0.03)]`; selected: `bg-[rgba(167,139,250,0.08)] border-l-2 border-l-[agent.color]`; running: 名称旁有 pulse 点 |
+| **Agent List Sidebar** | 固定宽度左侧栏，可滚动 | `w-[220px] shrink-0 bg-[#050508] border-r border-[rgba(255,255,255,0.06)] overflow-y-auto` | Desktop 固定显示; Mobile 变为横向滚动条 |
+| **Timeline Event** | 时间节点 + 内容卡片，左侧有时间线竖线 | `relative pl-8 pb-4` 左侧 `before:absolute before:left-3 before:top-0 before:bottom-0 before:w-px before:bg-[rgba(255,255,255,0.06)]` | 新事件 slide-in-from-bottom `animate-in duration-200`; agent-to-agent 消息带紫色左边框 |
+| **Timeline Dot** | 时间线上的节点圆点 | `absolute left-1.5 top-2 w-3 h-3 rounded-full border-2 border-[#030305]` | running: `bg-[#fbbf24] animate-pulse`; done: `bg-[#22c55e]`; error: `bg-[#ef4444]`; info: `bg-[rgba(255,255,255,0.2)]` |
+| **Timeline Card** | 事件内容卡片 | `px-4 py-3 rounded-xl bg-[#0a0a0f] border border-[rgba(255,255,255,0.08)]` | hover: `border-[rgba(255,255,255,0.12)]`; 调度事件 (CEO→子Agent) 有品牌色渐变左边框 |
+| **Detail Panel** | 右侧固定宽度详情面板，显示选中 Agent 的完整信息 | `w-[340px] shrink-0 bg-[rgba(10,10,15,0.8)] backdrop-blur-2xl border-l border-[rgba(255,255,255,0.06)]` | 切换 Agent 时内容 fade-in; 无选中时显示全局概览 |
+| **Content Stream** | 详情面板内的实时产出区域 | `flex-1 overflow-y-auto px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap` | 运行中：底部有光标闪烁 `w-1.5 h-4 bg-[agent.color] animate-pulse`; 自动滚动 |
+| **Bottom Command Bar** | 底部固定输入栏 | `fixed bottom-0 left-0 right-0 px-6 py-3 bg-[rgba(10,10,15,0.95)] backdrop-blur-2xl border-t border-[rgba(255,255,255,0.06)]` | focus 时上方出现建议命令提示 |
+| **调度关系标记** | Timeline 中 CEO 调度事件用箭头标记 | `inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md` | `CEO → XHS` 用 CEO 红色 + XHS 红色渐变背景 |
+
+### 3. 配色方案
+
+与方案 A 完全一致（沿用 Cotify 暗色主题），此处不重复。
+
+额外增加：
+
+| 用途 | 色值 | 说明 |
+|------|------|------|
+| Timeline 竖线 | `rgba(255,255,255,0.06)` | 时间线连接线 |
+| 选中态背景 | `rgba(167,139,250,0.08)` | Agent 列表选中项 |
+| 调度箭头 | Agent 品牌色 + `opacity: 0.6` | CEO → 子 Agent 调度标记 |
+
+### 4. 字体层级
+
+与方案 A 一致。额外增加：
+
+| 层级 | 字号 | 字重 | 行高 | 用途 |
+|------|------|------|------|------|
+| Timeline 时间 | 11px / `text-[11px]` | 500 | 1.4 | 事件时间标签 |
+| Timeline 正文 | 14px / `text-sm` | 400 | 1.6 | 事件内容 |
+| Detail 标题 | 16px / `text-base` | 600 | 1.4 | 详情面板 Agent 名称 |
+| Detail 内容 | 14px / `text-sm` | 400 | 1.7 | 实时产出内容流 |
+
+### 5. 交互设计
+
+#### 5.1 命令发送流程
+1. 用户在底部 Command Bar 输入需求
+2. Timeline 区域追加一条 "用户指令" 事件，紫色高亮
+3. CEO 在 Agent List 中切换为 running 状态
+4. Timeline 实时追加 CEO 的分析过程事件
+5. CEO 调度子 Agent 时，Timeline 显示带箭头的调度事件 `CEO → XHS: 撰写笔记`
+6. 被调度的 Agent 在列表中切换为 running
+7. 每个 Agent 的工具调用和产出都实时追加到 Timeline
+
+#### 5.2 Agent 选择与详情
+- 左侧点击 Agent → 右侧 Detail Panel 切换显示该 Agent 的:
+  - 像素头像 + 名称 + 状态
+  - 当前任务描述
+  - 实时内容产出流（Markdown 渲染）
+  - 工具调用记录
+- Timeline 中同时 highlight 该 Agent 的相关事件（其他 Agent 事件降低 opacity）
+- 再次点击 → 取消选中，恢复全局视图
+
+#### 5.3 Timeline 事件类型
+- **用户指令**: 紫色背景卡片，右对齐
+- **Agent 思考**: 灰色小字，无卡片
+- **调度事件**: 带品牌色渐变背景，`CEO → XHS` 标记
+- **工具调用**: 黄色小字 `⚙ Read file.md`
+- **产出结果**: 绿色左边框，可展开查看完整内容
+- **错误**: 红色左边框 + 红色文字
+
+#### 5.4 状态变化过渡
+- Agent List 状态切换: `transition-all duration-200`
+- Detail Panel 切换: `animate-in fade-in slide-in-from-right-4 duration-300`
+- Timeline 新事件: `animate-in slide-in-from-bottom-2 duration-200`
+- 调度箭头: 从 CEO 位置发出 particle 动画到目标 Agent
+
+#### 5.5 加载/空/错误状态
+- **空状态**: Timeline 显示居中提示 "输入指令，开始工作"，Agent List 全部 offline
+- **加载中**: Timeline 底部显示 typing indicator
+- **错误**: 错误事件在 Timeline 中红色高亮，Agent List 中对应 Agent 闪红
+- **全部完成**: Timeline 末尾追加 "任务完成" 总结卡片，绿色背景
+
+### 6. 响应式适配
+
+| 断点 | Agent List | Timeline | Detail Panel |
+|------|-----------|----------|-------------|
+| Desktop (>= 1280px) | 左侧 220px 固定 | 中间自适应 | 右侧 340px 固定 |
+| Tablet (768-1279px) | 左侧 180px 固定 | 中间自适应 | 底部 Sheet (点击弹出) |
+| Mobile (< 768px) | 顶部横向滚动条 | 全屏 | 全屏 Sheet (点击弹出) |
+
+Mobile 下 Agent List 变为水平滚动的 pill 按钮：
+```
+┌─────────────────────────────────┐
+│ [●CEO] [●XHS] [○Anlst] [●Grwth]│ → 可横向滚动
+└─────────────────────────────────┘
+```
+
+---
+
+## 方案对比
+
+| 维度 | 方案 A (Dashboard Monitor) | 方案 B (协作工作流) |
+|------|--------------------------|-------------------|
+| **核心隐喻** | 作战指挥室/控制台 | 项目管理工具/时间线 |
+| **信息密度** | 高（一屏看全部 Agent） | 中（需要滚动 Timeline） |
+| **调度可视化** | SVG 连线动画（直观） | Timeline 事件标记（按时间顺序） |
+| **Agent 详情** | 底部面板展开 | 右侧固定面板 |
+| **命令输入位置** | 顶部（醒目） | 底部（符合聊天习惯） |
+| **适合场景** | 监控为主，快速查看全局状态 | 追踪为主，关注任务执行过程 |
+| **实现复杂度** | 中（SVG 连线是难点） | 中低（经典三栏布局） |
+| **Mobile 体验** | 中（卡片网格需适配） | 好（Timeline 天然适配竖屏） |
+
+---
+
+## 建议
+
+两个方案各有优势：
+- **方案 A** 更适合"总览型"场景 — 一眼看到所有 Agent 状态，适合 CEO 视角的"指挥"感
+- **方案 B** 更适合"追踪型"场景 — 按时间线了解任务进展，适合需要回溯执行过程的场景
+
+也可以考虑 **混合方案**: 以方案 B 的三栏布局为基础，但在 Timeline 顶部嵌入方案 A 的 Agent 网格小卡片作为快速状态总览。
+
+等待老板确认方向后，将细化选定方案并交给 @DEV 实现。

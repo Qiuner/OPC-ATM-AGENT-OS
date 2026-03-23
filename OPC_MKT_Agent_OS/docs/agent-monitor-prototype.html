@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Monitor — OPC MKT</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --bg:        #0a0c14;
+  --bg2:       #0f1117;
+  --panel:     #13161f;
+  --border:    #1e2435;
+  --border2:   #2a2f3e;
+  --text:      #e2e8f0;
+  --muted:     #4a5568;
+  --pm:        #f43f5e;
+  --res:       #3b82f6;
+  --des:       #22c55e;
+  --dev:       #eab308;
+  --qa:        #a855f7;
+  --working:   #22c55e;
+  --idle:      #f59e0b;
+  --error:     #ef4444;
+  --offline:   #4a5568;
+  --pixel:     2px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.topbar-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #60a5fa;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px #3b82f680;
+  margin-right: 8px;
+}
+.status-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: 'Press Start 2P', monospace;
+  border: 1px solid;
+}
+.pill-working  { color: var(--working); border-color: var(--working); background: #22c55e15; }
+.pill-idle     { color: var(--idle);    border-color: var(--idle);    background: #f59e0b15; }
+.pill-error    { color: var(--error);   border-color: var(--error);   background: #ef444415; }
+.pill-offline  { color: var(--offline); border-color: var(--offline); background: #4a556815; }
+.pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill-working .pill-dot { animation: blink 1s infinite; }
+.pill-error   .pill-dot { animation: blink 0.4s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.topbar-right { margin-left: auto; display: flex; gap: 8px; }
+.btn {
+  padding: 5px 12px; font-size: 9px;
+  font-family: 'Press Start 2P', monospace;
+  background: var(--border2); border: 1px solid var(--border);
+  color: var(--muted); cursor: pointer; border-radius: 3px;
+  transition: all .2s;
+}
+.btn:hover { color: var(--text); border-color: #60a5fa; background: #60a5fa15; }
+
+/* ── MAIN LAYOUT ── */
+.main {
+  display: flex;
+  gap: 0;
+  height: calc(100vh - 53px);
+}
+
+/* ── OFFICE CANVAS ── */
+.office-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+}
+
+.office-canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--bg2);
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Zone backgrounds */
+.zone {
+  position: absolute;
+  border-radius: 6px;
+  border: 1px solid;
+}
+.zone-label {
+  position: absolute;
+  top: 6px; left: 8px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 1px;
+  opacity: 0.6;
+}
+
+.zone-work {
+  top: 24px; left: 24px; right: 24px; height: 210px;
+  background: #1a2240;
+  border-color: #2a3a6e;
+}
+.zone-work .zone-label { color: #60a5fa; }
+
+.zone-rest {
+  bottom: 24px; left: 24px; width: calc(50% - 36px); height: 160px;
+  background: #1a2a1a;
+  border-color: #2a4a2a;
+}
+.zone-rest .zone-label { color: #4ade80; }
+
+.zone-bug {
+  bottom: 24px; right: 24px; width: calc(50% - 36px); height: 160px;
+  background: #2a1a1a;
+  border-color: #6a2a2a;
+}
+.zone-bug .zone-label { color: #f87171; }
+
+.zone-entry {
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 72px; height: 80px;
+  background: #16161e;
+  border-color: var(--border2);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── FURNITURE (pixel art) ── */
+.furniture {
+  position: absolute;
+  image-rendering: pixelated;
+}
+
+/* Desks – 5 desks in work zone */
+.desk {
+  width: 64px; height: 40px;
+  position: absolute;
+  background: #3d4458;
+  border: 2px solid #4a5268;
+  border-radius: 2px;
+}
+.desk::after { /* monitor */
+  content: '';
+  position: absolute;
+  top: -22px; left: 50%; transform: translateX(-50%);
+  width: 32px; height: 20px;
+  background: #1a2840;
+  border: 2px solid #2a3a6e;
+  border-radius: 2px;
+  box-shadow: inset 0 0 8px #3b82f640;
+}
+.desk-nameplate {
+  position: absolute;
+  bottom: 2px; left: 0; right: 0;
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: var(--muted);
+}
+
+/* Sofa */
+.sofa {
+  position: absolute;
+  bottom: 44px; left: 50%; transform: translateX(-50%);
+  width: 88px; height: 32px;
+  background: #2d3a4e;
+  border: 2px solid #3d4a5e;
+  border-radius: 8px 8px 2px 2px;
+}
+.sofa::before { /* cushions */
+  content: '';
+  position: absolute;
+  top: 4px; left: 6px; right: 6px; height: 14px;
+  background: #374457;
+  border-radius: 4px;
+}
+
+/* Coffee machine */
+.coffee {
+  position: absolute;
+  bottom: 44px; right: 20px;
+  width: 24px; height: 36px;
+  background: #2d2d3e;
+  border: 2px solid var(--border2);
+  border-radius: 3px;
+}
+.coffee::after {
+  content: '☕';
+  position: absolute;
+  top: 6px; left: 50%; transform: translateX(-50%);
+  font-size: 10px;
+}
+
+/* Bug zone deco */
+.bug-deco {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  font-size: 28px;
+  opacity: 0.3;
+  animation: bugPulse 2s ease-in-out infinite;
+}
+@keyframes bugPulse {
+  0%,100% { opacity: 0.2; transform: translate(-50%,-50%) scale(1); }
+  50%      { opacity: 0.5; transform: translate(-50%,-50%) scale(1.1); }
+}
+
+/* Door */
+.door {
+  width: 28px; height: 46px;
+  background: #1e2030;
+  border: 2px solid var(--border2);
+  border-radius: 2px 2px 0 0;
+  position: relative;
+}
+.door::after {
+  content: '';
+  position: absolute;
+  top: 50%; right: 6px; transform: translateY(-50%);
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--dev);
+}
+
+/* ── PIXEL CHARACTERS ── */
+.agent {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 10;
+  cursor: pointer;
+}
+
+.agent-bubble {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 6px 6px 6px 0;
+  padding: 3px 7px;
+  font-size: 8px;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  position: relative;
+  margin-bottom: 1px;
+}
+.agent-bubble.hidden { display: none; }
+
+.agent-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  margin-bottom: 1px;
+}
+
+/* Pixel character body using box-shadow */
+.pixel-body {
+  width: 8px;
+  height: 8px;
+  position: relative;
+  image-rendering: pixelated;
+}
+
+/* We'll use inline SVG for the pixel characters */
+.pixel-svg {
+  width: 32px;
+  height: 40px;
+  image-rendering: pixelated;
+}
+
+.agent-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-top: 1px;
+}
+
+/* Status animations */
+.agent[data-status="working"] {
+  animation: typing 0.5s ease-in-out infinite alternate;
+}
+.agent[data-status="idle"] {
+  animation: breathe 2.5s ease-in-out infinite;
+}
+.agent[data-status="error"] {
+  animation: shake 0.35s linear infinite;
+  filter: drop-shadow(0 0 6px #ef444480);
+}
+.agent[data-status="offline"] {
+  opacity: 0.3;
+  filter: grayscale(1);
+  animation: none;
+}
+
+@keyframes typing {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-3px); }
+}
+@keyframes breathe {
+  0%,100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-3px); }
+  40%      { transform: translateX(3px); }
+  60%      { transform: translateX(-2px); }
+  80%      { transform: translateX(2px); }
+}
+
+/* Error pulse ring */
+.agent[data-status="error"]::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--error);
+  animation: errorRing 1s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes errorRing {
+  0%   { transform: translate(-50%,-50%) scale(0.8); opacity: 1; }
+  100% { transform: translate(-50%,-50%) scale(1.6); opacity: 0; }
+}
+
+/* ── RIGHT PANEL ── */
+.right-panel {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.panel-section {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.panel-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #60a5fa;
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+}
+
+/* Agent cards */
+.agent-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border-left: 3px solid;
+  background: var(--bg2);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.agent-card:hover { background: #1a1f2e; }
+.agent-card:last-child { margin-bottom: 0; }
+
+.card-icon {
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.card-info { flex: 1; min-width: 0; }
+.card-name {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  margin-bottom: 3px;
+}
+.card-task {
+  font-size: 9px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-status-badge {
+  font-size: 8px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Press Start 2P', monospace;
+  flex-shrink: 0;
+}
+
+/* ── TERMINAL LOGS ── */
+.logs-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+.logs-wrap::-webkit-scrollbar { width: 4px; }
+.logs-wrap::-webkit-scrollbar-track { background: var(--bg); }
+.logs-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.log-panel {
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.log-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px;
+  background: var(--bg2);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 9px;
+  user-select: none;
+}
+.log-header-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.log-header-name { font-family: 'Press Start 2P', monospace; font-size: 7px; }
+.log-header-arrow { margin-left: auto; font-size: 8px; color: var(--muted); transition: transform .2s; }
+.log-panel.collapsed .log-header-arrow { transform: rotate(-90deg); }
+
+.log-body {
+  background: #080a0f;
+  padding: 8px 10px;
+  font-size: 9px;
+  line-height: 1.8;
+  max-height: 100px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', monospace;
+}
+.log-panel.collapsed .log-body { display: none; }
+
+.log-line { display: flex; gap: 8px; }
+.log-time { color: #475569; flex-shrink: 0; }
+.log-msg-info    { color: #60a5fa; }
+.log-msg-success { color: #4ade80; }
+.log-msg-warn    { color: #fbbf24; }
+.log-msg-error   { color: #f87171; }
+.log-msg-muted   { color: #475569; }
+
+.log-cursor {
+  display: inline-block;
+  width: 6px; height: 10px;
+  background: var(--working);
+  animation: cursor 0.8s step-end infinite;
+  margin-left: 2px;
+  vertical-align: middle;
+}
+@keyframes cursor { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ── SCROLLBAR OFFICE ── */
+.office-canvas::-webkit-scrollbar { display: none; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .right-panel { width: 260px; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <span class="topbar-title">⬛ AGENT MONITOR</span>
+
+  <div class="status-pill pill-working">
+    <span class="pill-dot"></span> WORKING 2
+  </div>
+  <div class="status-pill pill-idle">
+    <span class="pill-dot"></span> IDLE 1
+  </div>
+  <div class="status-pill pill-error">
+    <span class="pill-dot"></span> ERROR 1
+  </div>
+  <div class="status-pill pill-offline">
+    <span class="pill-dot"></span> OFFLINE 1
+  </div>
+
+  <div class="topbar-right">
+    <button class="btn" onclick="simulateStatusChange()">▶ SIMULATE</button>
+    <button class="btn" onclick="refreshAll()">↺ REFRESH</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- OFFICE CANVAS -->
+  <div class="office-wrap">
+    <div class="office-canvas" id="officeCanvas">
+
+      <!-- ZONES -->
+      <div class="zone zone-work">
+        <span class="zone-label">WORK AREA</span>
+      </div>
+      <div class="zone zone-rest">
+        <span class="zone-label">REST AREA</span>
+        <div class="sofa"></div>
+        <div class="coffee"></div>
+      </div>
+      <div class="zone zone-bug">
+        <span class="zone-label">BUG ZONE</span>
+        <div class="bug-deco">🐛</div>
+      </div>
+      <div class="zone zone-entry">
+        <div class="door"></div>
+      </div>
+
+      <!-- DESKS in work zone -->
+      <div class="desk" style="top:80px;left:48px;">
+        <div class="desk-nameplate">PM</div>
+      </div>
+      <div class="desk" style="top:80px;left:136px;">
+        <div class="desk-nameplate">RES</div>
+      </div>
+      <div class="desk" style="top:80px;left:224px;">
+        <div class="desk-nameplate">DES</div>
+      </div>
+      <div class="desk" style="top:160px;left:92px;">
+        <div class="desk-nameplate">DEV</div>
+      </div>
+      <div class="desk" style="top:160px;left:180px;">
+        <div class="desk-nameplate">QA</div>
+      </div>
+
+      <!-- ── AGENT CHARACTERS ── -->
+
+      <!-- PM: working → at desk -->
+      <div class="agent" id="agent-pm" data-status="working" style="left:60px; top:48px;">
+        <div class="agent-bubble">分析Q1市场数据</div>
+        <div class="agent-name" style="color:#f43f5e">PM</div>
+        <svg class="pixel-svg" viewBox="0 0 16 20" xmlns="http://www.w3.org/2000/svg">
+          <!-- Head -->
+          <rect x="5" y="0" width="6" height="1" fill="#7c3f1e"/>
+          <rect x="4" y="1" width="8" height="4" fill="#f4c49e"/>
+          <rect x="5" y="2" width="2" height="1" fill="#1a1a1a"/>
+          <rect x="9" y="2" width="2" height="1" fill="#1a1a1a"/>
+          <rect x="6" y="4" width="4" height="1" fill="#c97b5e"/>
+          <!-- Tie -->
+          <rect x="7" y="6" width="2" height="5" fill="#f43f5e"/>
+          <!-- Body (shirt) -->
+          <rect x="4" y="5" width="8" height="7" fill="#e8e8e8"/>
+          <rect x="4" y="5" width="2" height="7" fill="#d0d0d0"/>
+          <rect x="10" y="5" width="2" height="7" fill="#d0d0d0"/>
+          <!-- Arms -->
+          <rect x="2" y="5" width="2" height="6" fill="#f4c49e"/>
+          <rect x="12" y="5" width="2" height="6" fill="#f4c49e"/>
+          <!-- Legs -->
+          <rect x="5" y="12" width="3" height="5" fill="#2d3a5e"/>
+          <rect x="8" y="12" width="3" height="5" fill="#2d3a5e"/>
+          <!-- Feet -->
+          <rect x="5" y="17" width="3" height="2" fill="#1a1a1a"/>
+          <rect x="8" y="17" width="3" height="2" fill="#1a1a1a"/>
+          <!-- Clipboard -->
+          <rect x="12" y="7" width="3" height="4" fill="#e0c9a0"/>
+          <rect x="13" y="8" width="1" height="1" fill="#8a7a5a"/>
+          <rect x="13" y="9" width="1" height="1" fill="#8a7a5a"/>
+        </svg>
+        <div class="agent-status-dot" style="background:#22c55e; box-shadow:0 0 6px #22c55e;"></div>
+      </div>
+
+      <!-- Researcher: idle → rest area -->
+      <div class="agent" id="agent-res" data-status="idle" style="left:calc(50% - 220px); bottom:56px;">
+        <div class="agent-bubble hidden">待命中</div>
+        <div class="agent-name" style="color:#3b82f6">RES</div>
+        <svg class="pixel-svg" viewBox="0 0 16 20" xmlns="http://www.w3.org/2000/svg">
+          <!-- Hair -->
+          <rect x="4" y="0" width="8" height="2" fill="#1a1a1a"/>
+          <!-- Head -->
+          <rect x="4" y="1" width="8" height="4" fill="#f4c49e"/>
+          <!-- Glasses -->
+          <rect x="4" y="2" width="3" height="2" fill="none" stroke="#3b82f6" stroke-width="0.5"/>
+          <rect x="9" y="2" width="3" height="2" fill="none" stroke="#3b82f6" stroke-width="0.5"/>
+          <rect x="7" y="3" width="2" height="1" fill="#3b82f6"/>
+          <!-- Mouth -->
+          <rect x="6" y="4" width="4" height="1" fill="#c97b5e"/>
+          <!-- Lab coat -->
+          <rect x="4" y="5" width="8" height="7" fill="#e0e0e0"/>
+          <rect x="4" y="5" width="2" height="7" fill="#c8c8c8"/>
+          <rect x="10" y="5" width="2" height="7" fill="#c8c8c8"/>
+          <!-- Blue shirt under -->
+          <rect x="6" y="6" width="4" height="5" fill="#3b82f6"/>
+          <!-- Arms -->
+          <rect x="2" y="5" width="2" height="6" fill="#f4c49e"/>
+          <rect x="12" y="5" width="2" height="6" fill="#f4c49e"/>
+          <!-- Notebook -->
+          <rect x="12" y="8" width="3" height="4" fill="#fef3c7"/>
+          <rect x="13" y="9" width="1" height="1" fill="#94a3b8"/>
+          <!-- Legs -->
+          <rect x="5" y="12" width="3" height="5" fill="#1e3a5f"/>
+          <rect x="8" y="12" width="3" height="5" fill="#1e3a5f"/>
+          <rect x="5" y="17" width="3" height="2" fill="#1a1a1a"/>
+          <rect x="8" y="17" width="3" height="2" fill="#1a1a1a"/>
+        </svg>
+        <div class="agent-status-dot" style="background:#f59e0b; box-shadow:0 0 6px #f59e0b;"></div>
+      </div>
+
+      <!-- Designer: working → at desk -->
+      <div class="agent" id="agent-des" data-status="working" style="left:236px; top:48px;">
+        <div class="agent-bubble">设计首页Banner</div>
+        <div class="agent-name" style="color:#22c55e">DES</div>
+        <svg class="pixel-svg" viewBox="0 0 16 20" xmlns="http://www.w3.org/2000/svg">
+          <!-- Purple hair -->
+          <rect x="4" y="0" width="8" height="3" fill="#7c3aed"/>
+          <rect x="3" y="1" width="1" height="3" fill="#7c3aed"/>
+          <rect x="12" y="1" width="1" height="3" fill="#7c3aed"/>
+          <!-- Head -->
+          <rect x="4" y="1" width="8" height="4" fill="#f4c49e"/>
+          <rect x="5" y="2" width="2" height="1" fill="#1a1a1a"/>
+          <rect x="9" y="2" width="2" height="1" fill="#1a1a1a"/>
+          <rect x="6" y="4" width="4" height="1" fill="#e88"/>
+          <!-- Creative outfit -->
+          <rect x="4" y="5" width="8" height="7" fill="#22c55e"/>
+          <rect x="6" y="5" width="4" height="3" fill="#16a34a"/>
+          <!-- Arms -->
+          <rect x="2" y="5" width="2" height="6" fill="#f4c49e"/>
+          <rect x="12" y="5" width="2" height="6" fill="#f4c49e"/>
+          <!-- Palette -->
+          <rect x="12" y="6" width="4" height="3" fill="#f97316"/>
+          <rect x="12" y="6" width="1" height="1" fill="#ef4444"/>
+          <rect x="13" y="6" width="1" height="1" fill="#3b82f6"/>
+          <rect x="14" y="6" width="1" height="1" fill="#22c55e"/>
+          <rect x="13" y="7" width="2" height="1" fill="#a855f7"/>
+          <!-- Legs -->
+          <rect x="5" y="12" width="3" height="5" fill="#1a1a2e"/>
+          <rect x="8" y="12" width="3" height="5" fill="#1a1a2e"/>
+          <rect x="5" y="17" width="3" height="2" fill="#1a1a1a"/>
+          <rect x="8" y="17" width="3" height="2" fill="#1a1a1a"/>
+        </svg>
+        <div class="agent-status-dot" style="background:#22c55e; box-shadow:0 0 6px #22c55e;"></div>
+      </div>
+
+      <!-- DEV: error → bug zone -->
+      <div class="agent" id="agent-dev" data-status="error" style="right:80px; bottom:60px;">
+        <div class="agent-bubble" style="color:#f87171;border-color:#ef444460;">Build failed: TypeError</div>
+        <div class="agent-name" style="color:#eab308">DEV</div>
+        <svg class="pixel-svg" viewBox="0 0 16 20" xmlns="http://www.w3.org/2000/svg">
+          <!-- Dark hood -->
+          <rect x="3" y="0" width="10" height="5" fill="#1a3a2a"/>
+          <rect x="4" y="1" width="8" height="4" fill="#f4c49e"/>
+          <rect x="5" y="2" width="2" height="1" fill="#1a1a1a"/>
+          <rect x="9" y="2" width="2" height="1" fill="#1a1a1a"/>
+          <!-- Headphones -->
+          <rect x="3" y="1" width="2" height="3" fill="#1a1a1a"/>
+          <rect x="11" y="1" width="2" height="3" fill="#1a1a1a"/>
+          <!-- Hoodie -->
+          <rect x="3" y="5" width="10" height="7" fill="#eab308"/>
+          <rect x="6" y="5" width="4" height="4" fill="#ca9a05"/>
+          <!-- Hands on keyboard -->
+          <rect x="1" y="9" width="3" height="2" fill="#f4c49e"/>
+          <rect x="12" y="9" width="3" height="2" fill="#f4c49e"/>
+          <!-- Laptop -->
+          <rect x="3" y="11" width="10" height="1" fill="#2d2d3e"/>
+          <!-- Legs -->
+          <rect x="5" y="12" width="3" height="5" fill="#1a1a2e"/>
+          <rect x="8" y="12" width="3" height="5" fill="#1a1a2e"/>
+          <rect x="5" y="17" width="3" height="2" fill="#1a1a1a"/>
+          <rect x="8" y="17" width="3" height="2" fill="#1a1a1a"/>
+          <!-- Error ! -->
+          <rect x="7" y="-3" width="2" height="4" fill="#ef4444"/>
+          <rect x="7" y="2" width="2" height="2" fill="#ef4444"/>
+        </svg>
+        <div class="agent-status-dot" style="background:#ef4444; box-shadow:0 0 8px #ef4444; animation:blink 0.4s infinite;"></div>
+      </div>
+
+      <!-- QA: offline → entrance -->
+      <div class="agent" id="agent-qa" data-status="offline" style="left:50%;top:50%;transform:translate(-50%,-50%) translateY(-24px);">
+        <div class="agent-bubble hidden"></div>
+        <div class="agent-name" style="color:#a855f7">QA</div>
+        <svg class="pixel-svg" viewBox="0 0 16 20" xmlns="http://www.w3.org/2000/svg">
+          <!-- Brown hair -->
+          <rect x="4" y="0" width="8" height="2" fill="#6b4226"/>
+          <rect x="4" y="1" width="8" height="4" fill="#f4c49e"/>
+          <rect x="5" y="2" width="2" height="1" fill="#1a1a1a"/>
+          <rect x="9" y="2" width="2" height="1" fill="#1a1a1a"/>
+          <rect x="6" y="4" width="4" height="1" fill="#c97b5e"/>
+          <!-- Orange vest -->
+          <rect x="4" y="5" width="8" height="7" fill="#f97316"/>
+          <rect x="5" y="5" width="6" height="7" fill="#ea580c"/>
+          <!-- Safety stripes -->
+          <rect x="4" y="8" width="8" height="1" fill="#fbbf24"/>
+          <!-- Arms -->
+          <rect x="2" y="5" width="2" height="6" fill="#f4c49e"/>
+          <rect x="12" y="5" width="2" height="6" fill="#f4c49e"/>
+          <!-- Clipboard -->
+          <rect x="12" y="7" width="3" height="4" fill="#e0c9a0"/>
+          <!-- Check marks -->
+          <rect x="13" y="8" width="1" height="1" fill="#22c55e"/>
+          <rect x="13" y="9" width="1" height="1" fill="#22c55e"/>
+          <!-- Safety helmet -->
+          <rect x="4" y="0" width="8" height="2" fill="#a855f7"/>
+          <rect x="3" y="1" width="10" height="1" fill="#9333ea"/>
+          <!-- Legs -->
+          <rect x="5" y="12" width="3" height="5" fill="#1e3a5f"/>
+          <rect x="8" y="12" width="3" height="5" fill="#1e3a5f"/>
+          <rect x="5" y="17" width="3" height="2" fill="#1a1a1a"/>
+          <rect x="8" y="17" width="3" height="2" fill="#1a1a1a"/>
+        </svg>
+        <div class="agent-status-dot" style="background:#4a5568;"></div>
+      </div>
+
+    </div><!-- /office-canvas -->
+
+    <!-- TERMINAL LOGS STRIP (bottom of office) -->
+    <div style="height:180px; background:var(--bg2); border-top:1px solid var(--border); overflow-y:auto; padding:8px 12px; display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto;">
+
+      <div class="log-panel" style="min-width:200px; flex:1;">
+        <div class="log-header" onclick="toggleLog(this)">
+          <span class="log-header-dot" style="background:#f43f5e;"></span>
+          <span class="log-header-name">PM</span>
+          <span style="font-size:9px;color:var(--muted);flex:1;margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">分析Q1市场数据</span>
+          <span class="log-header-arrow">▼</span>
+        </div>
+        <div class="log-body">
+          <div class="log-line"><span class="log-time">09:42:01</span><span class="log-msg-info">[PM] 接收任务: 分析Q1市场数据</span></div>
+          <div class="log-line"><span class="log-time">09:42:03</span><span class="log-msg-muted">[PM] 加载数据源...</span></div>
+          <div class="log-line"><span class="log-time">09:42:07</span><span class="log-msg-success">[PM] 数据加载完成: 2847 条记录</span></div>
+          <div class="log-line"><span class="log-time">09:42:09</span><span class="log-msg-info">[PM] 正在分析趋势...</span></div>
+          <div class="log-line"><span class="log-time">09:42:15</span><span class="log-msg-info">[PM] 发现3个关键趋势 <span class="log-cursor"></span></span></div>
+        </div>
+      </div>
+
+      <div class="log-panel" style="min-width:200px; flex:1;">
+        <div class="log-header" onclick="toggleLog(this)">
+          <span class="log-header-dot" style="background:#3b82f6;"></span>
+          <span class="log-header-name">RESEARCHER</span>
+          <span style="font-size:9px;color:var(--muted);flex:1;margin-left:8px;">idle</span>
+          <span class="log-header-arrow">▼</span>
+        </div>
+        <div class="log-body">
+          <div class="log-line"><span class="log-time">09:38:12</span><span class="log-msg-success">[RES] 完成竞品调研报告</span></div>
+          <div class="log-line"><span class="log-time">09:38:30</span><span class="log-msg-muted">[RES] 进入待命状态</span></div>
+          <div class="log-line"><span class="log-time">09:38:30</span><span class="log-msg-muted">[RES] 等待新任务...</span></div>
+        </div>
+      </div>
+
+      <div class="log-panel" style="min-width:200px; flex:1;">
+        <div class="log-header" onclick="toggleLog(this)">
+          <span class="log-header-dot" style="background:#22c55e;"></span>
+          <span class="log-header-name">DESIGNER</span>
+          <span style="font-size:9px;color:var(--muted);flex:1;margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">设计首页Banner</span>
+          <span class="log-header-arrow">▼</span>
+        </div>
+        <div class="log-body">
+          <div class="log-line"><span class="log-time">09:41:00</span><span class="log-msg-info">[DES] 开始设计首页Banner</span></div>
+          <div class="log-line"><span class="log-time">09:41:12</span><span class="log-msg-muted">[DES] 生成配色方案...</span></div>
+          <div class="log-line"><span class="log-time">09:41:20</span><span class="log-msg-info">[DES] 输出3个布局变体</span></div>
+          <div class="log-line"><span class="log-time">09:41:33</span><span class="log-msg-info">[DES] 精修细节中 <span class="log-cursor"></span></span></div>
+        </div>
+      </div>
+
+      <div class="log-panel" style="min-width:200px; flex:1;">
+        <div class="log-header" onclick="toggleLog(this)">
+          <span class="log-header-dot" style="background:#ef4444; animation:blink 0.4s infinite;"></span>
+          <span class="log-header-name">DEV</span>
+          <span style="font-size:9px;color:#f87171;flex:1;margin-left:8px;">⚠ ERROR</span>
+          <span class="log-header-arrow">▼</span>
+        </div>
+        <div class="log-body">
+          <div class="log-line"><span class="log-time">09:40:01</span><span class="log-msg-info">[DEV] 开始构建: npm run build</span></div>
+          <div class="log-line"><span class="log-time">09:40:08</span><span class="log-msg-muted">[DEV] 编译 TypeScript...</span></div>
+          <div class="log-line"><span class="log-time">09:40:15</span><span class="log-msg-error">[DEV] ✗ TypeError: Cannot read property of undefined</span></div>
+          <div class="log-line"><span class="log-time">09:40:15</span><span class="log-msg-error">[DEV] at agent-monitor.tsx:142:18</span></div>
+          <div class="log-line"><span class="log-time">09:40:15</span><span class="log-msg-warn">[DEV] Build failed. 1 error found.</span></div>
+        </div>
+      </div>
+
+      <div class="log-panel collapsed" style="min-width:200px; flex:1;">
+        <div class="log-header" onclick="toggleLog(this)">
+          <span class="log-header-dot" style="background:#4a5568;"></span>
+          <span class="log-header-name">QA</span>
+          <span style="font-size:9px;color:var(--muted);flex:1;margin-left:8px;">offline</span>
+          <span class="log-header-arrow">▼</span>
+        </div>
+        <div class="log-body">
+          <div class="log-line"><span class="log-time">09:20:00</span><span class="log-msg-muted">[QA] 已下线</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /office-wrap -->
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <div class="panel-section">
+      <div class="panel-title">▸ AGENT STATUS</div>
+
+      <!-- PM Card -->
+      <div class="agent-card" style="border-left-color:#f43f5e;" onclick="focusAgent('pm')">
+        <div class="card-icon" style="background:#f43f5e20; color:#f43f5e;">👔</div>
+        <div class="card-info">
+          <div class="card-name">PM</div>
+          <div class="card-task">分析Q1市场数据</div>
+        </div>
+        <div class="card-status-badge" style="background:#22c55e20;color:#22c55e;">WORK</div>
+      </div>
+
+      <!-- Researcher Card -->
+      <div class="agent-card" style="border-left-color:#3b82f6;" onclick="focusAgent('res')">
+        <div class="card-icon" style="background:#3b82f620; color:#3b82f6;">🔬</div>
+        <div class="card-info">
+          <div class="card-name">RESEARCHER</div>
+          <div class="card-task">等待新任务...</div>
+        </div>
+        <div class="card-status-badge" style="background:#f59e0b20;color:#f59e0b;">IDLE</div>
+      </div>
+
+      <!-- Designer Card -->
+      <div class="agent-card" style="border-left-color:#22c55e;" onclick="focusAgent('des')">
+        <div class="card-icon" style="background:#22c55e20; color:#22c55e;">🎨</div>
+        <div class="card-info">
+          <div class="card-name">DESIGNER</div>
+          <div class="card-task">设计首页Banner</div>
+        </div>
+        <div class="card-status-badge" style="background:#22c55e20;color:#22c55e;">WORK</div>
+      </div>
+
+      <!-- DEV Card -->
+      <div class="agent-card" style="border-left-color:#ef4444;" onclick="focusAgent('dev')">
+        <div class="card-icon" style="background:#ef444420; color:#ef4444;">💻</div>
+        <div class="card-info">
+          <div class="card-name">DEV</div>
+          <div class="card-task" style="color:#f87171;">Build failed: TypeError</div>
+        </div>
+        <div class="card-status-badge" style="background:#ef444420;color:#ef4444;">ERR</div>
+      </div>
+
+      <!-- QA Card -->
+      <div class="agent-card" style="border-left-color:#4a5568; opacity:.5;" onclick="focusAgent('qa')">
+        <div class="card-icon" style="background:#4a556820; color:#4a5568;">🛡</div>
+        <div class="card-info">
+          <div class="card-name">QA</div>
+          <div class="card-task">未上线</div>
+        </div>
+        <div class="card-status-badge" style="background:#4a556820;color:#4a5568;">OFF</div>
+      </div>
+    </div>
+
+    <div class="logs-wrap">
+      <div class="panel-title">▸ SYSTEM LOG</div>
+      <div style="font-size:9px;line-height:2;">
+        <div class="log-line"><span class="log-time">09:42:15</span><span class="log-msg-info"> PM: 发现3个关键趋势</span></div>
+        <div class="log-line"><span class="log-time">09:42:15</span><span class="log-msg-error"> DEV: Build failed</span></div>
+        <div class="log-line"><span class="log-time">09:41:33</span><span class="log-msg-info"> DES: 精修细节中</span></div>
+        <div class="log-line"><span class="log-time">09:38:30</span><span class="log-msg-success"> RES: 调研完成，进入idle</span></div>
+        <div class="log-line"><span class="log-time">09:20:00</span><span class="log-msg-muted"> QA: 下线</span></div>
+        <div class="log-line"><span class="log-time">09:15:00</span><span class="log-msg-success"> 系统启动完成</span></div>
+      </div>
+    </div>
+
+  </div><!-- /right-panel -->
+
+</div><!-- /main -->
+
+<script>
+// Toggle log collapse
+function toggleLog(header) {
+  const panel = header.closest('.log-panel');
+  panel.classList.toggle('collapsed');
+}
+
+// Focus agent (highlight + scroll)
+function focusAgent(id) {
+  const el = document.getElementById('agent-' + id);
+  if (!el) return;
+  el.style.outline = '2px solid #60a5fa';
+  el.style.outlineOffset = '4px';
+  setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; }, 1500);
+}
+
+// Simulate status change demo
+const statusCycles = {
+  pm:  ['working','idle','working'],
+  res: ['idle','working','idle'],
+  des: ['working','idle','working'],
+  dev: ['error','working','error'],
+  qa:  ['offline','idle','offline'],
+};
+const statusIdx = { pm:0, res:0, des:0, dev:0, qa:0 };
+
+function simulateStatusChange() {
+  const agents = ['pm','res','des','dev','qa'];
+  const randomAgent = agents[Math.floor(Math.random() * agents.length)];
+  const cycle = statusCycles[randomAgent];
+  statusIdx[randomAgent] = (statusIdx[randomAgent] + 1) % cycle.length;
+  const newStatus = cycle[statusIdx[randomAgent]];
+
+  const el = document.getElementById('agent-' + randomAgent);
+  if (el) {
+    el.setAttribute('data-status', newStatus);
+    // Update position based on status
+    setAgentPosition(randomAgent, newStatus);
+  }
+}
+
+// Position map [left, top/bottom, useBottom]
+const positions = {
+  pm:  { working:{left:'60px',  top:'48px',   bottom:'auto'},
+         idle:   {left:'calc(50% - 200px)', top:'auto', bottom:'60px'},
+         error:  {left:'calc(100% - 120px)', top:'auto', bottom:'64px'},
+         offline:{left:'50%', top:'50%', bottom:'auto', transform:'translate(-50%,-50%) translateY(-24px)'} },
+  res: { working:{left:'148px', top:'48px',   bottom:'auto'},
+         idle:   {left:'calc(50% - 160px)', top:'auto', bottom:'56px'},
+         error:  {left:'calc(100% - 80px)', top:'auto', bottom:'64px'},
+         offline:{left:'50%', top:'50%', bottom:'auto', transform:'translate(-50%,-50%) translateY(0)'} },
+  des: { working:{left:'236px', top:'48px',   bottom:'auto'},
+         idle:   {left:'calc(50% - 120px)', top:'auto', bottom:'56px'},
+         error:  {left:'calc(100% - 100px)', top:'auto', bottom:'96px'},
+         offline:{left:'50%', top:'50%', bottom:'auto', transform:'translate(-50%,-50%) translateY(12px)'} },
+  dev: { working:{left:'104px', top:'128px',  bottom:'auto'},
+         idle:   {left:'calc(50% - 80px)', top:'auto', bottom:'56px'},
+         error:  {left:'calc(100% - 80px)', top:'auto', bottom:'60px'},
+         offline:{left:'calc(50% + 10px)', top:'50%', bottom:'auto', transform:'translate(-50%,-50%) translateY(-12px)'} },
+  qa:  { working:{left:'192px', top:'128px',  bottom:'auto'},
+         idle:   {left:'calc(50% - 40px)', top:'auto', bottom:'56px'},
+         error:  {left:'calc(100% - 60px)', top:'auto', bottom:'96px'},
+         offline:{left:'50%', top:'50%', bottom:'auto', transform:'translate(-50%,-50%) translateY(-24px)'} },
+};
+
+function setAgentPosition(id, status) {
+  const el = document.getElementById('agent-' + id);
+  if (!el) return;
+  const pos = positions[id][status];
+  if (!pos) return;
+  el.style.left   = pos.left   || '';
+  el.style.top    = pos.top    || '';
+  el.style.bottom = pos.bottom || '';
+  el.style.transform = pos.transform || '';
+}
+
+function refreshAll() {
+  const agents = document.querySelectorAll('.agent');
+  agents.forEach(a => {
+    a.style.animation = 'none';
+    setTimeout(() => { a.style.animation = ''; }, 100);
+  });
+}
+
+// Live clock in topbar
+setInterval(() => {
+  const lines = document.querySelectorAll('.log-cursor');
+  // cursors already animated by CSS
+}, 1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "calendar": [],
+  "metadata": {
+    "platform": "xiaohongshu",
+    "accountName": "湾区虾哥",
+    "lastUpdated": "2026-03-16",
+    "schema": {
+      "description": "calendar 数组中每个条目的结构",
+      "fields": {
+        "id": "string — 唯一标识",
+        "title": "string — 内容标题",
+        "status": "draft | scheduled | published | archived",
+        "platform": "string — 发布平台（如 xiaohongshu）",
+        "scheduledDate": "string (ISO) — 计划发布时间",
+        "publishedDate": "string (ISO) | null — 实际发布时间",
+        "contentType": "图文 | 视频 | 直播",
+        "tags": "string[] — 话题标签",
+        "performanceMetrics": {
+          "views": "number — 曝光量",
+          "likes": "number — 点赞数",
+          "comments": "number — 评论数",
+          "shares": "number — 分享数",
+          "saves": "number — 收藏数"
+        },
+        "createdBy": "string — 创建该条目的 agent id"
+      }
+    }
+  }
+}

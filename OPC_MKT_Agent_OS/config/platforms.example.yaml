@@ -1,0 +1,26 @@
+platforms:
+  xiaohongshu:
+    enabled: true
+    format: "note"
+    max_length: 1000
+    cta_style: "评论关键词引导"
+  douyin:
+    enabled: true
+    format: "short_video_script"
+    max_length: 500
+    cta_style: "私信关键词"
+  shipinhao:
+    enabled: true
+    format: "video_caption"
+    max_length: 500
+    cta_style: "关注+私信"
+  x:
+    enabled: true
+    format: "thread"
+    max_length: 280
+    cta_style: "link_in_bio"
+  jike:
+    enabled: true
+    format: "post"
+    max_length: 1200
+    cta_style: "评论互动"

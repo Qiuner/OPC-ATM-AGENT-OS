@@ -1,0 +1,44 @@
+{
+  "name": "marketing-agent-os-engine",
+  "version": "0.1.0",
+  "description": "Marketing Agent OS — Claude Agent SDK 驱动的营销自动化引擎",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch scheduler.ts",
+    "start": "tsx scheduler.ts",
+    "ceo": "tsx agents/ceo.ts",
+    "xhs": "tsx agents/xhs-agent.ts",
+    "analyst": "tsx agents/analyst-agent.ts",
+    "db:migrate": "tsx db/migrate.ts",
+    "podcast": "tsx agents/podcast-agent.ts",
+    "x-twitter": "tsx agents/x-twitter-agent.ts",
+    "visual-gen": "tsx agents/visual-gen-agent.ts",
+    "strategist": "tsx agents/strategist-agent.ts",
+    "team-session": "tsx agents/team-session.ts",
+    "mcp:creatorflow": "tsx mcps/creatorflow/index.ts",
+    "mcp:xhs-data": "tsx mcps/xhs-data/index.ts",
+    "mcp:podcast-tts": "tsx mcps/podcast-tts/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.74",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@supabase/supabase-js": "^2.49.0",
+    "dotenv": "^16.5.0",
+    "node-cron": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "exports": {
+    "./agents/registry": "./agents/registry.ts",
+    "./agents/types": "./agents/types.ts",
+    "./agents/team-session": "./agents/team-session.ts"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

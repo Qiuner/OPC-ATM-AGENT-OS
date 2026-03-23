@@ -1,0 +1,1858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Monitor v2 — OPC MKT</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:ital,wght@0,400;0,600;1,400&display=swap');
+
+:root {
+  --bg:      #090b11;
+  --bg2:     #0d1018;
+  --panel:   #11141d;
+  --panel2:  #161922;
+  --border:  #1c2030;
+  --border2: #252a3a;
+  --text:    #dde2ef;
+  --muted:   #3d4560;
+  --muted2:  #5a6480;
+  --pm:   #f43f5e;
+  --res:  #3b82f6;
+  --des:  #22c55e;
+  --dev:  #eab308;
+  --qa:   #a855f7;
+  --ok:   #22c55e;
+  --idle: #f59e0b;
+  --err:  #ef4444;
+  --off:  #3d4560;
+  --r:    4px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+/* ═══ TOP BAR ═══ */
+.topbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 18px; height: 48px; flex-shrink: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-logo {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px; color: #7aa2f7;
+  text-shadow: 0 0 10px #7aa2f760;
+  letter-spacing: 1px; margin-right: 6px;
+}
+.pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 3px;
+  font-family: 'Press Start 2P', monospace; font-size: 7px;
+  border: 1px solid; cursor: default;
+}
+.pill-ok   { color: var(--ok);   border-color: #22c55e40; background: #22c55e0d; }
+.pill-idle { color: var(--idle); border-color: #f59e0b40; background: #f59e0b0d; }
+.pill-err  { color: var(--err);  border-color: #ef444440; background: #ef44440d; }
+.pill-off  { color: var(--off);  border-color: #3d456040; background: #3d45600d; }
+.pill .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.pill-ok   .dot { animation: blink 1.2s infinite; }
+.pill-err  .dot { animation: blink 0.35s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
+.topbar-right { margin-left: auto; display: flex; gap: 6px; }
+.tbtn {
+  padding: 4px 10px; font-size: 8px;
+  font-family: 'Press Start 2P', monospace;
+  background: var(--border); border: 1px solid var(--border2);
+  color: var(--muted2); cursor: pointer; border-radius: 3px;
+  transition: all .15s;
+}
+.tbtn:hover { color: var(--text); border-color: #7aa2f7; background: #7aa2f710; }
+
+/* ═══ MAIN ═══ */
+.main { flex: 1; display: flex; overflow: hidden; }
+
+/* ═══ LEFT COLUMN ═══ */
+.left-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
+
+/* ═══ OFFICE CANVAS ═══ */
+.office {
+  flex: 1; position: relative; overflow: hidden;
+  background: var(--bg2);
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ─ zones ─ */
+.zone {
+  position: absolute; border-radius: var(--r);
+  border: 1px solid; pointer-events: none;
+}
+.zone-lbl {
+  position: absolute; top: 7px; left: 10px;
+  font-family: 'Press Start 2P', monospace; font-size: 6px;
+  letter-spacing: 1.5px; opacity: .55;
+}
+.zone-work  { top:18px;left:18px;right:110px;height:46%; background:#131c33; border-color:#1e2e55; }
+.zone-work  .zone-lbl  { color:#7aa2f7; }
+.zone-rest  { bottom:18px;left:18px;right:110px;height:48%; background:#0f2214; border-color:#1a3a22; }
+.zone-rest  .zone-lbl  { color:#4ade80; }
+.zone-apt   { top:18px;right:18px;width:86px;bottom:18px; background:#0d1520; border-color:#1e2e45; border-radius:var(--r); }
+.zone-apt   .zone-lbl  { color:#93c5fd; top:auto;bottom:8px;left:0;right:0;text-align:center; }
+
+/* ─ decorative furniture ─ */
+/* DESK */
+.desk {
+  position: absolute; width: 72px; height: 44px;
+  background: linear-gradient(180deg,#3a3f55 0%,#2e3348 100%);
+  border: 2px solid #4a5070; border-radius: 3px;
+}
+/* monitor */
+.desk .mon {
+  position: absolute; top: -34px; left: 50%; transform: translateX(-50%);
+  width: 40px; height: 28px;
+  background: #0a0e1a; border: 2px solid #2a3460;
+  border-radius: 3px 3px 0 0;
+}
+.desk .mon::after { /* monitor stand */
+  content:''; position:absolute; bottom:-6px; left:50%;
+  transform:translateX(-50%);
+  width:12px; height:6px; background:#2a3048; border-radius:1px;
+}
+.desk .mon-screen {
+  position: absolute; inset: 2px;
+  border-radius: 2px; overflow: hidden;
+}
+.desk .mon-screen.code { background: #0d1117; }
+.desk .mon-screen.chart { background: #0a1a2e; }
+.desk .mon-screen::before { /* screen glow */
+  content:''; position:absolute; inset:0;
+  background: inherit;
+  box-shadow: 0 0 12px 4px currentColor;
+  opacity: .25;
+}
+.desk-nameplate {
+  position:absolute; bottom:3px; left:0; right:0;
+  text-align:center; font-family:'Press Start 2P',monospace;
+  font-size:5px; color:var(--muted2);
+}
+/* coffee cup on desk */
+.desk .cup {
+  position:absolute; top:6px; right:6px;
+  width:10px; height:11px;
+  background:#8b5e3c; border:1px solid #6b3e1e;
+  border-radius:1px 1px 2px 2px;
+}
+.desk .cup::after { /* steam */
+  content:''; position:absolute; top:-4px; left:2px;
+  width:2px; height:3px; background:#ffffff20; border-radius:1px;
+}
+
+/* BOOKSHELF */
+.shelf {
+  position:absolute; top:24px; right:26px;
+  width:18px; height:60px;
+  background:#2a2040; border:1px solid #3a3060;
+  border-radius:2px; display:flex; flex-direction:column;
+  align-items:center; gap:2px; padding:3px 2px;
+}
+.shelf-book { width:12px; height:8px; border-radius:1px; }
+
+/* WHITEBOARD */
+.whiteboard {
+  position:absolute; top:24px; left:26px;
+  width:54px; height:34px;
+  background:#1e2a3a; border:2px solid #2a3a50;
+  border-radius:2px;
+}
+.whiteboard::before {
+  content:'WB'; position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  font-family:'Press Start 2P',monospace; font-size:5px;
+  color:var(--muted); opacity:.4;
+}
+
+/* PLANT */
+.plant {
+  position:absolute;
+  width:20px; height:30px;
+}
+.plant .pot {
+  position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:14px; height:10px;
+  background:#5a3a1a; border:1px solid #4a2a10; border-radius:1px 1px 3px 3px;
+}
+.plant .leaf {
+  position:absolute; bottom:8px;
+  width:10px; height:16px;
+  background:#1a4a1a; border-radius:50% 0 50% 0;
+}
+.plant .leaf.l { left:1px; transform:rotate(-15deg); }
+.plant .leaf.r { right:1px; transform:rotate(15deg) scaleX(-1); }
+.plant .leaf.c { bottom:12px; left:50%; transform:translateX(-50%); background:#266026; border-radius:0 50% 0 50%; }
+
+/* SOFA */
+.sofa {
+  position:absolute; bottom:40px; left:50%; transform:translateX(-50%);
+  width:96px; height:36px;
+}
+.sofa .back { position:absolute; top:0;left:4px;right:4px;height:20px; background:#1e3460; border:1px solid #2a4480; border-radius:4px 4px 0 0; }
+.sofa .seat { position:absolute; bottom:0;left:0;right:0;height:20px; background:#172a50; border:1px solid #2a3a6a; border-radius:2px; }
+.sofa .cushion { position:absolute; bottom:4px;left:8px;width:36px;height:12px; background:#1e3a6a; border-radius:2px; }
+.sofa .cushion2 { position:absolute; bottom:4px;right:8px;width:36px;height:12px; background:#1e3a6a; border-radius:2px; }
+.sofa .arm { position:absolute; bottom:0; height:24px; width:12px; background:#1e3060; border:1px solid #2a4070; border-radius:3px; }
+.sofa .arm.l { left:0; } .sofa .arm.r { right:0; }
+/* sofa offset to left to stay within narrowed rest area */
+
+/* COFFEE MACHINE */
+.coffeemachine {
+  position:absolute; bottom:38px; left:calc(50% - 130px);
+  width:28px; height:42px;
+  background:#1a1a28; border:1px solid #2a2a40; border-radius:3px;
+}
+.coffeemachine::before {
+  content:'☕'; position:absolute; top:6px; left:50%; transform:translateX(-50%);
+  font-size:12px;
+}
+.coffeemachine::after {
+  content:''; position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+  width:14px; height:6px; background:#0f0f1a; border:1px solid #2a2a40; border-radius:1px;
+}
+
+/* APARTMENT pixel house */
+.apt-house {
+  position:absolute; bottom:32px; left:50%; transform:translateX(-50%);
+  display:flex; flex-direction:column; align-items:center;
+}
+.apt-roof {
+  width:0; height:0;
+  border-left:28px solid transparent;
+  border-right:28px solid transparent;
+  border-bottom:20px solid #1e3a5a;
+  filter:drop-shadow(0 -1px 0 #2a4a70);
+}
+.apt-walls {
+  width:48px; height:44px;
+  background:#152030; border:1px solid #1e3050;
+  border-radius:0 0 2px 2px; position:relative;
+}
+.apt-window {
+  position:absolute; top:6px;
+  width:12px; height:12px;
+  background:#1a2a40; border:1px solid #2a4060;
+  border-radius:1px;
+}
+.apt-window.left  { left:4px; }
+.apt-window.right { right:4px; }
+.apt-window.on    { background:#1e3a60; box-shadow:0 0 6px #3b82f640; }
+.apt-window::before {
+  content:''; position:absolute; top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:1px; height:100%; background:#2a4060;
+}
+.apt-window::after {
+  content:''; position:absolute; top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:100%; height:1px; background:#2a4060;
+}
+.apt-door {
+  position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:12px; height:18px;
+  background:#0d1520; border:1px solid #1e3050;
+  border-radius:2px 2px 0 0;
+}
+.apt-door::after {
+  content:''; position:absolute; top:50%;right:2px;
+  transform:translateY(-50%);
+  width:3px; height:3px; border-radius:50%;
+  background:#3b82f660;
+}
+.apt-sign {
+  font-family:'Press Start 2P',monospace; font-size:5px;
+  color:#93c5fd; opacity:.6; text-align:center;
+  margin-top:3px; letter-spacing:1px;
+}
+
+/* Font size controls */
+.font-ctrl { display:flex;align-items:center;gap:4px; }
+.font-btn {
+  width:26px;height:26px;border-radius:3px;
+  background:var(--bg2);border:1px solid var(--border2);
+  color:var(--muted2);cursor:pointer;font-weight:700;
+  font-family:'Press Start 2P',monospace;font-size:9px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;
+}
+.font-btn:hover { color:var(--text);border-color:#7aa2f7; }
+.font-size-val {
+  font-family:'Press Start 2P',monospace;font-size:7px;
+  color:var(--muted2);min-width:18px;text-align:center;
+}
+
+/* CARPET */
+.carpet {
+  position:absolute; bottom:50%; left:24px; right:24px;
+  height:60px; transform:translateY(50%);
+  background:repeating-linear-gradient(90deg,#161e2e 0px,#161e2e 8px,#1a2236 8px,#1a2236 16px);
+  border-radius:4px; border:1px solid var(--border2); opacity:.6;
+}
+
+/* ENTRANCE DOOR */
+.door-area {
+  position:absolute; bottom:18px; left:50%; transform:translateX(-50%);
+  width:40px; display:flex; flex-direction:column; align-items:center; gap:2px;
+}
+.door-frame {
+  width:36px; height:52px;
+  background:#0d1018; border:2px solid var(--border2); border-radius:2px 2px 0 0;
+  position:relative;
+}
+.door-frame::after {
+  content:''; position:absolute; top:50%;right:7px; transform:translateY(-50%);
+  width:5px; height:5px; border-radius:50%; background:var(--dev);
+}
+.door-sign {
+  font-family:'Press Start 2P',monospace; font-size:5px;
+  color:var(--muted); background:var(--panel); padding:2px 4px;
+  border:1px solid var(--border2); border-radius:2px; white-space:nowrap;
+}
+
+/* ═══ PIXEL AGENTS ═══ */
+.agent {
+  position: absolute; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; z-index: 10; cursor: pointer;
+  transition: left .85s cubic-bezier(.34,1.56,.64,1),
+              top  .85s cubic-bezier(.34,1.56,.64,1),
+              bottom .85s cubic-bezier(.34,1.56,.64,1);
+  user-select: none;
+}
+.agent:hover .agent-name { opacity: 1; }
+.agent:hover .bubble { display: flex; }
+.agent-name {
+  font-family: 'Press Start 2P', monospace; font-size: 6px;
+  opacity: .75; transition: opacity .2s;
+  text-shadow: 0 1px 4px #000;
+  white-space: nowrap;
+}
+.bubble {
+  display: none; align-items: flex-start; gap: 5px;
+  background: var(--panel2); border: 1px solid var(--border2);
+  border-radius: 5px 5px 5px 0; padding: 4px 7px;
+  font-size: 8px; white-space: nowrap; max-width: 140px;
+  color: var(--text); position: absolute; bottom: 100%; left: 0;
+  margin-bottom: 4px; box-shadow: 0 4px 12px #00000060;
+}
+.bubble.show { display: flex; }
+.bubble::after {
+  content:''; position:absolute; bottom:-4px; left:10px;
+  width:6px; height:6px;
+  background:var(--panel2); border-right:1px solid var(--border2);
+  border-bottom:1px solid var(--border2); transform:rotate(45deg);
+}
+.agent-char { width:40px; height:52px; image-rendering:pixelated; }
+.agent-dot {
+  width:7px; height:7px; border-radius:50%; margin-top:1px;
+  border:1px solid #00000060;
+}
+
+/* Status animations */
+.agent[data-status=working] { animation:typing .55s ease-in-out infinite alternate; }
+.agent[data-status=idle]    { animation:breathe 2.8s ease-in-out infinite; }
+.agent[data-status=error]   { animation:shake .38s linear infinite; filter:drop-shadow(0 0 7px #ef444480); }
+.agent[data-status=offline] { opacity:.28; filter:grayscale(1); pointer-events:none; }
+@keyframes typing  { to { transform:translateY(-3px) } }
+@keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+@keyframes shake   { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-3px)} 40%{transform:translateX(3px)} 60%{transform:translateX(-2px)} 80%{transform:translateX(2px)} }
+
+/* error ring */
+.agent[data-status=error]::before {
+  content:''; pointer-events:none;
+  position:absolute; top:30px; left:50%;
+  transform:translateX(-50%); width:48px; height:48px;
+  border-radius:50%; border:1px solid var(--err);
+  animation:errring 1.1s ease-out infinite;
+}
+@keyframes errring { 0%{transform:translateX(-50%) scale(.6);opacity:.9} 100%{transform:translateX(-50%) scale(2);opacity:0} }
+
+/* screen glow on desk monitors */
+.mon-glow {
+  position:absolute; inset:0; border-radius:2px;
+  box-shadow:inset 0 0 8px currentColor, 0 0 10px 3px currentColor;
+  opacity:.15;
+}
+
+/* ═══ COMMAND BAR ═══ */
+.cmdbar {
+  height: 58px; flex-shrink: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: stretch;
+}
+.cmdbar-section {
+  display: flex; align-items: center; padding: 0 16px; gap: 10px;
+  border-right: 1px solid var(--border);
+}
+.cmdbar-section:last-child { border-right: none; }
+.cmd-date { display:flex; flex-direction:column; gap:2px; }
+.cmd-date .d1 { font-family:'Press Start 2P',monospace; font-size:7px; color:#7aa2f7; }
+.cmd-date .d2 { font-size:9px; color:var(--muted2); }
+.cmd-token { display:flex; flex-direction:column; gap:2px; text-align:right; }
+.cmd-token .t1 { font-family:'Press Start 2P',monospace; font-size:8px; color:#4ade80; }
+.cmd-token .t2 { font-size:9px; color:var(--muted2); }
+.cmd-input-wrap { flex:1; display:flex; align-items:center; gap:10px; padding:0 16px; }
+.cmd-input {
+  flex:1; height:34px;
+  background: var(--bg2); border:1px solid var(--border2);
+  border-radius:5px; padding:0 12px;
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+  color:var(--text); outline:none; transition:border-color .2s;
+}
+.cmd-input::placeholder { color:var(--muted); }
+.cmd-input:focus { border-color:#7aa2f7; box-shadow:0 0 0 2px #7aa2f720; }
+.cmd-send {
+  height:34px; padding:0 14px;
+  background:linear-gradient(135deg,#2a4af7,#7aa2f7);
+  border:none; border-radius:5px;
+  font-family:'Press Start 2P',monospace; font-size:8px; color:#fff;
+  cursor:pointer; transition:opacity .2s; white-space:nowrap;
+}
+.cmd-send:hover { opacity:.85; }
+.cmd-stats { display:flex; flex-direction:column; gap:4px; }
+.cmd-stat-row { display:flex; align-items:center; gap:6px; font-size:9px; }
+.cmd-stat-dot { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
+
+/* ═══ LOGS STRIP ═══ */
+.logs-strip {
+  height:170px; flex-shrink:0;
+  background:var(--bg);
+  display:flex; gap:0; overflow-x:auto; overflow-y:hidden;
+}
+.logs-strip::-webkit-scrollbar { height:3px; }
+.logs-strip::-webkit-scrollbar-track { background:var(--bg); }
+.logs-strip::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
+.log-panel { min-width:210px; flex:1; border-right:1px solid var(--border); display:flex; flex-direction:column; }
+.log-panel:last-child { border-right:none; }
+.lph {
+  display:flex; align-items:center; gap:6px;
+  padding:6px 10px; background:var(--panel); cursor:pointer;
+  border-bottom:1px solid var(--border); flex-shrink:0;
+  user-select:none;
+}
+.lph-dot { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
+.lph-name { font-family:'Press Start 2P',monospace;font-size:6px; }
+.lph-task { flex:1;font-size:8px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:4px; }
+.lph-arrow { color:var(--muted);font-size:8px;transition:transform .2s; }
+.log-panel.collapsed .lph-arrow { transform:rotate(-90deg); }
+.lpb { flex:1;overflow-y:auto;padding:6px 10px;font-size:8px;line-height:2;background:#070910; }
+.lpb::-webkit-scrollbar { width:3px; }
+.lpb::-webkit-scrollbar-thumb { background:var(--border2); }
+.log-panel.collapsed .lpb { display:none; }
+.ll { display:flex;gap:8px; }
+.lt { color:#2d3a55;flex-shrink:0; }
+.li { color:#60a5fa; }
+.ls { color:#4ade80; }
+.lw { color:#fbbf24; }
+.le { color:#f87171; }
+.lm { color:#2d3a55; }
+.lcur { display:inline-block;width:6px;height:9px;background:var(--ok);animation:cur .7s step-end infinite;vertical-align:middle; }
+@keyframes cur { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ═══ RIGHT PANEL ═══ */
+.rpanel {
+  width:300px; flex-shrink:0;
+  background:var(--panel); display:flex; flex-direction:column;
+  overflow:hidden;
+}
+.rp-head {
+  padding:12px 14px 8px;
+  font-family:'Press Start 2P',monospace; font-size:7px;
+  color:#7aa2f7; letter-spacing:1px; border-bottom:1px solid var(--border);
+}
+.rp-cards { flex:1; overflow-y:auto; padding:10px 12px; display:flex;flex-direction:column;gap:7px; }
+.rp-cards::-webkit-scrollbar { width:3px; }
+.rp-cards::-webkit-scrollbar-thumb { background:var(--border2); }
+.acard {
+  display:flex; align-items:center; gap:10px;
+  padding:9px 10px; border-radius:6px;
+  border-left:3px solid; background:var(--bg2);
+  cursor:pointer; transition:background .15s, transform .1s;
+}
+.acard:hover { background:#161922; transform:translateX(2px); }
+.acard-icon { width:30px;height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0; }
+.acard-info { flex:1;min-width:0; }
+.acard-name { font-family:'Press Start 2P',monospace;font-size:6px;margin-bottom:3px; }
+.acard-task { font-size:8px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.acard-badge { font-family:'Press Start 2P',monospace;font-size:6px;padding:2px 5px;border-radius:2px;flex-shrink:0; }
+
+/* running time */
+.rp-timer { padding:8px 14px; border-top:1px solid var(--border); }
+.timer-row { display:flex;justify-content:space-between;align-items:center;font-size:8px;color:var(--muted2);margin-bottom:4px; }
+.timer-val { font-family:'JetBrains Mono',monospace;font-size:9px;color:#7aa2f7;font-variant-numeric:tabular-nums; }
+
+/* ═══ NOTIFICATION POPUP ═══ */
+.notif-overlay {
+  position:absolute; inset:0; z-index:50;
+  background:#00000050; backdrop-filter:blur(2px);
+  display:flex; align-items:flex-start; justify-content:center;
+  padding-top:32px;
+  animation:fadeIn .25s ease;
+}
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+.notif-overlay.hidden { display:none; }
+.notif-box {
+  background:var(--panel2); border:1px solid var(--border2);
+  border-radius:8px; padding:18px 20px; width:360px;
+  box-shadow:0 16px 40px #00000080;
+  animation:slideDown .3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes slideDown { from{transform:translateY(-20px);opacity:0} to{transform:translateY(0);opacity:1} }
+.notif-header { display:flex;align-items:center;gap:10px;margin-bottom:12px; }
+.notif-avatar {
+  width:36px;height:36px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Press Start 2P',monospace;font-size:10px;
+  flex-shrink:0;
+}
+.notif-title { font-family:'Press Start 2P',monospace;font-size:8px;margin-bottom:3px; }
+.notif-from  { font-size:9px;color:var(--muted2); }
+.notif-msg {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:5px; padding:10px 12px;
+  font-size:10px; line-height:1.7; color:var(--text);
+  margin-bottom:14px;
+}
+.notif-msg .notif-highlight { color:#fbbf24; font-weight:600; }
+.notif-actions { display:flex;gap:8px;justify-content:flex-end; }
+.notif-btn {
+  height:32px;padding:0 14px;
+  font-family:'Press Start 2P',monospace;font-size:7px;
+  border-radius:4px;cursor:pointer;border:1px solid;
+  transition:all .15s;
+}
+.notif-btn.confirm {
+  background:linear-gradient(135deg,#1d4ed8,#3b82f6);
+  border-color:#3b82f6;color:#fff;
+}
+.notif-btn.confirm:hover { background:linear-gradient(135deg,#1e40af,#2563eb); }
+.notif-btn.cancel {
+  background:var(--bg2);border-color:var(--border2);color:var(--muted2);
+}
+.notif-btn.cancel:hover { border-color:var(--muted2);color:var(--text); }
+.notif-tag {
+  display:inline-flex;align-items:center;gap:4px;
+  background:#f59e0b15;border:1px solid #f59e0b40;
+  border-radius:3px;padding:2px 7px;font-size:8px;color:#f59e0b;
+  margin-bottom:8px;
+}
+
+/* screen code lines */
+.code-line {
+  position:absolute;font-family:'JetBrains Mono',monospace;font-size:4px;
+  line-height:5px;overflow:hidden;white-space:nowrap;
+}
+
+/* ═══ AGENT PROFILE SHEET ═══ */
+.sheet-overlay {
+  position:fixed;inset:0;z-index:100;
+  background:#00000055;backdrop-filter:blur(3px);
+  transition:opacity .25s;
+}
+.sheet-overlay.hidden { display:none; }
+
+.sheet {
+  position:fixed;top:0;right:0;bottom:0;
+  width:420px;max-width:100vw;
+  background:var(--panel2);
+  border-left:1px solid var(--border2);
+  display:flex;flex-direction:column;
+  box-shadow:-16px 0 40px #00000080;
+  transform:translateX(0);
+  transition:transform .3s cubic-bezier(.32,0,.67,0);
+  z-index:101;
+  overflow:hidden;
+}
+.sheet.entering { animation:sheetIn .3s cubic-bezier(.34,1.3,.64,1) both; }
+@keyframes sheetIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+
+.sheet-header {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.sheet-close {
+  width:28px;height:28px;border-radius:4px;
+  background:var(--bg2);border:1px solid var(--border2);
+  color:var(--muted2);cursor:pointer;font-size:14px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;
+}
+.sheet-close:hover { color:var(--text);border-color:var(--muted2); }
+
+.sheet-hero {
+  display:flex;align-items:center;gap:14px;
+  padding:16px 18px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.sheet-avatar {
+  width:72px;height:72px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;border:2px solid;overflow:hidden;
+  background:var(--bg);
+  image-rendering:pixelated;
+}
+.sheet-avatar svg { width:56px;height:72px; }
+.sheet-hero-info { flex:1;min-width:0; }
+.sheet-role { font-family:'Press Start 2P',monospace;font-size:10px;margin-bottom:5px; }
+.sheet-title-cn { font-size:11px;color:var(--muted2);margin-bottom:7px; }
+.sheet-status-badge {
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 8px;border-radius:3px;border:1px solid;
+  font-family:'Press Start 2P',monospace;font-size:7px;
+}
+
+.sheet-body { flex:1;overflow-y:auto;padding:0 18px 18px; }
+.sheet-body::-webkit-scrollbar { width:4px; }
+.sheet-body::-webkit-scrollbar-thumb { background:var(--border2);border-radius:2px; }
+
+.sheet-section { margin-top:16px; }
+.sheet-section-header {
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:8px;
+}
+.sheet-section-title {
+  font-family:'Press Start 2P',monospace;font-size:7px;
+  color:#7aa2f7;letter-spacing:1px;
+}
+.edit-btn {
+  padding:3px 9px;font-size:8px;
+  font-family:'Press Start 2P',monospace;
+  background:var(--bg2);border:1px solid var(--border2);
+  color:var(--muted2);cursor:pointer;border-radius:3px;
+  transition:all .15s;
+}
+.edit-btn:hover { color:var(--text);border-color:#7aa2f7; }
+.edit-btn.active { color:#7aa2f7;border-color:#7aa2f7;background:#7aa2f710; }
+
+.desc-text {
+  font-size:10px;line-height:1.7;color:#a0aec0;
+  padding:10px 12px;background:var(--bg2);
+  border:1px solid var(--border);border-radius:5px;
+}
+.desc-input {
+  width:100%;font-size:10px;line-height:1.7;
+  color:var(--text);background:var(--bg2);
+  border:1px solid #7aa2f7;border-radius:5px;
+  padding:10px 12px;resize:vertical;min-height:72px;
+  font-family:'JetBrains Mono',monospace;outline:none;
+  box-shadow:0 0 0 2px #7aa2f720;
+}
+
+.prompt-box {
+  width:100%;height:120px;
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  line-height:1.65;color:#a0aec0;
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:5px;padding:10px 12px;resize:none;
+  outline:none;overflow-y:auto;
+}
+.prompt-box:focus, .prompt-box.editing {
+  color:var(--text);border-color:#7aa2f7;
+  box-shadow:0 0 0 2px #7aa2f720;
+}
+.prompt-box::-webkit-scrollbar { width:3px; }
+.prompt-box::-webkit-scrollbar-thumb { background:var(--border2); }
+
+/* skills grid */
+.skills-grid { display:grid;grid-template-columns:1fr 1fr;gap:8px; }
+.skill-card {
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:5px;padding:9px 11px;
+  display:flex;align-items:center;justify-content:space-between;
+  transition:border-color .15s;
+}
+.skill-card:hover { border-color:var(--border2); }
+.skill-name { font-size:9px;font-weight:600;color:var(--text);margin-bottom:2px; }
+.skill-desc { font-size:8px;color:var(--muted2); }
+/* toggle */
+.toggle {
+  width:32px;height:18px;border-radius:9px;
+  border:1px solid;cursor:pointer;
+  position:relative;flex-shrink:0;margin-left:8px;
+  transition:background .2s,border-color .2s;
+}
+.toggle.on  { background:#22c55e30;border-color:#22c55e; }
+.toggle.off { background:#3d456020;border-color:#3d4560; }
+.toggle::after {
+  content:'';position:absolute;top:2px;
+  width:12px;height:12px;border-radius:50%;
+  transition:left .2s,background .2s;
+}
+.toggle.on::after  { left:17px;background:#22c55e; }
+.toggle.off::after { left:2px; background:#3d4560; }
+
+.sheet-footer {
+  display:flex;gap:10px;padding:14px 18px;
+  border-top:1px solid var(--border);flex-shrink:0;
+  background:var(--panel2);
+}
+.sheet-footer-btn {
+  flex:1;height:36px;border-radius:5px;
+  font-family:'Press Start 2P',monospace;font-size:8px;
+  cursor:pointer;border:1px solid;transition:all .15s;
+}
+.sheet-footer-btn.cancel {
+  background:var(--bg2);border-color:var(--border2);color:var(--muted2);
+}
+.sheet-footer-btn.cancel:hover { color:var(--text);border-color:var(--muted2); }
+.sheet-footer-btn.save {
+  background:linear-gradient(135deg,#1d4ed8,#3b82f6);
+  border-color:#3b82f6;color:#fff;
+}
+.sheet-footer-btn.save:hover { opacity:.88; }
+.save-flash { animation:saveFlash .4s ease; }
+@keyframes saveFlash { 0%,100%{opacity:1} 50%{opacity:.5} }
+</style>
+</head>
+<body>
+
+<!-- ═══ TOP BAR ═══ -->
+<div class="topbar">
+  <span class="topbar-logo">⬛ AGENT MONITOR</span>
+  <div class="pill pill-ok"><span class="dot"></span>WORKING 2</div>
+  <div class="pill pill-idle"><span class="dot"></span>IDLE 1</div>
+  <div class="pill pill-err"><span class="dot"></span>ERROR 1</div>
+  <div class="pill pill-off"><span class="dot"></span>OFFLINE 1</div>
+  <div class="topbar-right">
+    <div class="font-ctrl">
+      <button class="font-btn" onclick="adjustFont(-1)">A-</button>
+      <span class="font-size-val" id="fontSizeVal">12</span>
+      <button class="font-btn" onclick="adjustFont(1)">A+</button>
+    </div>
+    <button class="tbtn" onclick="showNotif()">🔔 ALERT</button>
+    <button class="tbtn" onclick="simulate()">▶ SIM</button>
+    <button class="tbtn" onclick="refreshAll()">↺</button>
+  </div>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<div class="main">
+
+  <!-- LEFT COLUMN -->
+  <div class="left-col">
+
+    <!-- OFFICE CANVAS -->
+    <div class="office" id="office">
+
+      <!-- zones -->
+      <div class="zone zone-work"><span class="zone-lbl">WORK AREA</span></div>
+      <div class="zone zone-rest"><span class="zone-lbl">REST AREA</span></div>
+      <div class="zone zone-apt"><span class="zone-lbl">公寓</span></div>
+
+      <!-- WORK AREA furniture -->
+      <div class="whiteboard" style="position:absolute;top:32px;left:32px;"></div>
+      <div class="shelf" style="position:absolute;top:32px;right:32px;">
+        <div class="shelf-book" style="background:#3b82f6;"></div>
+        <div class="shelf-book" style="background:#f43f5e;"></div>
+        <div class="shelf-book" style="background:#22c55e;"></div>
+        <div class="shelf-book" style="background:#a855f7;"></div>
+        <div class="shelf-book" style="background:#eab308;"></div>
+      </div>
+      <div class="carpet"></div>
+
+      <!-- Desk PM -->
+      <div class="desk" id="desk-pm" style="position:absolute;top:58px;left:48px;">
+        <div class="mon">
+          <div class="mon-screen chart" style="color:#3b82f620;">
+            <div class="mon-glow" style="color:#3b82f6;"></div>
+            <div class="code-line" style="top:2px;left:2px;color:#4ade80;width:100%;">↑ Q1 +34%</div>
+            <div class="code-line" style="top:8px;left:2px;color:#60a5fa;width:100%;">■■■■■■ 67%</div>
+          </div>
+        </div>
+        <div class="cup"></div>
+        <div class="desk-nameplate">PM</div>
+      </div>
+
+      <!-- Desk RES -->
+      <div class="desk" id="desk-res" style="position:absolute;top:58px;left:140px;">
+        <div class="mon">
+          <div class="mon-screen code" style="color:#a855f720;">
+            <div class="mon-glow" style="color:#a855f7;"></div>
+            <div class="code-line" style="top:2px;left:2px;color:#60a5fa;width:100%;">research.md</div>
+            <div class="code-line" style="top:8px;left:2px;color:#4a5568;width:100%;">loading...</div>
+          </div>
+        </div>
+        <div class="desk-nameplate">RES</div>
+      </div>
+
+      <!-- Desk DES -->
+      <div class="desk" id="desk-des" style="position:absolute;top:58px;left:232px;">
+        <div class="mon">
+          <div class="mon-screen" style="background:linear-gradient(135deg,#0d1117,#1a0a2e);color:#a855f720;">
+            <div class="mon-glow" style="color:#a855f7;"></div>
+            <div class="code-line" style="top:2px;left:2px;color:#f97316;width:100%;">█ banner.fig</div>
+            <div class="code-line" style="top:8px;left:2px;color:#a855f7;width:100%;">◉ designing</div>
+          </div>
+        </div>
+        <div class="cup"></div>
+        <div class="desk-nameplate">DES</div>
+      </div>
+
+      <!-- Desk DEV -->
+      <div class="desk" id="desk-dev" style="position:absolute;top:136px;left:94px;">
+        <div class="mon">
+          <div class="mon-screen" style="background:#0d1117;color:#eab30820;">
+            <div class="mon-glow" style="color:#ef4444;"></div>
+            <div class="code-line" style="top:2px;left:2px;color:#f87171;width:100%;">✗ build fail</div>
+            <div class="code-line" style="top:8px;left:2px;color:#f87171;width:100%;">TypeError</div>
+          </div>
+        </div>
+        <div class="desk-nameplate">DEV</div>
+      </div>
+
+      <!-- Desk QA -->
+      <div class="desk" id="desk-qa" style="position:absolute;top:136px;left:186px;">
+        <div class="mon">
+          <div class="mon-screen code" style="color:#a855f720;">
+            <div class="mon-glow" style="color:#a855f7;opacity:.08;"></div>
+            <div class="code-line" style="top:2px;left:2px;color:#2d3a55;width:100%;">[offline]</div>
+          </div>
+        </div>
+        <div class="desk-nameplate">QA</div>
+      </div>
+
+      <!-- REST AREA furniture -->
+      <div class="sofa"></div>
+      <div class="coffeemachine"></div>
+      <div class="plant" style="position:absolute;bottom:26px;left:30px;"></div>
+      <div class="plant" style="position:absolute;bottom:26px;left:54px;"></div>
+
+      <!-- REST AREA extra plant -->
+      <div class="plant" style="position:absolute;bottom:26px;left:calc(50% - 160px);"></div>
+
+      <!-- APARTMENT pixel house (right zone) -->
+      <div style="position:absolute;right:18px;top:0;bottom:0;width:86px;display:flex;align-items:center;justify-content:center;">
+        <div class="apt-house">
+          <div class="apt-roof"></div>
+          <div class="apt-walls">
+            <div class="apt-window left on"></div>
+            <div class="apt-window right"></div>
+            <div class="apt-door"></div>
+          </div>
+          <div class="apt-sign">OFFLINE<br>DORM</div>
+        </div>
+      </div>
+
+      <!-- ═══ AGENTS ═══ -->
+
+      <!-- PM: working at desk -->
+      <div class="agent" id="ag-pm" data-status="working"
+           style="left:54px;top:16px;"
+           onclick="focusAgent('pm')">
+        <div class="bubble show" style="color:#fbbf24;">分析Q1市场数据</div>
+        <div class="agent-name" style="color:var(--pm);">PM</div>
+        <!-- PM character: suit + tie + clipboard -->
+        <svg class="agent-char" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg">
+          <!-- hair -->
+          <rect x="6" y="0" width="8" height="2" fill="#5a2e0e"/>
+          <rect x="5" y="1" width="10" height="3" fill="#7c3f1e"/>
+          <!-- head -->
+          <rect x="5" y="2" width="10" height="7" fill="#f4c49e"/>
+          <!-- eyes -->
+          <rect x="7" y="5" width="2" height="2" fill="#1a1a1a"/>
+          <rect x="11" y="5" width="2" height="2" fill="#1a1a1a"/>
+          <!-- eye shine -->
+          <rect x="8" y="5" width="1" height="1" fill="#ffffff"/>
+          <rect x="12" y="5" width="1" height="1" fill="#ffffff"/>
+          <!-- mouth -->
+          <rect x="8" y="8" width="4" height="1" fill="#c97b5e"/>
+          <!-- ear -->
+          <rect x="4" y="5" width="1" height="3" fill="#f4c49e"/>
+          <rect x="15" y="5" width="1" height="3" fill="#f4c49e"/>
+          <!-- neck -->
+          <rect x="8" y="9" width="4" height="2" fill="#f4c49e"/>
+          <!-- shirt white -->
+          <rect x="5" y="11" width="10" height="9" fill="#e8e8ee"/>
+          <!-- jacket left -->
+          <rect x="5" y="11" width="3" height="9" fill="#1a1f3a"/>
+          <!-- jacket right -->
+          <rect x="12" y="11" width="3" height="9" fill="#1a1f3a"/>
+          <!-- tie -->
+          <rect x="9" y="11" width="2" height="7" fill="#f43f5e"/>
+          <rect x="9" y="18" width="2" height="1" fill="#c03050"/>
+          <!-- left arm with clipboard -->
+          <rect x="2" y="11" width="3" height="8" fill="#1a1f3a"/>
+          <rect x="1" y="15" width="3" height="5" fill="#f4c49e"/>
+          <!-- clipboard -->
+          <rect x="-1" y="13" width="4" height="5" fill="#e0c9a0"/>
+          <rect x="-1" y="13" width="4" height="1" fill="#b09060"/>
+          <rect x="0" y="15" width="2" height="1" fill="#6a5030"/>
+          <rect x="0" y="16" width="2" height="1" fill="#6a5030"/>
+          <!-- right arm -->
+          <rect x="15" y="11" width="3" height="8" fill="#1a1f3a"/>
+          <rect x="16" y="16" width="3" height="4" fill="#f4c49e"/>
+          <!-- legs -->
+          <rect x="6" y="20" width="4" height="6" fill="#252a40"/>
+          <rect x="10" y="20" width="4" height="6" fill="#252a40"/>
+          <!-- shoes -->
+          <rect x="5" y="25" width="5" height="1" fill="#111"/>
+          <rect x="10" y="25" width="5" height="1" fill="#111"/>
+        </svg>
+        <div class="agent-dot" style="background:var(--ok);box-shadow:0 0 6px var(--ok);"></div>
+      </div>
+
+      <!-- Researcher: idle at rest area -->
+      <div class="agent" id="ag-res" data-status="idle"
+           style="left:calc(25% - 40px);bottom:58px;"
+           onclick="focusAgent('res')">
+        <div class="bubble">调研竞品中...</div>
+        <div class="agent-name" style="color:var(--res);">RES</div>
+        <svg class="agent-char" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg">
+          <!-- hair black -->
+          <rect x="5" y="0" width="10" height="3" fill="#1a1a1a"/>
+          <rect x="4" y="1" width="12" height="3" fill="#111"/>
+          <!-- head -->
+          <rect x="5" y="2" width="10" height="7" fill="#f0b98e"/>
+          <!-- glasses frame left -->
+          <rect x="5" y="4" width="4" height="3" fill="none" stroke="#3b82f6" stroke-width=".8"/>
+          <!-- glasses frame right -->
+          <rect x="11" y="4" width="4" height="3" fill="none" stroke="#3b82f6" stroke-width=".8"/>
+          <!-- glasses bridge -->
+          <rect x="9" y="5" width="2" height="1" fill="#3b82f6"/>
+          <!-- eyes through glasses -->
+          <rect x="7" y="5" width="2" height="1" fill="#1a1a1a"/>
+          <rect x="12" y="5" width="2" height="1" fill="#1a1a1a"/>
+          <!-- mouth -->
+          <rect x="8" y="8" width="4" height="1" fill="#c97b5e"/>
+          <!-- ears -->
+          <rect x="4" y="5" width="1" height="2" fill="#f0b98e"/>
+          <rect x="15" y="5" width="1" height="2" fill="#f0b98e"/>
+          <!-- neck -->
+          <rect x="8" y="9" width="4" height="2" fill="#f0b98e"/>
+          <!-- lab coat -->
+          <rect x="4" y="11" width="12" height="9" fill="#e0e0e8"/>
+          <!-- lab coat lapels -->
+          <rect x="4" y="11" width="2" height="5" fill="#cacad0"/>
+          <rect x="14" y="11" width="2" height="5" fill="#cacad0"/>
+          <!-- blue shirt under -->
+          <rect x="7" y="11" width="6" height="6" fill="#3b82f6"/>
+          <!-- arms - lab coat -->
+          <rect x="2" y="11" width="2" height="9" fill="#e0e0e8"/>
+          <rect x="16" y="11" width="2" height="9" fill="#e0e0e8"/>
+          <!-- hands -->
+          <rect x="1" y="18" width="3" height="3" fill="#f0b98e"/>
+          <!-- magnifying glass -->
+          <rect x="-1" y="14" width="4" height="4" fill="none" stroke="#9ca3af" stroke-width=".8"/>
+          <rect x="2" y="17" width="2" height="3" fill="#9ca3af"/>
+          <!-- right hand with notebook -->
+          <rect x="17" y="18" width="3" height="3" fill="#f0b98e"/>
+          <rect x="17" y="14" width="4" height="5" fill="#fef3c7"/>
+          <rect x="18" y="15" width="2" height="1" fill="#94a3b8"/>
+          <rect x="18" y="16" width="2" height="1" fill="#94a3b8"/>
+          <rect x="18" y="17" width="2" height="1" fill="#94a3b8"/>
+          <!-- legs -->
+          <rect x="6" y="20" width="3" height="6" fill="#1e3a5f"/>
+          <rect x="11" y="20" width="3" height="6" fill="#1e3a5f"/>
+          <!-- shoes -->
+          <rect x="5" y="25" width="4" height="1" fill="#111"/>
+          <rect x="11" y="25" width="4" height="1" fill="#111"/>
+        </svg>
+        <div class="agent-dot" style="background:var(--idle);box-shadow:0 0 5px var(--idle);"></div>
+      </div>
+
+      <!-- Designer: working at desk -->
+      <div class="agent" id="ag-des" data-status="working"
+           style="left:238px;top:16px;"
+           onclick="focusAgent('des')">
+        <div class="bubble show" style="color:#a855f7;">设计首页Banner</div>
+        <div class="agent-name" style="color:var(--des);">DES</div>
+        <svg class="agent-char" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg">
+          <!-- wild purple hair -->
+          <rect x="3" y="0" width="14" height="2" fill="#7c3aed"/>
+          <rect x="2" y="1" width="16" height="4" fill="#6d28d9"/>
+          <rect x="2" y="3" width="2" height="3" fill="#7c3aed"/>
+          <rect x="16" y="3" width="2" height="3" fill="#7c3aed"/>
+          <!-- head -->
+          <rect x="5" y="2" width="10" height="7" fill="#f4c49e"/>
+          <!-- eyes -->
+          <rect x="7" y="5" width="2" height="2" fill="#6d28d9"/>
+          <rect x="11" y="5" width="2" height="2" fill="#6d28d9"/>
+          <rect x="8" y="5" width="1" height="1" fill="#ffffffaa"/>
+          <rect x="12" y="5" width="1" height="1" fill="#ffffffaa"/>
+          <!-- smile -->
+          <rect x="7" y="8" width="2" height="1" fill="#e88"/>
+          <rect x="11" y="8" width="2" height="1" fill="#e88"/>
+          <rect x="8" y="9" width="4" height="1" fill="#e88"/>
+          <!-- ears -->
+          <rect x="4" y="5" width="1" height="2" fill="#f4c49e"/>
+          <rect x="15" y="5" width="1" height="2" fill="#f4c49e"/>
+          <!-- neck -->
+          <rect x="8" y="9" width="4" height="2" fill="#f4c49e"/>
+          <!-- creative top - green -->
+          <rect x="5" y="11" width="10" height="9" fill="#22c55e"/>
+          <!-- design detail stripes -->
+          <rect x="5" y="13" width="10" height="1" fill="#16a34a"/>
+          <rect x="5" y="15" width="10" height="1" fill="#16a34a"/>
+          <!-- arms -->
+          <rect x="2" y="11" width="3" height="8" fill="#22c55e"/>
+          <rect x="15" y="11" width="3" height="8" fill="#22c55e"/>
+          <!-- left hand -->
+          <rect x="1" y="17" width="3" height="3" fill="#f4c49e"/>
+          <!-- right hand with palette -->
+          <rect x="16" y="16" width="3" height="4" fill="#f4c49e"/>
+          <!-- palette -->
+          <rect x="17" y="12" width="5" height="5" fill="#2d2d40"/>
+          <rect x="18" y="13" width="1" height="1" fill="#ef4444"/>
+          <rect x="20" y="13" width="1" height="1" fill="#3b82f6"/>
+          <rect x="18" y="15" width="1" height="1" fill="#22c55e"/>
+          <rect x="20" y="15" width="1" height="1" fill="#f59e0b"/>
+          <!-- brush -->
+          <rect x="16" y="10" width="1" height="5" fill="#9ca3af"/>
+          <rect x="16" y="10" width="1" height="2" fill="#f97316"/>
+          <!-- legs -->
+          <rect x="6" y="20" width="4" height="6" fill="#111827"/>
+          <rect x="10" y="20" width="4" height="6" fill="#111827"/>
+          <!-- colorful shoes -->
+          <rect x="5" y="25" width="5" height="1" fill="#a855f7"/>
+          <rect x="10" y="25" width="5" height="1" fill="#22c55e"/>
+        </svg>
+        <div class="agent-dot" style="background:var(--ok);box-shadow:0 0 6px var(--ok);"></div>
+      </div>
+
+      <!-- DEV: error at desk (work area, shake + red pulse) -->
+      <div class="agent" id="ag-dev" data-status="error"
+           style="left:100px;top:94px;"
+           onclick="focusAgent('dev')">
+        <div class="bubble show" style="color:#f87171;border-color:#ef444440;">Build failed: TypeError</div>
+        <div class="agent-name" style="color:var(--dev);">DEV</div>
+        <svg class="agent-char" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg">
+          <!-- hoodie hood -->
+          <rect x="3" y="0" width="14" height="5" fill="#92400e"/>
+          <rect x="4" y="1" width="12" height="5" fill="#a16207"/>
+          <!-- head -->
+          <rect x="5" y="2" width="10" height="7" fill="#fcd9a0"/>
+          <!-- headphone band -->
+          <rect x="4" y="2" width="12" height="2" fill="#1a1a2e"/>
+          <!-- headphone cups -->
+          <rect x="3" y="3" width="3" height="4" fill="#1a1a2e"/>
+          <rect x="3" y="4" width="3" height="3" fill="#2a2a3e"/>
+          <rect x="14" y="3" width="3" height="4" fill="#1a1a2e"/>
+          <rect x="14" y="4" width="3" height="3" fill="#2a2a3e"/>
+          <!-- headphone glow (error red) -->
+          <rect x="3" y="4" width="2" height="2" fill="#ef444430"/>
+          <rect x="15" y="4" width="2" height="2" fill="#ef444430"/>
+          <!-- eyes tired/squint -->
+          <rect x="7" y="5" width="3" height="1" fill="#1a1a1a"/>
+          <rect x="11" y="5" width="3" height="1" fill="#1a1a1a"/>
+          <!-- tired bags -->
+          <rect x="7" y="6" width="3" height="1" fill="#e0a0608a"/>
+          <rect x="11" y="6" width="3" height="1" fill="#e0a0608a"/>
+          <!-- grimace mouth -->
+          <rect x="8" y="8" width="4" height="1" fill="#b07040"/>
+          <rect x="7" y="7" width="1" height="2" fill="#b07040"/>
+          <rect x="12" y="7" width="1" height="2" fill="#b07040"/>
+          <!-- neck -->
+          <rect x="8" y="9" width="4" height="2" fill="#fcd9a0"/>
+          <!-- hoodie body - yellow -->
+          <rect x="4" y="11" width="12" height="9" fill="#eab308"/>
+          <!-- hoodie pocket -->
+          <rect x="7" y="15" width="6" height="3" fill="#ca8a04"/>
+          <!-- kangaroo pocket detail -->
+          <rect x="8" y="16" width="4" height="2" fill="#a16207"/>
+          <!-- arms -->
+          <rect x="1" y="11" width="3" height="9" fill="#eab308"/>
+          <rect x="16" y="11" width="3" height="9" fill="#eab308"/>
+          <!-- hands typing -->
+          <rect x="0" y="18" width="3" height="3" fill="#fcd9a0"/>
+          <rect x="17" y="18" width="3" height="3" fill="#fcd9a0"/>
+          <!-- mini laptop -->
+          <rect x="3" y="19" width="14" height="2" fill="#1a1a2e"/>
+          <rect x="4" y="20" width="12" height="1" fill="#111"/>
+          <!-- error on tiny screen -->
+          <rect x="5" y="17" width="10" height="6" fill="#0d1117"/>
+          <rect x="5" y="17" width="10" height="1" fill="#1a1a2e"/>
+          <rect x="6" y="18" width="6" height="1" fill="#f87171" style="opacity:.7"/>
+          <rect x="6" y="19" width="4" height="1" fill="#f87171" style="opacity:.4"/>
+          <!-- legs -->
+          <rect x="6" y="20" width="4" height="6" fill="#1f2937"/>
+          <rect x="10" y="20" width="4" height="6" fill="#1f2937"/>
+          <!-- shoes -->
+          <rect x="5" y="25" width="5" height="1" fill="#111"/>
+          <rect x="10" y="25" width="5" height="1" fill="#111"/>
+        </svg>
+        <div class="agent-dot" style="background:var(--err);box-shadow:0 0 8px var(--err);animation:blink .35s infinite;"></div>
+      </div>
+
+      <!-- QA: offline in apartment -->
+      <div class="agent" id="ag-qa" data-status="offline"
+           style="right:30px;top:28%;"
+           onclick="focusAgent('qa')">
+        <div class="bubble">等待上线...</div>
+        <div class="agent-name" style="color:var(--qa);">QA</div>
+        <svg class="agent-char" viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg">
+          <!-- safety helmet purple -->
+          <rect x="4" y="0" width="12" height="3" fill="#7e22ce"/>
+          <rect x="3" y="1" width="14" height="3" fill="#9333ea"/>
+          <rect x="3" y="3" width="14" height="2" fill="#a855f7"/>
+          <!-- head -->
+          <rect x="5" y="3" width="10" height="6" fill="#f4c49e"/>
+          <!-- eyes -->
+          <rect x="7" y="5" width="2" height="2" fill="#1a1a1a"/>
+          <rect x="11" y="5" width="2" height="2" fill="#1a1a1a"/>
+          <rect x="8" y="5" width="1" height="1" fill="#ffffff"/>
+          <rect x="12" y="5" width="1" height="1" fill="#ffffff"/>
+          <!-- mouth -->
+          <rect x="8" y="8" width="4" height="1" fill="#c97b5e"/>
+          <!-- ears -->
+          <rect x="4" y="5" width="1" height="2" fill="#f4c49e"/>
+          <rect x="15" y="5" width="1" height="2" fill="#f4c49e"/>
+          <!-- neck -->
+          <rect x="8" y="9" width="4" height="2" fill="#f4c49e"/>
+          <!-- orange vest -->
+          <rect x="5" y="11" width="10" height="9" fill="#ea580c"/>
+          <!-- reflective stripes -->
+          <rect x="5" y="14" width="10" height="1" fill="#fbbf24"/>
+          <rect x="5" y="17" width="10" height="1" fill="#fbbf24"/>
+          <!-- inner shirt blue -->
+          <rect x="7" y="11" width="6" height="3" fill="#1d4ed8"/>
+          <!-- arms with vest -->
+          <rect x="2" y="11" width="3" height="9" fill="#ea580c"/>
+          <rect x="15" y="11" width="3" height="9" fill="#ea580c"/>
+          <!-- hands -->
+          <rect x="1" y="18" width="3" height="3" fill="#f4c49e"/>
+          <rect x="16" y="18" width="3" height="3" fill="#f4c49e"/>
+          <!-- checklist clipboard -->
+          <rect x="16" y="13" width="5" height="6" fill="#f0e8d0"/>
+          <rect x="16" y="13" width="5" height="1" fill="#c0a870"/>
+          <rect x="17" y="15" width="3" height="1" fill="#5a4530"/>
+          <rect x="17" y="16" width="3" height="1" fill="#5a4530"/>
+          <!-- checkmarks -->
+          <rect x="17" y="15" width="1" height="1" fill="#22c55e"/>
+          <rect x="17" y="16" width="1" height="1" fill="#22c55e"/>
+          <!-- legs -->
+          <rect x="6" y="20" width="3" height="6" fill="#1e3a5f"/>
+          <rect x="11" y="20" width="3" height="6" fill="#1e3a5f"/>
+          <!-- boots -->
+          <rect x="5" y="25" width="4" height="1" fill="#78350f"/>
+          <rect x="11" y="25" width="4" height="1" fill="#78350f"/>
+        </svg>
+        <div class="agent-dot" style="background:var(--off);"></div>
+      </div>
+
+      <!-- NOTIFICATION OVERLAY -->
+      <div class="notif-overlay hidden" id="notifOverlay">
+        <div class="notif-box">
+          <div class="notif-header">
+            <div class="notif-avatar" style="background:#ef444420;color:#ef4444;border:1px solid #ef444440;">DEV</div>
+            <div>
+              <div class="notif-title" style="color:#f87171;">⚠ 需要您的确认</div>
+              <div class="notif-from">来自 DEV 开发工程师 · 刚刚</div>
+            </div>
+          </div>
+          <div class="notif-tag">🐛 Build Error · TypeError</div>
+          <div class="notif-msg">
+            构建失败：<span class="notif-highlight">agent-monitor.tsx:142</span> 出现
+            <span class="notif-highlight">TypeError: Cannot read property 'status' of undefined</span>。<br><br>
+            可能原因：agents API 返回数据为空时未做 null 检查。是否允许我
+            <span class="notif-highlight">添加 null guard 并重新构建</span>？
+          </div>
+          <div class="notif-actions">
+            <button class="notif-btn cancel" onclick="closeNotif()">✗ 取消</button>
+            <button class="notif-btn confirm" onclick="closeNotif()">✓ 确认修复</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /office -->
+
+    <!-- ═══ COMMAND BAR ═══ -->
+    <div class="cmdbar">
+      <!-- left: date + token -->
+      <div class="cmdbar-section" style="min-width:160px;">
+        <div class="cmd-date">
+          <div class="d1" id="cmdDate">2026-03-11</div>
+          <div class="d2">Tuesday · <span id="cmdTime">09:42:18</span></div>
+        </div>
+      </div>
+
+      <!-- center: input -->
+      <div class="cmd-input-wrap">
+        <input class="cmd-input" id="cmdInput"
+               placeholder="💬  输入指令，向 Agent 团队下达任务..."
+               onkeydown="if(event.key==='Enter')sendCmd()"/>
+        <button class="cmd-send" onclick="sendCmd()">▶ 发送</button>
+      </div>
+
+      <!-- right: token + stats -->
+      <div class="cmdbar-section" style="min-width:160px;border-right:none;">
+        <div class="cmd-token">
+          <div class="t1">$12.34</div>
+          <div class="t2">本次消耗 · 45K tokens</div>
+        </div>
+        <div style="width:1px;height:30px;background:var(--border);margin:0 4px;"></div>
+        <div class="cmd-stats">
+          <div class="cmd-stat-row"><span class="cmd-stat-dot" style="background:var(--ok);"></span>2 运行中</div>
+          <div class="cmd-stat-row"><span class="cmd-stat-dot" style="background:var(--idle);"></span>1 待命</div>
+          <div class="cmd-stat-row"><span class="cmd-stat-dot" style="background:var(--err);"></span>1 异常</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ LOG STRIP ═══ -->
+    <div class="logs-strip">
+
+      <div class="log-panel" id="lp-pm">
+        <div class="lph" onclick="toggleLog('pm')">
+          <span class="lph-dot" style="background:var(--pm);"></span>
+          <span class="lph-name">PM</span>
+          <span class="lph-task">分析Q1市场数据</span>
+          <span class="lph-arrow">▼</span>
+        </div>
+        <div class="lpb">
+          <div class="ll"><span class="lt">09:42:01</span><span class="li">[PM] 接收任务: 分析Q1市场数据</span></div>
+          <div class="ll"><span class="lt">09:42:03</span><span class="lm">[PM] 加载 BigQuery 数据源...</span></div>
+          <div class="ll"><span class="lt">09:42:07</span><span class="ls">[PM] 数据加载完成: 2,847 条记录</span></div>
+          <div class="ll"><span class="lt">09:42:10</span><span class="li">[PM] 识别到3个增长趋势</span></div>
+          <div class="ll"><span class="lt">09:42:14</span><span class="li">[PM] 正在生成可视化报告 <span class="lcur"></span></span></div>
+        </div>
+      </div>
+
+      <div class="log-panel" id="lp-res">
+        <div class="lph" onclick="toggleLog('res')">
+          <span class="lph-dot" style="background:var(--res);"></span>
+          <span class="lph-name">RESEARCHER</span>
+          <span class="lph-task">idle — 上次: 竞品调研</span>
+          <span class="lph-arrow">▼</span>
+        </div>
+        <div class="lpb">
+          <div class="ll"><span class="lt">09:38:05</span><span class="ls">[RES] 完成竞品分析报告 v2</span></div>
+          <div class="ll"><span class="lt">09:38:10</span><span class="lm">[RES] 发现 5 个差异化机会点</span></div>
+          <div class="ll"><span class="lt">09:38:30</span><span class="lm">[RES] 进入 idle 状态，等待新任务...</span></div>
+        </div>
+      </div>
+
+      <div class="log-panel" id="lp-des">
+        <div class="lph" onclick="toggleLog('des')">
+          <span class="lph-dot" style="background:var(--des);"></span>
+          <span class="lph-name">DESIGNER</span>
+          <span class="lph-task">设计首页Banner</span>
+          <span class="lph-arrow">▼</span>
+        </div>
+        <div class="lpb">
+          <div class="ll"><span class="lt">09:41:00</span><span class="li">[DES] 开始设计首页 Banner</span></div>
+          <div class="ll"><span class="lt">09:41:08</span><span class="lm">[DES] 生成配色方案 × 3</span></div>
+          <div class="ll"><span class="lt">09:41:20</span><span class="ls">[DES] 布局方案已输出 (v1/v2/v3)</span></div>
+          <div class="ll"><span class="lt">09:41:33</span><span class="li">[DES] 精修细节 <span class="lcur"></span></span></div>
+        </div>
+      </div>
+
+      <div class="log-panel" id="lp-dev">
+        <div class="lph" onclick="toggleLog('dev')">
+          <span class="lph-dot" style="background:var(--err);animation:blink .35s infinite;"></span>
+          <span class="lph-name" style="color:#f87171;">DEV</span>
+          <span class="lph-task" style="color:#f87171;">⚠ TypeError — Build Failed</span>
+          <span class="lph-arrow">▼</span>
+        </div>
+        <div class="lpb">
+          <div class="ll"><span class="lt">09:40:00</span><span class="li">[DEV] npm run build --prod</span></div>
+          <div class="ll"><span class="lt">09:40:08</span><span class="lm">[DEV] 编译 TypeScript (243 files)...</span></div>
+          <div class="ll"><span class="lt">09:40:15</span><span class="le">[DEV] ✗ TypeError: Cannot read property 'status' of undefined</span></div>
+          <div class="ll"><span class="lt">09:40:15</span><span class="le">      at agent-monitor.tsx:142:18</span></div>
+          <div class="ll"><span class="lt">09:40:15</span><span class="lw">[DEV] Build failed — 1 error. Awaiting user input.</span></div>
+        </div>
+      </div>
+
+      <div class="log-panel collapsed" id="lp-qa">
+        <div class="lph" onclick="toggleLog('qa')">
+          <span class="lph-dot" style="background:var(--off);"></span>
+          <span class="lph-name">QA</span>
+          <span class="lph-task">offline</span>
+          <span class="lph-arrow">▼</span>
+        </div>
+        <div class="lpb">
+          <div class="ll"><span class="lt">09:20:00</span><span class="lm">[QA] Session ended. Goodbye.</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /left-col -->
+
+  <!-- ═══ RIGHT PANEL ═══ -->
+  <div class="rpanel">
+    <div class="rp-head">▸ AGENT STATUS</div>
+    <div class="rp-cards">
+
+      <div class="acard" data-agent="pm" style="border-left-color:var(--pm);" onclick="highlight('pm')">
+        <div class="acard-icon" style="background:#f43f5e20;color:#f43f5e;">👔</div>
+        <div class="acard-info">
+          <div class="acard-name">PM</div>
+          <div class="acard-task">分析Q1市场数据</div>
+        </div>
+        <div class="acard-badge" style="background:#22c55e15;color:#22c55e;">WORK</div>
+      </div>
+
+      <div class="acard" data-agent="res" style="border-left-color:var(--res);" onclick="highlight('res')">
+        <div class="acard-icon" style="background:#3b82f620;color:#3b82f6;">🔬</div>
+        <div class="acard-info">
+          <div class="acard-name">RESEARCHER</div>
+          <div class="acard-task">等待新任务...</div>
+        </div>
+        <div class="acard-badge" style="background:#f59e0b15;color:#f59e0b;">IDLE</div>
+      </div>
+
+      <div class="acard" data-agent="des" style="border-left-color:var(--des);" onclick="highlight('des')">
+        <div class="acard-icon" style="background:#22c55e20;color:#22c55e;">🎨</div>
+        <div class="acard-info">
+          <div class="acard-name">DESIGNER</div>
+          <div class="acard-task">设计首页Banner</div>
+        </div>
+        <div class="acard-badge" style="background:#22c55e15;color:#22c55e;">WORK</div>
+      </div>
+
+      <div class="acard" data-agent="dev" style="border-left-color:var(--err);" onclick="showNotif();highlight('dev')">
+        <div class="acard-icon" style="background:#ef444420;color:#ef4444;">💻</div>
+        <div class="acard-info">
+          <div class="acard-name">DEV</div>
+          <div class="acard-task" style="color:#f87171;">Build failed: TypeError</div>
+        </div>
+        <div class="acard-badge" style="background:#ef444415;color:#ef4444;animation:blink .5s infinite;">ERR</div>
+      </div>
+
+      <div class="acard" data-agent="qa" style="border-left-color:var(--off);opacity:.45;" onclick="highlight('qa')">
+        <div class="acard-icon" style="background:#3d456020;color:#3d4560;">🛡</div>
+        <div class="acard-info">
+          <div class="acard-name">QA</div>
+          <div class="acard-task">未上线</div>
+        </div>
+        <div class="acard-badge" style="background:#3d456015;color:#3d4560;">OFF</div>
+      </div>
+
+    </div><!-- /cards -->
+
+    <div class="rp-timer">
+      <div class="timer-row">
+        <span>运行时长</span>
+        <span class="timer-val" id="runTimer">00:27:42</span>
+      </div>
+      <div class="timer-row">
+        <span>任务完成</span>
+        <span class="timer-val" style="color:#4ade80;">12 / 15</span>
+      </div>
+      <div class="timer-row">
+        <span>平均响应</span>
+        <span class="timer-val" style="color:#f59e0b;">2.3s</span>
+      </div>
+    </div>
+  </div><!-- /rpanel -->
+
+</div><!-- /main -->
+
+<script>
+// ─── Clock ───
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('cmdTime').textContent = `${h}:${m}:${s}`;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ─── Run Timer ───
+let startSec = 27*60 + 42;
+setInterval(() => {
+  startSec++;
+  const h = String(Math.floor(startSec/3600)).padStart(2,'0');
+  const m = String(Math.floor((startSec%3600)/60)).padStart(2,'0');
+  const s = String(startSec%60).padStart(2,'0');
+  document.getElementById('runTimer').textContent = `${h}:${m}:${s}`;
+}, 1000);
+
+// ─── Notification ───
+function showNotif() {
+  document.getElementById('notifOverlay').classList.remove('hidden');
+}
+function closeNotif() {
+  document.getElementById('notifOverlay').classList.add('hidden');
+}
+document.getElementById('notifOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeNotif();
+});
+
+// ─── Log toggle ───
+function toggleLog(id) {
+  const el = document.getElementById('lp-' + id);
+  if (el) el.classList.toggle('collapsed');
+}
+
+// ─── Highlight agent ───
+function highlight(id) {
+  const el = document.getElementById('ag-' + id);
+  if (!el) return;
+  el.style.filter = 'drop-shadow(0 0 12px #7aa2f7)';
+  setTimeout(() => el.style.filter = '', 1500);
+}
+
+// ─── Send command ───
+function sendCmd() {
+  const inp = document.getElementById('cmdInput');
+  const val = inp.value.trim();
+  if (!val) return;
+  inp.value = '';
+  // Flash PM working bubble
+  const bubble = document.querySelector('#ag-pm .bubble');
+  if (bubble) {
+    const prev = bubble.textContent;
+    bubble.textContent = '收到指令: ' + val.slice(0,20);
+    bubble.classList.add('show');
+    setTimeout(() => { bubble.textContent = prev; }, 3000);
+  }
+  highlight('pm');
+}
+
+// ─── Simulate status changes ───
+// offline position = inside apartment zone (far right strip)
+const APT = { right:'30px', top:'28%', left:'', bottom:'', transform:'' };
+
+const agentPositions = {
+  pm:  { working:{left:'54px',  top:'16px', bottom:'',right:'',transform:''},
+         idle:   {left:'calc(20% - 20px)', top:'',bottom:'60px',right:'',transform:''},
+         error:  {left:'54px',  top:'16px', bottom:'',right:'',transform:''},
+         offline:{...APT} },
+  res: { working:{left:'146px', top:'16px', bottom:'',right:'',transform:''},
+         idle:   {left:'calc(20% + 20px)', top:'',bottom:'58px',right:'',transform:''},
+         error:  {left:'146px', top:'16px', bottom:'',right:'',transform:''},
+         offline:{right:'30px', top:'8%',  left:'',bottom:'',transform:''} },
+  des: { working:{left:'238px', top:'16px', bottom:'',right:'',transform:''},
+         idle:   {left:'calc(20% + 60px)', top:'',bottom:'58px',right:'',transform:''},
+         error:  {left:'238px', top:'16px', bottom:'',right:'',transform:''},
+         offline:{right:'30px', top:'48%', left:'',bottom:'',transform:''} },
+  dev: { working:{left:'100px', top:'94px', bottom:'',right:'',transform:''},
+         idle:   {left:'calc(20% + 100px)', top:'',bottom:'60px',right:'',transform:''},
+         error:  {left:'100px', top:'94px', bottom:'',right:'',transform:''},
+         offline:{right:'30px', top:'62%', left:'',bottom:'',transform:''} },
+  qa:  { working:{left:'192px', top:'94px', bottom:'',right:'',transform:''},
+         idle:   {left:'calc(20% + 140px)', top:'',bottom:'60px',right:'',transform:''},
+         error:  {left:'192px', top:'94px', bottom:'',right:'',transform:''},
+         offline:{right:'30px', top:'28%', left:'',bottom:'',transform:''} },
+};
+
+function setPos(id, status) {
+  const el = document.getElementById('ag-' + id);
+  if (!el) return;
+  const p = agentPositions[id]?.[status];
+  if (!p) return;
+  el.setAttribute('data-status', status);
+  el.style.left      = p.left      !== undefined ? p.left      : '';
+  el.style.top       = p.top       !== undefined ? p.top       : '';
+  el.style.bottom    = p.bottom    !== undefined ? p.bottom    : '';
+  el.style.right     = p.right     !== undefined ? p.right     : '';
+  el.style.transform = p.transform !== undefined ? p.transform : '';
+}
+
+// ─── Font size control ───
+let currentFontSize = 12;
+const FONT_SIZES = [10, 11, 12, 13, 14, 15];
+function adjustFont(delta) {
+  const idx = FONT_SIZES.indexOf(currentFontSize);
+  const newIdx = Math.max(0, Math.min(FONT_SIZES.length - 1, idx + delta));
+  currentFontSize = FONT_SIZES[newIdx];
+  document.documentElement.style.fontSize = currentFontSize + 'px';
+  document.getElementById('fontSizeVal').textContent = currentFontSize;
+}
+// Set default slightly larger
+document.addEventListener('DOMContentLoaded', () => adjustFont(0));
+
+const rotations = {
+  pm:  ['working','idle','working'],
+  res: ['idle','working','idle'],
+  des: ['working','idle','working'],
+  dev: ['error','working','idle','error'],
+  qa:  ['offline','idle','working','offline'],
+};
+const ri = { pm:0, res:0, des:0, dev:0, qa:0 };
+
+function simulate() {
+  const ids = ['pm','res','des','dev','qa'];
+  const id  = ids[Math.floor(Math.random() * ids.length)];
+  const rot = rotations[id];
+  ri[id] = (ri[id] + 1) % rot.length;
+  setPos(id, rot[ri[id]]);
+}
+
+function refreshAll() {
+  ['pm','res','des','dev','qa'].forEach(id => {
+    const el = document.getElementById('ag-'+id);
+    if (el) {
+      el.style.animation = 'none';
+      el.getBoundingClientRect();
+      el.style.animation = '';
+    }
+  });
+}
+
+// ─── Agent Profile Sheet ───
+const AGENT_DATA = {
+  pm: {
+    name: 'PM',
+    cnTitle: '产品负责人 & 项目经理',
+    color: '#f43f5e',
+    status: 'working',
+    statusLabel: '🟢 Working',
+    statusClass: 'pill-ok',
+    desc: '负责需求理解、任务拆解分配、PRD撰写、优先级排序、进度管控、风险把控、最终验收。用 MoSCoW 法则进行优先级决策，确保团队高效协作。',
+    prompt: `你是 @PM（产品负责人 & 项目经理）。
+
+核心职责：接收用户需求、评估可行性、任务拆解分配、PRD撰写、进度管控、最终验收。
+
+决策框架：
+- 评估每个需求的 ROI（用户价值 vs 开发成本）
+- 优先级排序使用 MoSCoW 法则：Must / Should / Could / Won't
+- 任何超过 2 天工作量的任务必须拆解为子任务
+
+每个阶段结束后向用户汇报，等待确认后进入下一阶段。`,
+    skills: [
+      { id:'perplexity', name:'perplexity-search', desc:'AI 实时搜索', on:true },
+      { id:'firecrawl',  name:'firecrawl',         desc:'网页抓取',   on:true },
+      { id:'notion',     name:'notion-mcp',         desc:'Notion 集成', on:true },
+      { id:'codex',      name:'codex',              desc:'代码执行',   on:false },
+    ],
+    svgId: 'pm',
+  },
+  res: {
+    name: 'RESEARCHER',
+    cnTitle: '需求调研 & 市场研究员',
+    color: '#3b82f6',
+    status: 'idle',
+    statusLabel: '🟡 Idle',
+    statusClass: 'pill-idle',
+    desc: '负责市场调研、竞品分析、用户需求挖掘、行业趋势研究、商业模式调研。调研结果必须有数据或来源支撑，不做主观臆断。',
+    prompt: `你是 @Researcher（需求调研 & 市场研究员）。
+
+核心职责：市场调研、竞品分析、用户需求挖掘、行业趋势研究、商业模式调研。
+
+工作原则：
+- 调研结果必须有数据或来源支撑，不做主观臆断
+- 竞品分析要包含具体的功能对比和定价信息
+- 用户需求要从真实社区讨论中提取，给出原始链接
+- 调研结论要转化为可执行的产品建议
+
+使用 Web Search 工具主动搜索最新信息。`,
+    skills: [
+      { id:'perplexity',  name:'perplexity-search', desc:'AI 实时搜索', on:true },
+      { id:'agent-reach', name:'agent-reach',        desc:'多平台搜索', on:true },
+      { id:'firecrawl',   name:'firecrawl-search',   desc:'深度抓取',   on:true },
+      { id:'notion',      name:'notion-mcp',          desc:'Notion 集成', on:false },
+    ],
+    svgId: 'res',
+  },
+  des: {
+    name: 'DESIGNER',
+    cnTitle: '高级 UI/UX 设计师',
+    color: '#22c55e',
+    status: 'working',
+    statusLabel: '🟢 Working',
+    statusClass: 'pill-ok',
+    desc: '负责设计规范输出、页面布局、组件样式、配色方案、交互设计、响应式方案、设计走查。对标 Google Material Design 3，移动端优先。',
+    prompt: `你是 @Designer（高级 UI/UX 设计师）。
+
+核心职责：设计规范输出、页面布局、组件样式、配色方案、交互设计、响应式方案、设计走查。
+
+设计标准：
+- 对标 Google Material Design 3
+- 配色：中性灰色调为主，accent 用于关键交互
+- 间距系统：基于 4px 网格（4, 8, 12, 16, 24, 32, 48, 64）
+- 圆角：小组件 6px，卡片 12px，大容器 16px
+
+所有设计决策要给出 Tailwind CSS 类名参考。设计方案必须经用户确认后才能交给 @DEV 实现。`,
+    skills: [
+      { id:'frontend-design', name:'frontend-design', desc:'前端原型生成', on:true },
+      { id:'nano-banana',     name:'nano-banana-pro',  desc:'AI 图片生成', on:true },
+      { id:'baoyu',           name:'baoyu-image-gen',  desc:'多模型图片',  on:true },
+      { id:'pencil',          name:'pencil-mcp',        desc:'设计工具',    on:false },
+    ],
+    svgId: 'des',
+  },
+  dev: {
+    name: 'DEV',
+    cnTitle: '技术架构师 & 高级开发工程师',
+    color: '#eab308',
+    status: 'error',
+    statusLabel: '🔴 Error',
+    statusClass: 'pill-err',
+    desc: '负责技术选型、架构设计、核心代码开发、Code Review、性能优化。TypeScript 严格模式，每次提交前确保构建和 lint 通过。',
+    prompt: `你是 @DEV（技术架构师 & 高级开发工程师）。
+
+技术栈：Next.js 15 (App Router) + TypeScript + Tailwind CSS v4 + shadcn/ui
+
+编码规范：
+- TypeScript 严格模式，禁止 any
+- 组件命名: PascalCase，文件命名: kebab-case
+- 每个组件单一职责，超过 200 行考虑拆分
+- API 响应统一格式: { success: boolean, data?: T, error?: string }
+- 错误处理: 所有 async 操作必须 try-catch
+
+严格按照 @Designer 确认的设计方案编码，不自行发挥 UI 样式。`,
+    skills: [
+      { id:'github-mcp', name:'github-mcp',   desc:'GitHub 集成', on:true },
+      { id:'supabase',   name:'supabase-mcp',  desc:'数据库操作',  on:true },
+      { id:'vercel',     name:'vercel-mcp',    desc:'部署工具',    on:true },
+      { id:'n8n',        name:'n8n-mcp',        desc:'工作流自动化', on:false },
+    ],
+    svgId: 'dev',
+  },
+  qa: {
+    name: 'QA',
+    cnTitle: '测试 & 部署上线专员',
+    color: '#a855f7',
+    status: 'offline',
+    statusLabel: '⚫ Offline',
+    statusClass: 'pill-off',
+    desc: '负责测试用例设计、自动化测试、CI/CD 配置、部署上线、监控告警。测试覆盖率目标：核心模块 > 80%。',
+    prompt: `你是 @QA（测试 & 部署上线专员）。
+
+测试策略：
+- 单元测试: 核心业务逻辑、工具函数（Jest + React Testing Library）
+- 集成测试: API 端点、数据流
+- E2E 测试: 核心用户路径（Playwright，关键流程才写）
+- 测试覆盖率目标: 核心模块 > 80%
+
+部署流程：
+1. 本地构建验证通过
+2. 运行全量测试
+3. @Designer 设计走查确认
+4. 检查环境变量配置
+5. 执行部署命令（目标: Vercel）`,
+    skills: [
+      { id:'playwright', name:'playwright',   desc:'E2E 测试',   on:true },
+      { id:'vercel-qa',  name:'vercel-mcp',   desc:'Vercel 部署', on:true },
+      { id:'github-ci',  name:'github-mcp',   desc:'CI/CD 配置', on:true },
+      { id:'supabase-q', name:'supabase-mcp', desc:'数据库检查', on:false },
+    ],
+    svgId: 'qa',
+  },
+};
+
+// SVG character markup (scaled up 2x for avatar)
+const AGENT_SVGS = {
+  pm: `<svg viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="0" width="8" height="2" fill="#5a2e0e"/><rect x="5" y="1" width="10" height="3" fill="#7c3f1e"/><rect x="5" y="2" width="10" height="7" fill="#f4c49e"/><rect x="7" y="5" width="2" height="2" fill="#1a1a1a"/><rect x="11" y="5" width="2" height="2" fill="#1a1a1a"/><rect x="8" y="5" width="1" height="1" fill="#ffffff"/><rect x="12" y="5" width="1" height="1" fill="#ffffff"/><rect x="8" y="8" width="4" height="1" fill="#c97b5e"/><rect x="4" y="5" width="1" height="3" fill="#f4c49e"/><rect x="15" y="5" width="1" height="3" fill="#f4c49e"/><rect x="8" y="9" width="4" height="2" fill="#f4c49e"/><rect x="5" y="11" width="10" height="9" fill="#e8e8ee"/><rect x="5" y="11" width="3" height="9" fill="#1a1f3a"/><rect x="12" y="11" width="3" height="9" fill="#1a1f3a"/><rect x="9" y="11" width="2" height="7" fill="#f43f5e"/><rect x="9" y="18" width="2" height="1" fill="#c03050"/><rect x="2" y="11" width="3" height="8" fill="#1a1f3a"/><rect x="1" y="15" width="3" height="5" fill="#f4c49e"/><rect x="-1" y="13" width="4" height="5" fill="#e0c9a0"/><rect x="-1" y="13" width="4" height="1" fill="#b09060"/><rect x="0" y="15" width="2" height="1" fill="#6a5030"/><rect x="0" y="16" width="2" height="1" fill="#6a5030"/><rect x="15" y="11" width="3" height="8" fill="#1a1f3a"/><rect x="16" y="16" width="3" height="4" fill="#f4c49e"/><rect x="6" y="20" width="4" height="6" fill="#252a40"/><rect x="10" y="20" width="4" height="6" fill="#252a40"/><rect x="5" y="25" width="5" height="1" fill="#111"/><rect x="10" y="25" width="5" height="1" fill="#111"/></svg>`,
+  res: `<svg viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="0" width="10" height="3" fill="#1a1a1a"/><rect x="4" y="1" width="12" height="3" fill="#111"/><rect x="5" y="2" width="10" height="7" fill="#f0b98e"/><rect x="5" y="4" width="4" height="3" fill="none" stroke="#3b82f6" stroke-width=".8"/><rect x="11" y="4" width="4" height="3" fill="none" stroke="#3b82f6" stroke-width=".8"/><rect x="9" y="5" width="2" height="1" fill="#3b82f6"/><rect x="7" y="5" width="2" height="1" fill="#1a1a1a"/><rect x="12" y="5" width="2" height="1" fill="#1a1a1a"/><rect x="8" y="8" width="4" height="1" fill="#c97b5e"/><rect x="4" y="5" width="1" height="2" fill="#f0b98e"/><rect x="15" y="5" width="1" height="2" fill="#f0b98e"/><rect x="8" y="9" width="4" height="2" fill="#f0b98e"/><rect x="4" y="11" width="12" height="9" fill="#e0e0e8"/><rect x="4" y="11" width="2" height="5" fill="#cacad0"/><rect x="14" y="11" width="2" height="5" fill="#cacad0"/><rect x="7" y="11" width="6" height="6" fill="#3b82f6"/><rect x="2" y="11" width="2" height="9" fill="#e0e0e8"/><rect x="16" y="11" width="2" height="9" fill="#e0e0e8"/><rect x="1" y="18" width="3" height="3" fill="#f0b98e"/><rect x="-1" y="14" width="4" height="4" fill="none" stroke="#9ca3af" stroke-width=".8"/><rect x="2" y="17" width="2" height="3" fill="#9ca3af"/><rect x="17" y="18" width="3" height="3" fill="#f0b98e"/><rect x="17" y="14" width="4" height="5" fill="#fef3c7"/><rect x="18" y="15" width="2" height="1" fill="#94a3b8"/><rect x="18" y="16" width="2" height="1" fill="#94a3b8"/><rect x="6" y="20" width="3" height="6" fill="#1e3a5f"/><rect x="11" y="20" width="3" height="6" fill="#1e3a5f"/><rect x="5" y="25" width="4" height="1" fill="#111"/><rect x="11" y="25" width="4" height="1" fill="#111"/></svg>`,
+  des: `<svg viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="0" width="14" height="2" fill="#7c3aed"/><rect x="2" y="1" width="16" height="4" fill="#6d28d9"/><rect x="2" y="3" width="2" height="3" fill="#7c3aed"/><rect x="16" y="3" width="2" height="3" fill="#7c3aed"/><rect x="5" y="2" width="10" height="7" fill="#f4c49e"/><rect x="7" y="5" width="2" height="2" fill="#6d28d9"/><rect x="11" y="5" width="2" height="2" fill="#6d28d9"/><rect x="8" y="5" width="1" height="1" fill="#ffffffaa"/><rect x="12" y="5" width="1" height="1" fill="#ffffffaa"/><rect x="7" y="8" width="2" height="1" fill="#e88"/><rect x="11" y="8" width="2" height="1" fill="#e88"/><rect x="8" y="9" width="4" height="1" fill="#e88"/><rect x="4" y="5" width="1" height="2" fill="#f4c49e"/><rect x="15" y="5" width="1" height="2" fill="#f4c49e"/><rect x="8" y="9" width="4" height="2" fill="#f4c49e"/><rect x="5" y="11" width="10" height="9" fill="#22c55e"/><rect x="5" y="13" width="10" height="1" fill="#16a34a"/><rect x="5" y="15" width="10" height="1" fill="#16a34a"/><rect x="2" y="11" width="3" height="8" fill="#22c55e"/><rect x="15" y="11" width="3" height="8" fill="#22c55e"/><rect x="1" y="17" width="3" height="3" fill="#f4c49e"/><rect x="16" y="16" width="3" height="4" fill="#f4c49e"/><rect x="17" y="12" width="5" height="5" fill="#2d2d40"/><rect x="18" y="13" width="1" height="1" fill="#ef4444"/><rect x="20" y="13" width="1" height="1" fill="#3b82f6"/><rect x="18" y="15" width="1" height="1" fill="#22c55e"/><rect x="20" y="15" width="1" height="1" fill="#f59e0b"/><rect x="16" y="10" width="1" height="5" fill="#9ca3af"/><rect x="16" y="10" width="1" height="2" fill="#f97316"/><rect x="6" y="20" width="4" height="6" fill="#111827"/><rect x="10" y="20" width="4" height="6" fill="#111827"/><rect x="5" y="25" width="5" height="1" fill="#a855f7"/><rect x="10" y="25" width="5" height="1" fill="#22c55e"/></svg>`,
+  dev: `<svg viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="0" width="14" height="5" fill="#92400e"/><rect x="4" y="1" width="12" height="5" fill="#a16207"/><rect x="5" y="2" width="10" height="7" fill="#fcd9a0"/><rect x="4" y="2" width="12" height="2" fill="#1a1a2e"/><rect x="3" y="3" width="3" height="4" fill="#1a1a2e"/><rect x="3" y="4" width="3" height="3" fill="#2a2a3e"/><rect x="14" y="3" width="3" height="4" fill="#1a1a2e"/><rect x="14" y="4" width="3" height="3" fill="#2a2a3e"/><rect x="7" y="5" width="3" height="1" fill="#1a1a1a"/><rect x="11" y="5" width="3" height="1" fill="#1a1a1a"/><rect x="8" y="8" width="4" height="1" fill="#b07040"/><rect x="8" y="9" width="4" height="2" fill="#fcd9a0"/><rect x="4" y="11" width="12" height="9" fill="#eab308"/><rect x="7" y="15" width="6" height="3" fill="#ca8a04"/><rect x="1" y="11" width="3" height="9" fill="#eab308"/><rect x="16" y="11" width="3" height="9" fill="#eab308"/><rect x="0" y="18" width="3" height="3" fill="#fcd9a0"/><rect x="17" y="18" width="3" height="3" fill="#fcd9a0"/><rect x="5" y="17" width="10" height="6" fill="#0d1117"/><rect x="5" y="17" width="10" height="1" fill="#1a1a2e"/><rect x="6" y="18" width="6" height="1" fill="#f87171"/><rect x="6" y="20" width="4" height="6" fill="#1f2937"/><rect x="10" y="20" width="4" height="6" fill="#1f2937"/><rect x="5" y="25" width="5" height="1" fill="#111"/><rect x="10" y="25" width="5" height="1" fill="#111"/></svg>`,
+  qa:  `<svg viewBox="0 0 20 26" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="0" width="12" height="3" fill="#7e22ce"/><rect x="3" y="1" width="14" height="3" fill="#9333ea"/><rect x="3" y="3" width="14" height="2" fill="#a855f7"/><rect x="5" y="3" width="10" height="6" fill="#f4c49e"/><rect x="7" y="5" width="2" height="2" fill="#1a1a1a"/><rect x="11" y="5" width="2" height="2" fill="#1a1a1a"/><rect x="8" y="5" width="1" height="1" fill="#ffffff"/><rect x="12" y="5" width="1" height="1" fill="#ffffff"/><rect x="8" y="8" width="4" height="1" fill="#c97b5e"/><rect x="4" y="5" width="1" height="2" fill="#f4c49e"/><rect x="15" y="5" width="1" height="2" fill="#f4c49e"/><rect x="8" y="9" width="4" height="2" fill="#f4c49e"/><rect x="5" y="11" width="10" height="9" fill="#ea580c"/><rect x="5" y="14" width="10" height="1" fill="#fbbf24"/><rect x="5" y="17" width="10" height="1" fill="#fbbf24"/><rect x="7" y="11" width="6" height="3" fill="#1d4ed8"/><rect x="2" y="11" width="3" height="9" fill="#ea580c"/><rect x="15" y="11" width="3" height="9" fill="#ea580c"/><rect x="1" y="18" width="3" height="3" fill="#f4c49e"/><rect x="16" y="18" width="3" height="3" fill="#f4c49e"/><rect x="16" y="13" width="5" height="6" fill="#f0e8d0"/><rect x="16" y="13" width="5" height="1" fill="#c0a870"/><rect x="17" y="15" width="3" height="1" fill="#5a4530"/><rect x="17" y="16" width="3" height="1" fill="#5a4530"/><rect x="17" y="15" width="1" height="1" fill="#22c55e"/><rect x="17" y="16" width="1" height="1" fill="#22c55e"/><rect x="6" y="20" width="3" height="6" fill="#1e3a5f"/><rect x="11" y="20" width="3" height="6" fill="#1e3a5f"/><rect x="5" y="25" width="4" height="1" fill="#78350f"/><rect x="11" y="25" width="4" height="1" fill="#78350f"/></svg>`,
+};
+
+let currentAgent = null;
+let editingDesc   = false;
+let editingPrompt = false;
+const skillStates = {};
+
+function openProfile(agentId) {
+  currentAgent  = agentId;
+  editingDesc   = false;
+  editingPrompt = false;
+  const d = AGENT_DATA[agentId];
+  if (!d) return;
+
+  // Init skill states
+  if (!skillStates[agentId]) {
+    skillStates[agentId] = {};
+    d.skills.forEach(s => { skillStates[agentId][s.id] = s.on; });
+  }
+
+  // Avatar
+  const av = document.getElementById('profileAvatar');
+  av.innerHTML = AGENT_SVGS[agentId] || '';
+  av.style.borderColor = d.color;
+
+  // Meta
+  document.getElementById('profileRole').textContent    = d.name;
+  document.getElementById('profileRole').style.color    = d.color;
+  document.getElementById('profileCnTitle').textContent = d.cnTitle;
+
+  const badge = document.getElementById('profileStatusBadge');
+  badge.textContent = d.statusLabel;
+  const sc = { working:'#22c55e', idle:'#f59e0b', error:'#ef4444', offline:'#4a5568' }[d.status];
+  badge.style.color = sc;
+  badge.style.borderColor = sc + '60';
+  badge.style.background  = sc + '15';
+
+  // Desc
+  document.getElementById('profileDescText').textContent = d.desc;
+  setDescMode(false);
+
+  // Prompt
+  document.getElementById('profilePrompt').value = d.prompt;
+  setPromptMode(false);
+
+  // Skills
+  renderSkills(agentId);
+
+  // Open
+  const overlay = document.getElementById('profileOverlay');
+  const sheet   = document.getElementById('profileSheet');
+  overlay.classList.remove('hidden');
+  sheet.classList.add('entering');
+  setTimeout(() => sheet.classList.remove('entering'), 350);
+}
+
+function closeProfile() {
+  document.getElementById('profileOverlay').classList.add('hidden');
+  currentAgent = null;
+}
+
+function setDescMode(editing) {
+  editingDesc = editing;
+  const text = document.getElementById('profileDescText');
+  const inp  = document.getElementById('profileDescInput');
+  const btn  = document.getElementById('descEditBtn');
+  if (editing) {
+    inp.value = text.textContent;
+    text.style.display = 'none';
+    inp.style.display  = 'block';
+    inp.focus();
+    btn.textContent = '完成';
+    btn.classList.add('active');
+  } else {
+    if (currentAgent && editingDesc) {
+      AGENT_DATA[currentAgent].desc = inp.value;
+      text.textContent = inp.value;
+    }
+    text.style.display = 'block';
+    inp.style.display  = 'none';
+    btn.textContent = '编辑';
+    btn.classList.remove('active');
+  }
+}
+
+function setPromptMode(editing) {
+  editingPrompt = editing;
+  const ta  = document.getElementById('profilePrompt');
+  const btn = document.getElementById('promptEditBtn');
+  if (editing) {
+    ta.removeAttribute('readonly');
+    ta.classList.add('editing');
+    ta.focus();
+    btn.textContent = '完成';
+    btn.classList.add('active');
+  } else {
+    ta.setAttribute('readonly','');
+    ta.classList.remove('editing');
+    btn.textContent = '编辑';
+    btn.classList.remove('active');
+  }
+}
+
+function toggleDescEdit() {
+  if (editingDesc) setDescMode(false);
+  else             setDescMode(true);
+}
+function togglePromptEdit() {
+  if (editingPrompt) setPromptMode(false);
+  else               setPromptMode(true);
+}
+
+function renderSkills(agentId) {
+  const d   = AGENT_DATA[agentId];
+  const grid = document.getElementById('skillsGrid');
+  const st   = skillStates[agentId];
+  grid.innerHTML = d.skills.map(s => `
+    <div class="skill-card">
+      <div>
+        <div class="skill-name">${s.name}</div>
+        <div class="skill-desc">${s.desc}</div>
+      </div>
+      <div class="toggle ${st[s.id] ? 'on' : 'off'}"
+           onclick="toggleSkill('${agentId}','${s.id}',this)"></div>
+    </div>`).join('');
+}
+
+function toggleSkill(agentId, skillId, el) {
+  skillStates[agentId][skillId] = !skillStates[agentId][skillId];
+  el.className = 'toggle ' + (skillStates[agentId][skillId] ? 'on' : 'off');
+}
+
+function saveProfile() {
+  if (editingDesc)   setDescMode(false);
+  if (editingPrompt) setPromptMode(false);
+  const btn = document.getElementById('saveProfileBtn');
+  btn.classList.add('save-flash');
+  btn.textContent = '✓ 已保存';
+  setTimeout(() => {
+    btn.classList.remove('save-flash');
+    btn.textContent = '保存修改';
+    closeProfile();
+  }, 800);
+}
+
+// Wire up acard clicks to open profile
+document.querySelectorAll('.acard').forEach(card => {
+  const id = card.getAttribute('data-agent');
+  if (id) card.addEventListener('click', () => openProfile(id));
+});
+</script>
+
+<!-- ═══ AGENT PROFILE SHEET ═══ -->
+<div class="sheet-overlay hidden" id="profileOverlay" onclick="if(event.target===this)closeProfile()">
+  <div class="sheet" id="profileSheet">
+
+    <div class="sheet-header">
+      <div style="font-family:'Press Start 2P',monospace;font-size:7px;color:#7aa2f7;letter-spacing:1px;">▸ AGENT PROFILE</div>
+      <button class="sheet-close" onclick="closeProfile()">✕</button>
+    </div>
+
+    <div class="sheet-hero">
+      <div class="sheet-avatar" id="profileAvatar"></div>
+      <div class="sheet-hero-info">
+        <div class="sheet-role" id="profileRole"></div>
+        <div class="sheet-title-cn" id="profileCnTitle"></div>
+        <div class="sheet-status-badge" id="profileStatusBadge"></div>
+      </div>
+    </div>
+
+    <div class="sheet-body">
+
+      <!-- Description -->
+      <div class="sheet-section">
+        <div class="sheet-section-header">
+          <div class="sheet-section-title">📝 人物描述</div>
+          <button class="edit-btn" id="descEditBtn" onclick="toggleDescEdit()">编辑</button>
+        </div>
+        <div class="desc-text" id="profileDescText"></div>
+        <textarea class="desc-input" id="profileDescInput" style="display:none;" rows="3"></textarea>
+      </div>
+
+      <!-- System Prompt -->
+      <div class="sheet-section">
+        <div class="sheet-section-header">
+          <div class="sheet-section-title">⚙️ 系统 Prompt</div>
+          <button class="edit-btn" id="promptEditBtn" onclick="togglePromptEdit()">编辑</button>
+        </div>
+        <textarea class="prompt-box" id="profilePrompt" readonly></textarea>
+      </div>
+
+      <!-- Skills -->
+      <div class="sheet-section">
+        <div class="sheet-section-header">
+          <div class="sheet-section-title">🔧 可用 Skills</div>
+        </div>
+        <div class="skills-grid" id="skillsGrid"></div>
+      </div>
+
+    </div><!-- /body -->
+
+    <div class="sheet-footer">
+      <button class="sheet-footer-btn cancel" onclick="closeProfile()">取消</button>
+      <button class="sheet-footer-btn save" id="saveProfileBtn" onclick="saveProfile()">保存修改</button>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
