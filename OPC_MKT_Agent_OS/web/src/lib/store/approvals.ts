@@ -15,6 +15,14 @@ export async function listApprovals(filter?: {
   return items;
 }
 
+export async function deleteApprovalsByContentId(contentId: string): Promise<void> {
+  const items = readCollection<ApprovalRecord>(COLLECTION);
+  const filtered = items.filter((item) => item.content_id !== contentId);
+  if (filtered.length !== items.length) {
+    writeCollection(COLLECTION, filtered);
+  }
+}
+
 export async function createApproval(
   data: Omit<ApprovalRecord, 'id' | 'created_at'>
 ): Promise<ApprovalRecord> {

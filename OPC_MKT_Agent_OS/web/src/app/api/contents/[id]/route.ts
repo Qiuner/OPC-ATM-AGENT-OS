@@ -4,6 +4,7 @@ import {
   updateContent,
   deleteContent,
 } from '@/lib/store/contents';
+import { deleteApprovalsByContentId } from '@/lib/store/approvals';
 
 export async function GET(
   _request: NextRequest,
@@ -54,6 +55,7 @@ export async function DELETE(
   try {
     const { id } = await params;
     await deleteContent(id);
+    await deleteApprovalsByContentId(id);
     return NextResponse.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

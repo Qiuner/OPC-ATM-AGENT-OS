@@ -11,19 +11,30 @@ interface Settings {
     verified: boolean;
     configuredAt: string;
   };
+  approval?: {
+    mode: "auto" | "manual";
+    autoThreshold: number;
+  };
   [key: string]: unknown;
 }
 
+const DEFAULT_APPROVAL = { mode: "manual" as const, autoThreshold: 7 };
+
 function readSettings(): Settings {
+  let settings: Settings = {};
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const raw = fs.readFileSync(SETTINGS_FILE, 'utf-8');
-      return JSON.parse(raw) as Settings;
+      settings = JSON.parse(raw) as Settings;
     }
   } catch {
-    // Return empty settings on parse error
+    // Return defaults on parse error
   }
-  return {};
+  // Ensure approval defaults are always present
+  if (!settings.approval) {
+    settings.approval = { ...DEFAULT_APPROVAL };
+  }
+  return settings;
 }
 
 function writeSettings(settings: Settings): void {
