@@ -769,20 +769,39 @@ export default function TeamStudioV3() {
 
   const agentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Fetch team state from API
+  // Fetch registered agents from API
   useEffect(() => {
     (async () => {
       try {
+        // Load registered agents as "online" (idle) state
+        const res = await fetch('/api/agent/status');
+        const json = await res.json() as { agents?: Array<{ id: string; name: string; nameEn: string; description: string; level: string; color: string; avatar: string; status: string }> };
+        if (json.agents && json.agents.length > 0) {
+          const mapped: MonitorAgent[] = json.agents.map(a => ({
+            id: a.id,
+            name: a.name,
+            nameEn: a.nameEn,
+            role: a.level,
+            color: a.color,
+            avatar: a.avatar || a.nameEn.slice(0, 3),
+            status: 'online' as AgentStatus,
+          }));
+          setAgents(mapped);
+        }
+      } catch {
+        // empty state on error
+      }
+      // Also try to load active team state
+      try {
         const res = await fetch('/api/team-studio');
-        const json = await res.json() as { success: boolean; data?: { agents?: MonitorAgent[]; tasks?: ExecTask[]; logs?: LogEntry[]; prompt?: string } };
+        const json = await res.json() as { success: boolean; data?: { tasks?: ExecTask[]; logs?: LogEntry[]; prompt?: string } };
         if (json.success && json.data) {
-          if (json.data.agents) setAgents(json.data.agents);
           if (json.data.tasks) setExecTasks(json.data.tasks);
           if (json.data.logs) setLogs(json.data.logs);
           if (json.data.prompt) setTaskPrompt(json.data.prompt);
         }
       } catch {
-        // empty state on error
+        // no active team session
       }
     })();
   }, []);
@@ -850,32 +869,17 @@ export default function TeamStudioV3() {
         }}
       >
         <div className="flex items-center gap-3 px-5 h-11">
-          <span className="w-2 h-2 rounded-full shrink-0 animate-pulse" style={{ background: T.green, boxShadow: `0 0 6px ${T.green}` }} />
           <span className="text-sm font-semibold px-1.5 py-0.5 rounded shrink-0" style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.10)' }}>TEAM</span>
-          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0" style={{ background: 'rgba(34,211,238,0.08)', color: '#22d3ee' }}>
-            Agent Team Mode
-          </span>
           <div className="flex-1 min-w-0">
-            <p className="text-lg truncate" style={{ fontFamily: font.body, color: T.text }}>
-              {taskPrompt || 'Waiting for task...'}
+            <p className="text-sm truncate" style={{ fontFamily: font.body, color: taskPrompt ? T.text : T.textDim }}>
+              {taskPrompt || `${agents.length} agents online — enter a task below`}
             </p>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-sm" style={{ color: T.textDim }}>⏱</span>
-            <span className="text-sm tabular-nums" style={{ fontFamily: font.mono, color: T.textMuted }}>{execTimeStr}</span>
-          </div>
-          <button
-            className="px-2.5 py-1 text-sm font-medium rounded-md cursor-pointer transition-all duration-200 hover:brightness-125"
-            style={{ fontFamily: font.heading, color: T.textMuted, background: 'rgba(255,255,255,0.04)', border: `1px solid ${T.border}` }}
-          >
-            ↻
-          </button>
-          <button
-            className="flex items-center gap-1 px-2.5 py-1 text-sm font-medium rounded-md cursor-pointer transition-all duration-200 hover:brightness-125"
-            style={{ fontFamily: font.heading, color: T.red, background: T.redBg, border: `1px solid ${T.red}20` }}
-          >
-            ■ Stop
-          </button>
+          {taskPrompt && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-xs tabular-nums" style={{ fontFamily: font.mono, color: T.textMuted }}>{execTimeStr}</span>
+            </div>
+          )}
         </div>
       </div>
 
