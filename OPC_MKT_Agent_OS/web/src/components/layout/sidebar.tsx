@@ -5,8 +5,6 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Database,
-  Megaphone,
-  KanbanSquare,
   CheckCircle,
   Send,
   BarChart3,
@@ -31,8 +29,6 @@ const navItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/team-studio', label: 'Team Studio', icon: Zap, badgeText: 'LIVE', badgeColor: '#22d3ee' },
   { href: '/context-vault', label: 'Context Vault', icon: Database },
-  { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
-  { href: '/task-board', label: 'Task Board', icon: KanbanSquare },
   { href: '/approval', label: 'Approval Center', icon: CheckCircle, badge: 3 },
   { href: '/publishing', label: 'Publishing Hub', icon: Send },
   { href: '/creatorflow', label: 'CreatorFlow', icon: Pen, badgeText: 'LIVE', badgeColor: '#22d3ee' },

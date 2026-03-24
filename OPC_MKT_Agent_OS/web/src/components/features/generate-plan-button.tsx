@@ -115,10 +115,10 @@ export function GeneratePlanButton() {
               {summary.planDays} 天策略 · {summary.draftsCount} 篇草稿 · {summary.publishPacksCount} 个发布包
             </p>
             <Link
-              href="/task-board"
+              href="/"
               className="mt-2 inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-medium hover:underline"
             >
-              查看任务看板 <ArrowRight className="h-3.5 w-3.5" />
+              查看 Dashboard <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         </div>

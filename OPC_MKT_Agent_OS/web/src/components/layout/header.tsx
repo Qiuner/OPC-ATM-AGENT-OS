@@ -5,11 +5,10 @@ import { usePathname } from 'next/navigation';
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
   '/context-vault': 'Context Vault',
-  '/campaigns': 'Campaigns',
-  '/task-board': 'Task Board',
   '/approval': 'Approval Center',
   '/publishing': 'Publishing Hub',
   '/team-studio': 'Team Studio',
+  '/creatorflow': 'CreatorFlow',
   '/analytics': 'Analytics',
 };
 

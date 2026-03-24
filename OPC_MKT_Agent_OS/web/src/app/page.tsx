@@ -18,7 +18,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { GeneratePlanButton } from '@/components/features/generate-plan-button';
-import type { Task, Content, Campaign } from '@/types';
+import type { Task, Content } from '@/types';
 
 interface DashboardMetrics {
   totalTasks: number;
@@ -345,25 +345,21 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [tasksRes, contentsRes, campaignsRes] = await Promise.all([
+      const [tasksRes, contentsRes] = await Promise.all([
         fetch('/api/tasks'),
         fetch('/api/contents'),
-        fetch('/api/campaigns'),
       ]);
 
       const tasksData = (await tasksRes.json()) as { success: boolean; data: Task[] };
       const contentsData = (await contentsRes.json()) as { success: boolean; data: Content[] };
-      const campaignsData = (await campaignsRes.json()) as { success: boolean; data: Campaign[] };
 
       const tasks = tasksData.success ? tasksData.data : [];
       const contents = contentsData.success ? contentsData.data : [];
-      const campaigns = campaignsData.success ? campaignsData.data : [];
 
       const reviewContents = contents.filter((c) => c.status === 'review').length;
       const publishedContents = contents.filter((c) => c.status === 'published').length;
-      const activeCampaigns = campaigns.filter((c) => c.status === 'active').length;
 
-      setMetrics({ totalTasks: tasks.length, reviewContents, publishedContents, activeCampaigns });
+      setMetrics({ totalTasks: tasks.length, reviewContents, publishedContents, activeCampaigns: 0 });
 
       const taskItems: ActivityItem[] = tasks.map((t) => ({
         id: t.id, type: 'task' as const, title: t.title, status: t.status, updatedAt: t.updated_at,
