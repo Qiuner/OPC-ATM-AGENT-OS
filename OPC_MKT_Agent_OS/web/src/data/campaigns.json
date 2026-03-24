@@ -1,0 +1,80 @@
+[
+  {
+    "id": "camp-001",
+    "workspace_id": "ws-001",
+    "name": "春季新品推广",
+    "description": "推广 OPC 增长站 2.0 新功能",
+    "goal": "推广 OPC 增长站 2.0 新功能，获取 500 个注册用户",
+    "start_date": "2026-03-01",
+    "end_date": "2026-03-31",
+    "status": "active",
+    "created_by": "user-001",
+    "created_at": "2026-02-25T00:00:00Z",
+    "updated_at": "2026-03-08T00:00:00Z"
+  },
+  {
+    "id": "camp-002",
+    "workspace_id": "ws-001",
+    "name": "品牌日常种草",
+    "description": "持续品牌曝光，每周发布优质内容",
+    "goal": "持续品牌曝光，每周发布 3-5 篇优质内容",
+    "start_date": "2026-02-15",
+    "end_date": "2026-04-15",
+    "status": "active",
+    "created_by": "user-001",
+    "created_at": "2026-02-10T00:00:00Z",
+    "updated_at": "2026-03-07T00:00:00Z"
+  },
+  {
+    "id": "camp-003",
+    "workspace_id": "ws-001",
+    "name": "AI工具测评系列",
+    "description": "建立行业 KOL 形象",
+    "goal": "建立行业 KOL 形象，产出 20 篇深度测评",
+    "start_date": "2026-03-05",
+    "end_date": "2026-04-30",
+    "status": "active",
+    "created_by": "user-001",
+    "created_at": "2026-03-01T00:00:00Z",
+    "updated_at": "2026-03-09T00:00:00Z"
+  },
+  {
+    "id": "camp-004",
+    "workspace_id": "ws-001",
+    "name": "Q2 增长计划",
+    "description": "Q2 季度整体增长策略",
+    "goal": "Q2 季度整体增长策略，目标 DAU 提升 30%",
+    "start_date": "2026-04-01",
+    "end_date": "2026-06-30",
+    "status": "planned",
+    "created_by": "user-001",
+    "created_at": "2026-03-05T00:00:00Z",
+    "updated_at": "2026-03-10T00:00:00Z"
+  },
+  {
+    "id": "camp-005",
+    "workspace_id": "ws-001",
+    "name": "春节活动",
+    "description": "春节限定活动",
+    "goal": "春节限定活动，新年优惠与品牌传播",
+    "start_date": "2026-01-20",
+    "end_date": "2026-02-10",
+    "status": "completed",
+    "created_by": "user-001",
+    "created_at": "2026-01-15T00:00:00Z",
+    "updated_at": "2026-02-10T00:00:00Z"
+  },
+  {
+    "id": "camp-openclaw-demo",
+    "workspace_id": "ws-001",
+    "name": "OpenClaw 龙虾大赛参赛作品",
+    "description": "展示 OpenClaw × OPC_MKT_Agent_OS 的全自动营销闭环能力",
+    "goal": "展示 OpenClaw × OPC_MKT_Agent_OS 的全自动营销闭环能力",
+    "status": "active",
+    "start_date": "2026-03-18",
+    "end_date": "2026-03-22",
+    "created_by": "openclaw-agent",
+    "created_at": "2026-03-18T10:00:00Z",
+    "updated_at": "2026-03-18T10:00:00Z"
+  }
+]

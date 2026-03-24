@@ -6,7 +6,7 @@
  *   创建团队 → spawn Agent → 协调执行 → 返回结果
  */
 
-import { ClaudeBridge, type StreamJsonEvent, type BridgeResult } from "./claude-bridge.js";
+import { ClaudeBridge, type StreamJsonEvent, type BridgeResult } from "./claude-bridge";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";

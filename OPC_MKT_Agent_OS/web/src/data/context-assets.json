@@ -1,0 +1,191 @@
+[
+  {
+    "id": "ca-001",
+    "workspace_id": "ws-001",
+    "type": "product",
+    "title": "OPC增长站",
+    "content": "一站式 AI 营销自动化平台，覆盖内容生产到数据分析全链路。14天上线个人AI业务网站，包含产品展示、案例库、教程中心和转化入口。价格区间：3999-15999元。",
+    "metadata": {
+      "status": "complete"
+    },
+    "created_by": "user-001",
+    "created_at": "2026-03-01T00:00:00Z",
+    "updated_at": "2026-03-08T00:00:00Z"
+  },
+  {
+    "id": "ca-002",
+    "workspace_id": "ws-001",
+    "type": "product",
+    "title": "AI营销配置包",
+    "content": "预设行业模板与 Prompt 组合，快速启动营销活动。覆盖电商、教育、SaaS等行业。",
+    "metadata": {
+      "status": "incomplete"
+    },
+    "created_by": "user-001",
+    "created_at": "2026-03-02T00:00:00Z",
+    "updated_at": "2026-03-05T00:00:00Z"
+  },
+  {
+    "id": "ca-003",
+    "workspace_id": "ws-001",
+    "type": "brand",
+    "title": "湾区虾哥品牌指南",
+    "content": "品牌视觉规范、Tone of Voice、核心价值主张文档。主色调蓝色系，辅助色中性灰。",
+    "metadata": {
+      "status": "complete"
+    },
+    "created_by": "user-001",
+    "created_at": "2026-02-20T00:00:00Z",
+    "updated_at": "2026-03-07T00:00:00Z"
+  },
+  {
+    "id": "ca-004",
+    "workspace_id": "ws-001",
+    "type": "brand",
+    "title": "语气规范",
+    "content": "各平台内容语气指南：专业但不刻板，亲切但不随意。小红书偏活泼，公众号偏专业。",
+    "metadata": {
+      "status": "complete"
+    },
+    "created_by": "user-001",
+    "created_at": "2026-02-25T00:00:00Z",
+    "updated_at": "2026-03-06T00:00:00Z"
+  },
+  {
+    "id": "ca-005",
+    "workspace_id": "ws-001",
+    "type": "audience",
+    "title": "一人公司创业者画像",
+    "content": "独立创业者用户画像，关注效率工具与低成本增长。年龄25-40岁，技术背景为主。",
+    "metadata": {
+      "status": "incomplete"
+    },
+    "created_by": "user-001",
+    "created_at": "2026-02-28T00:00:00Z",
+    "updated_at": "2026-03-04T00:00:00Z"
+  },
+  {
+    "id": "ca-006",
+    "workspace_id": "ws-001",
+    "type": "audience",
+    "title": "企业老板画像",
+    "content": "中小企业决策者，关注 ROI、团队协作与规模化运营。年营收100万-5000万。",
+    "metadata": {
+      "status": "complete"
+    },
+    "created_by": "user-001",
+    "created_at": "2026-03-05T00:00:00Z",
+    "updated_at": "2026-03-09T00:00:00Z"
+  },
+  {
+    "id": "ca-007",
+    "workspace_id": "ws-001",
+    "type": "content",
+    "title": "春节限定活动复盘",
+    "content": "2026春节营销活动数据复盘，含各平台 ROI 对比分析。小红书转化率最高达8.3%。",
+    "metadata": {
+      "status": "complete"
+    },
+    "created_by": "user-001",
+    "created_at": "2026-02-15T00:00:00Z",
+    "updated_at": "2026-02-20T00:00:00Z"
+  },
+  {
+    "id": "ca-008",
+    "workspace_id": "ws-001",
+    "type": "content",
+    "title": "小红书爆款分析",
+    "content": "近30天高互动笔记拆解，提取爆款内容公式与选题方向。Top10笔记平均互动量2.3万。",
+    "metadata": {
+      "status": "incomplete"
+    },
+    "created_by": "user-001",
+    "created_at": "2026-03-01T00:00:00Z",
+    "updated_at": "2026-03-03T00:00:00Z"
+  },
+  {
+    "workspace_id": "ws-001",
+    "type": "product",
+    "title": "测试产品",
+    "content": "测试内容",
+    "metadata": {},
+    "created_by": "user-001",
+    "id": "ca-mmkgvae3-qodxa4",
+    "created_at": "2026-03-10T10:27:58.682Z",
+    "updated_at": "2026-03-10T10:27:58.682Z"
+  },
+  {
+    "workspace_id": "default",
+    "type": "content",
+    "title": "素材收集 — https://mp.weixin.qq.com/s/GBCgc03eHrOxTEOd1k4aGw",
+    "content": "围绕「https://mp.weixin.qq.com/s/GBCgc03eHrOxTEOd1k4aGw」收集的素材集合（平台: 公众号）",
+    "metadata": {
+      "source": "openclaw",
+      "platform": "公众号"
+    },
+    "created_by": "openclaw-agent",
+    "id": "ca-mmvo1qmy-e56rm8",
+    "created_at": "2026-03-18T06:34:24.921Z",
+    "updated_at": "2026-03-18T06:34:24.921Z"
+  },
+  {
+    "workspace_id": "default",
+    "type": "content",
+    "title": "Anthropic 推出首个官方认证：Claude 架构师",
+    "content": "Anthropic 推出了自家第一个官方技术认证：\nClaude Certified Architect，Foundations\n（简称 CCAF）。\n这应该是 AI 行业里，第一个由模型厂商自己推出的、面向架构师级别的官方技术认证。\n名字叫\nClaude Certified Architect，Foundations\n（简称 CCA-F）。120 分钟，60 道题，全程监考，只有一次机会。\nCCA-F 认证徽章\n这可不是那种刷刷选择题就能过的入门测试。官方定位是\n~301 level\n，也就是说，你得有实打实的项目经验，才有可能通过。\n考什么\n五个核心领域，权重分配是：\nAgentic Architecture & Orchestration（智能体架构与编排），占了 27%。\n将近三分之一的分数都给了 Agent 架构设计。包括 agentic loop 设计、多 Agent 协调（coordinator-subagent 模式）、任务分解、会话状态管理和工作流控制。\n换句话说，Anthropic 认为 AI 架构师最核心的能力，是设计和编排 Agent 系统。\n下面这张图来自配套课程，列出了当前构建 Agent 面临的核心挑战：什么算 Agent？Agent 和 Workflow 怎么选？设计模式怎么定？测试和评估怎么做？\n构建 Agent 的六大核心挑战\nClaude Code Configuration & Workflows（Claude Code 配置与工作流），占 20%。\n考的是 CLAUDE.md 层级配置、自定义 slash 命令、路径特定规则、plan mode 的使用时机，以及 CI/CD 集成。\n这部分其实挺出乎意料的。Claude Code 才转正没多久，就直接占了考试五分之一的权重了。\n课程里展示了 Claude Code 在项目全生命周期的用法：从探索代码库、设计架构，到实现代码、写测试、部署上线、监控运维，每个环节都能介入。\nClaude Code 覆盖项目全生命周期\nPrompt Engineering & Structured Output（提示工程与结构化输出），同样 20%。\n设计带有明确标准的 prompt、few-shot 技巧、用 JSON Schema 约束结构化输出、校验和重试循环。\n课程把这块拆成了两个维度：Prompt Engineering 负责「写得好」，Prompt Evaluation 负责「测得准」，包括多版本对比、自动打分等。\nPrompt 工程与评估的两个维度\nTool Design & MCP Integration（工具设计与 MCP 集成），18%。\n设计清晰边界的工具接口、结构化错误响应、MCP 服务器集成、跨 Agent 的工具分配。\n下图是 MCP 的基本架构：一个 MCP Client 可以连接多个 MCP Server，每个 Server 提供 Tools、Prompts、Resources 三类能力，再对接外部服务。\nMCP Client 连接多个 Server 的架构\nContext Management & Reliability（上下文管理与可靠性），15%。\n长对话中保持关键信息、设计升级策略、多 Agent 系统的错误传播管理、不确定性的置信度校准。\n加在一起看，这份考卷其实是在问一个问题：你能不能真的用 Claude 搭建一套生产级的 AI 系统？\n远程考试\n考试由 ProctorFree 提供远程监考。120 分钟内完成 60 道选择题，中间不能休息，也不能查资料。\n而且……只有一次机会。没过的话，目前也没说能不能补考。\n成绩在 2 个工作日内出，会给到一份详细的分项成绩报告。通过了就能拿到一个\nCCA-F 数字徽章\n，可以挂在 LinkedIn 上。\n六个实战场景\n考试并非纯理论。每次考试会从 6 个预设场景中\n随机抽取 4 个\n，每个场景模拟的都是真实的生产环境。\n场景一：客户支持 Agent。\n用 Claude Agent SDK 构建一个处理退货、账单争议、账户问题的客服 Agent，接入后端系统的 MCP 工具（get_customer、lookup_order、process_refund、escalate_to_human），目标是 80% 以上的首次解决率，同时知道什么时候该转人工。\n这个场景要求你同时掌握 Agent 架构设计、MCP 工具集成和上下文可靠性管理，算是最综合的一道了。\n下图是课程中关于 MCP 通信机制的讲解：Client 通过 CallToolRequest 调用 Server 端的工具，Server 返回 CallToolResult。\nMCP Client-Server 通信流程\n场景二：Claude Code 代码生成。\n团队用 Claude Code 做代码生成、重构、调试和文档，你需要用自定义 slash 命令和 CLAUDE.md 配置来把它融入开发流程，还得判断什么时候用 plan mode。\n课程里演示了 Claude Code 的 worktree 分支模式：多个 feature 分支可以并行开发，完成后再合并回 main 分支。\nClaude Code worktree 分支合并流程\n场景三：多 Agent 研究系统。\n一个 coordinator Agent 调度多个子 Agent：一个搜网页、一个分析文档、一个综合发现、一个生成报告……最终产出带引用的完整研究报告。\n课程中用下面这张图展示了并行工作流的模式：一个用户任务被拆成多个子任务并行执行，每个子任务可以有不同的 prompt 和工具集，最后由 Aggregator 汇总。\n并行工作流：任务拆分与结果聚合\n场景四：开发者生产力工具。\n帮工程师探索不熟悉的代码库、理解遗留系统、生成样板代码、自动化重复任务……用到 Read、Write、Bash、Grep、Glob 这些内置工具，还得集成 MCP 服务器。\n下图是课程中对 Text Editor Tool 的介绍，这是 Claude 内置的文件编辑工具，可以查看目录、读写文件、替换文本、撤销编辑。\nClaude 内置 Text Editor 工具\n场景五：Claude Code 做 CI/CD。\n把 Claude Code 集成到持续集成流水线里，跑自动 code review、生成测试用例、给 PR 反馈，关键是要减少误报。\n课程里介绍了用分步 prompt 引导 Claude 做复杂决策的方法：列出具体步骤，比如对比市场数据、分析团队表现、审查客户反馈等，让输出更有条理。\n分步 Prompt 引导 Claude 做复杂决策\n场景六：结构化数据抽取。\n从非结构化文档中提取信息，用 JSON Schema 校验输出，处理边界情况，对接下游系统。\n课程中演示了工具函数的最佳实践：用描述性的参数名、校验输入、返回有意义的错误信息，让 Claude 在出错时能自动重试。\n工具函数设计最佳实践\n这六个场景覆盖的范围，基本就是当下企业 AI 应用的主要战场了。\n而这也是评估-优化循环工作流（Evaluator-Optimizer）会被考到的原因：在复杂场景中，一个 Producer 负责生成输出，一个 Grader 负责打分，不合格就反馈回去重做，直到通过为止。\n评估-优化循环工作流\n考试资格\n目前 CCA-F 还在\nEarly Access 阶段\n，只对 Anthropic 合作伙伴公司的员工开放。前 5,000 人免费，之后正式开放定价\n$99\n。\n先决条件也列得挺清楚：至少完成 Anthropic 课程目录中所有 200 级课程，熟悉 Agent SDK，并且用 Claude Code、Agent SDK、Anthropic API 和 MCP 构建过实际项目。\n简单来说，如果你只是日常聊聊天、写写 prompt，这个考试应该不太适合你。\n它面向的是真正在用 Claude 做系统集成的技术人。\n配套课程\nAnthropic 同时推出了一套完整的备考课程体系，其中最核心的一门叫\nBuilding with the Claude API\n，一共 7 个章节、87 节课，免费。\n内容覆盖得确实全面：\nGetting started with Claude（Claude 入门，16 课）。\nAPI 认证、基础请求、对话管理、system prompt、结构化输出。算是打地基的部分。\n课程里讲了个实用技巧叫 Message Prefilling：在发送消息时预填一段 assistant 回复的开头，Claude 就会顺着这个方向继续写，能精准控制输出格式。\nMessage Prefilling 引导 Claude 回复方向\n下面这张图展示了 token 生成的底层原理：输入文本经过神经网络后，模型会为每个候选 token 算出一个概率，概率最高的被选为 Next Token。\nToken 生成与选择概率\nPrompt Engineering & Evaluation（提示工程与评估，16 课）。\n从 prompt 写作策略到评估框架再到系统化测试。课程把 prompt 评估拆解成了「出题→喂模型→打分→汇总」的完整流水线，如下图所示：\nPrompt 评估流水线：从出题到自动打分\nTool Use with Claude（Claude 工具使用，14 课）。\n函数调用、多轮工具交互、批量调用、内置工具。教的是怎么让 Claude 真正「动手干活」。\n下图演示了 Batch Tool 的用法：用户说「设置两个提醒」，Claude 会在一次 ToolUse 调用中批量处理多个操作，减少往返次数。\n批量工具调用：一次请求处理多个操作\nRetrieval Augmented Generation（检索增强生成，10 课）。\n文本分块、Embedding、BM25 混合搜索、多索引架构、reranking、contextual retrieval。这部分相当于手把手教你搭一套生产级 RAG 系统。\n课程从最基础的文档分块讲起：把长文档切成小块，只把和用户问题相关的块塞进 prompt，既省 token 又提高准确率。\nRAG 文档分块与检索流程\n然后是 Text Embedding 的原理：把文本转成一串数字（向量），语义相近的文本在向量空间里也靠得近。\nText Embedding 将文本转为向量表示\n再到 Cosine Similarity 计算两个向量的相似度，用角度来衡量语义接近程度。这是 RAG 检索的核心算法。\n余弦相似度：衡量语义接近程度\nModel Context Protocol（模型上下文协议，12 课）。\n定义自定义工具和资源、实现 MCP 服务端和客户端、走完整个集成生命周期。\n下图展示了 MCP Server 的内部结构：以 GitHub Server 为例，一个 tool 包含 schema（定义）和 fn（实现），Server 负责和外部服务通信，Claude 通过 Client 来调用。\nMCP Server 内部结构\nClaude Code & Computer Use（Claude Code 与计算机操作，8 课）。\nClaude Code 加速开发流程，Computer Use 自动化 UI 操作，包括 MCP 集成模式。\n课程还演示了一个 Image To CAD 的工作流案例：用户上传图片，Claude 先描述物体，再用 Cadquery 建模，生成渲染图，最后自动对比原图修正问题。\nImage To CAD 工作流案例\nAgents and Workflows（智能体与工作流，11 课）。\n并行执行、操作链、条件路由、调试策略。这也是考试权重最高的部分。\n除了这门主课，官方还推荐了另外三门配套课程：\nIntroduction to Model Context Protocol\n、\nClaude Code in Action\n、\nClaude 101\n。\n备考建议是：把 Exam Guide 研究透，然后做模拟考试，目标分数 900/1000 以上。\n说点想法\nAI 行业发展到今天，会用 ChatGPT 写个邮件、用 Claude 改改代码的人已经太多了。\n但能设计一套多 Agent 协作系统、能把 MCP 工具链跑通、能在 CI/CD 里集成 Claude Code 做自动 review 的人……其实还真不多。\nAnthropic 这次做的事情，其实让人想到当年 AWS 推出 Solutions Architect 认证。\n那时候很多人觉得「会用 EC2 就行了」，但企业后来发现，\n架构错了，后面所有代码都是在错误的地基上搭房子。\n从考试权重也能看出来，Agent 架构占了 27%，排第一。\nAnthropic 应该是认为，\nAI 应用的下一个阶段，核心在 Agent 编排。\n目前这个认证还只面向合作伙伴，但 $99 的正式定价说明它迟早会开放给所有人。到时候，AI 架构师这个角色，可能就要有一个官方定义了。\n会用 AI 的人很多。\n能用 AI 搭系统的人，则非常被需要。\n我也需要：\n都 AI 时代了，还需要招人吗？\n相关链接：\n认证申请：https://anthropic.skilljar.com/claude-certified-architect-foundations-access-request\n课程页面：https://anthropic.skilljar.com/claude-with-the-anthropic-api",
+    "metadata": {
+      "source": "openclaw",
+      "source_url": "https://mp.weixin.qq.com/s/GBCgc03eHrOxTEOd1k4aGw",
+      "source_platform": "微信公众号",
+      "author": "AGI Hunt",
+      "images": [],
+      "is_video": false,
+      "video_url": null,
+      "platform": "微信公众号"
+    },
+    "created_by": "openclaw-agent",
+    "id": "ca-mmx9jasx-xbum8e",
+    "created_at": "2026-03-19T09:23:42.321Z",
+    "updated_at": "2026-03-19T09:23:42.321Z"
+  },
+  {
+    "workspace_id": "default",
+    "type": "content",
+    "title": "Anthropic 推出首个官方认证：Claude 架构师",
+    "content": "Anthropic 推出了自家第一个官方技术认证：\nClaude Certified Architect，Foundations\n（简称 CCAF）。\n这应该是 AI 行业里，第一个由模型厂商自己推出的、面向架构师级别的官方技术认证。\n名字叫\nClaude Certified Architect，Foundations\n（简称 CCA-F）。120 分钟，60 道题，全程监考，只有一次机会。\nCCA-F 认证徽章\n这可不是那种刷刷选择题就能过的入门测试。官方定位是\n~301 level\n，也就是说，你得有实打实的项目经验，才有可能通过。\n考什么\n五个核心领域，权重分配是：\nAgentic Architecture & Orchestration（智能体架构与编排），占了 27%。\n将近三分之一的分数都给了 Agent 架构设计。包括 agentic loop 设计、多 Agent 协调（coordinator-subagent 模式）、任务分解、会话状态管理和工作流控制。\n换句话说，Anthropic 认为 AI 架构师最核心的能力，是设计和编排 Agent 系统。\n下面这张图来自配套课程，列出了当前构建 Agent 面临的核心挑战：什么算 Agent？Agent 和 Workflow 怎么选？设计模式怎么定？测试和评估怎么做？\n构建 Agent 的六大核心挑战\nClaude Code Configuration & Workflows（Claude Code 配置与工作流），占 20%。\n考的是 CLAUDE.md 层级配置、自定义 slash 命令、路径特定规则、plan mode 的使用时机，以及 CI/CD 集成。\n这部分其实挺出乎意料的。Claude Code 才转正没多久，就直接占了考试五分之一的权重了。\n课程里展示了 Claude Code 在项目全生命周期的用法：从探索代码库、设计架构，到实现代码、写测试、部署上线、监控运维，每个环节都能介入。\nClaude Code 覆盖项目全生命周期\nPrompt Engineering & Structured Output（提示工程与结构化输出），同样 20%。\n设计带有明确标准的 prompt、few-shot 技巧、用 JSON Schema 约束结构化输出、校验和重试循环。\n课程把这块拆成了两个维度：Prompt Engineering 负责「写得好」，Prompt Evaluation 负责「测得准」，包括多版本对比、自动打分等。\nPrompt 工程与评估的两个维度\nTool Design & MCP Integration（工具设计与 MCP 集成），18%。\n设计清晰边界的工具接口、结构化错误响应、MCP 服务器集成、跨 Agent 的工具分配。\n下图是 MCP 的基本架构：一个 MCP Client 可以连接多个 MCP Server，每个 Server 提供 Tools、Prompts、Resources 三类能力，再对接外部服务。\nMCP Client 连接多个 Server 的架构\nContext Management & Reliability（上下文管理与可靠性），15%。\n长对话中保持关键信息、设计升级策略、多 Agent 系统的错误传播管理、不确定性的置信度校准。\n加在一起看，这份考卷其实是在问一个问题：你能不能真的用 Claude 搭建一套生产级的 AI 系统？\n远程考试\n考试由 ProctorFree 提供远程监考。120 分钟内完成 60 道选择题，中间不能休息，也不能查资料。\n而且……只有一次机会。没过的话，目前也没说能不能补考。\n成绩在 2 个工作日内出，会给到一份详细的分项成绩报告。通过了就能拿到一个\nCCA-F 数字徽章\n，可以挂在 LinkedIn 上。\n六个实战场景\n考试并非纯理论。每次考试会从 6 个预设场景中\n随机抽取 4 个\n，每个场景模拟的都是真实的生产环境。\n场景一：客户支持 Agent。\n用 Claude Agent SDK 构建一个处理退货、账单争议、账户问题的客服 Agent，接入后端系统的 MCP 工具（get_customer、lookup_order、process_refund、escalate_to_human），目标是 80% 以上的首次解决率，同时知道什么时候该转人工。\n这个场景要求你同时掌握 Agent 架构设计、MCP 工具集成和上下文可靠性管理，算是最综合的一道了。\n下图是课程中关于 MCP 通信机制的讲解：Client 通过 CallToolRequest 调用 Server 端的工具，Server 返回 CallToolResult。\nMCP Client-Server 通信流程\n场景二：Claude Code 代码生成。\n团队用 Claude Code 做代码生成、重构、调试和文档，你需要用自定义 slash 命令和 CLAUDE.md 配置来把它融入开发流程，还得判断什么时候用 plan mode。\n课程里演示了 Claude Code 的 worktree 分支模式：多个 feature 分支可以并行开发，完成后再合并回 main 分支。\nClaude Code worktree 分支合并流程\n场景三：多 Agent 研究系统。\n一个 coordinator Agent 调度多个子 Agent：一个搜网页、一个分析文档、一个综合发现、一个生成报告……最终产出带引用的完整研究报告。\n课程中用下面这张图展示了并行工作流的模式：一个用户任务被拆成多个子任务并行执行，每个子任务可以有不同的 prompt 和工具集，最后由 Aggregator 汇总。\n并行工作流：任务拆分与结果聚合\n场景四：开发者生产力工具。\n帮工程师探索不熟悉的代码库、理解遗留系统、生成样板代码、自动化重复任务……用到 Read、Write、Bash、Grep、Glob 这些内置工具，还得集成 MCP 服务器。\n下图是课程中对 Text Editor Tool 的介绍，这是 Claude 内置的文件编辑工具，可以查看目录、读写文件、替换文本、撤销编辑。\nClaude 内置 Text Editor 工具\n场景五：Claude Code 做 CI/CD。\n把 Claude Code 集成到持续集成流水线里，跑自动 code review、生成测试用例、给 PR 反馈，关键是要减少误报。\n课程里介绍了用分步 prompt 引导 Claude 做复杂决策的方法：列出具体步骤，比如对比市场数据、分析团队表现、审查客户反馈等，让输出更有条理。\n分步 Prompt 引导 Claude 做复杂决策\n场景六：结构化数据抽取。\n从非结构化文档中提取信息，用 JSON Schema 校验输出，处理边界情况，对接下游系统。\n课程中演示了工具函数的最佳实践：用描述性的参数名、校验输入、返回有意义的错误信息，让 Claude 在出错时能自动重试。\n工具函数设计最佳实践\n这六个场景覆盖的范围，基本就是当下企业 AI 应用的主要战场了。\n而这也是评估-优化循环工作流（Evaluator-Optimizer）会被考到的原因：在复杂场景中，一个 Producer 负责生成输出，一个 Grader 负责打分，不合格就反馈回去重做，直到通过为止。\n评估-优化循环工作流\n考试资格\n目前 CCA-F 还在\nEarly Access 阶段\n，只对 Anthropic 合作伙伴公司的员工开放。前 5,000 人免费，之后正式开放定价\n$99\n。\n先决条件也列得挺清楚：至少完成 Anthropic 课程目录中所有 200 级课程，熟悉 Agent SDK，并且用 Claude Code、Agent SDK、Anthropic API 和 MCP 构建过实际项目。\n简单来说，如果你只是日常聊聊天、写写 prompt，这个考试应该不太适合你。\n它面向的是真正在用 Claude 做系统集成的技术人。\n配套课程\nAnthropic 同时推出了一套完整的备考课程体系，其中最核心的一门叫\nBuilding with the Claude API\n，一共 7 个章节、87 节课，免费。\n内容覆盖得确实全面：\nGetting started with Claude（Claude 入门，16 课）。\nAPI 认证、基础请求、对话管理、system prompt、结构化输出。算是打地基的部分。\n课程里讲了个实用技巧叫 Message Prefilling：在发送消息时预填一段 assistant 回复的开头，Claude 就会顺着这个方向继续写，能精准控制输出格式。\nMessage Prefilling 引导 Claude 回复方向\n下面这张图展示了 token 生成的底层原理：输入文本经过神经网络后，模型会为每个候选 token 算出一个概率，概率最高的被选为 Next Token。\nToken 生成与选择概率\nPrompt Engineering & Evaluation（提示工程与评估，16 课）。\n从 prompt 写作策略到评估框架再到系统化测试。课程把 prompt 评估拆解成了「出题→喂模型→打分→汇总」的完整流水线，如下图所示：\nPrompt 评估流水线：从出题到自动打分\nTool Use with Claude（Claude 工具使用，14 课）。\n函数调用、多轮工具交互、批量调用、内置工具。教的是怎么让 Claude 真正「动手干活」。\n下图演示了 Batch Tool 的用法：用户说「设置两个提醒」，Claude 会在一次 ToolUse 调用中批量处理多个操作，减少往返次数。\n批量工具调用：一次请求处理多个操作\nRetrieval Augmented Generation（检索增强生成，10 课）。\n文本分块、Embedding、BM25 混合搜索、多索引架构、reranking、contextual retrieval。这部分相当于手把手教你搭一套生产级 RAG 系统。\n课程从最基础的文档分块讲起：把长文档切成小块，只把和用户问题相关的块塞进 prompt，既省 token 又提高准确率。\nRAG 文档分块与检索流程\n然后是 Text Embedding 的原理：把文本转成一串数字（向量），语义相近的文本在向量空间里也靠得近。\nText Embedding 将文本转为向量表示\n再到 Cosine Similarity 计算两个向量的相似度，用角度来衡量语义接近程度。这是 RAG 检索的核心算法。\n余弦相似度：衡量语义接近程度\nModel Context Protocol（模型上下文协议，12 课）。\n定义自定义工具和资源、实现 MCP 服务端和客户端、走完整个集成生命周期。\n下图展示了 MCP Server 的内部结构：以 GitHub Server 为例，一个 tool 包含 schema（定义）和 fn（实现），Server 负责和外部服务通信，Claude 通过 Client 来调用。\nMCP Server 内部结构\nClaude Code & Computer Use（Claude Code 与计算机操作，8 课）。\nClaude Code 加速开发流程，Computer Use 自动化 UI 操作，包括 MCP 集成模式。\n课程还演示了一个 Image To CAD 的工作流案例：用户上传图片，Claude 先描述物体，再用 Cadquery 建模，生成渲染图，最后自动对比原图修正问题。\nImage To CAD 工作流案例\nAgents and Workflows（智能体与工作流，11 课）。\n并行执行、操作链、条件路由、调试策略。这也是考试权重最高的部分。\n除了这门主课，官方还推荐了另外三门配套课程：\nIntroduction to Model Context Protocol\n、\nClaude Code in Action\n、\nClaude 101\n。\n备考建议是：把 Exam Guide 研究透，然后做模拟考试，目标分数 900/1000 以上。\n说点想法\nAI 行业发展到今天，会用 ChatGPT 写个邮件、用 Claude 改改代码的人已经太多了。\n但能设计一套多 Agent 协作系统、能把 MCP 工具链跑通、能在 CI/CD 里集成 Claude Code 做自动 review 的人……其实还真不多。\nAnthropic 这次做的事情，其实让人想到当年 AWS 推出 Solutions Architect 认证。\n那时候很多人觉得「会用 EC2 就行了」，但企业后来发现，\n架构错了，后面所有代码都是在错误的地基上搭房子。\n从考试权重也能看出来，Agent 架构占了 27%，排第一。\nAnthropic 应该是认为，\nAI 应用的下一个阶段，核心在 Agent 编排。\n目前这个认证还只面向合作伙伴，但 $99 的正式定价说明它迟早会开放给所有人。到时候，AI 架构师这个角色，可能就要有一个官方定义了。\n会用 AI 的人很多。\n能用 AI 搭系统的人，则非常被需要。\n我也需要：\n都 AI 时代了，还需要招人吗？\n相关链接：\n认证申请：https://anthropic.skilljar.com/claude-certified-architect-foundations-access-request\n课程页面：https://anthropic.skilljar.com/claude-with-the-anthropic-api",
+    "metadata": {
+      "source": "openclaw",
+      "source_url": "https://mp.weixin.qq.com/s/GBCgc03eHrOxTEOd1k4aGw",
+      "source_platform": "微信公众号",
+      "author": "AGI Hunt",
+      "images": [],
+      "is_video": false,
+      "video_url": null,
+      "platform": "微信公众号"
+    },
+    "created_by": "openclaw-agent",
+    "id": "ca-mmxael1u-qrfjrp",
+    "created_at": "2026-03-19T09:48:01.938Z",
+    "updated_at": "2026-03-19T09:48:01.938Z"
+  },
+  {
+    "workspace_id": "default",
+    "type": "content",
+    "title": "Anthropic 推出首个官方认证：Claude 架构师",
+    "content": "Anthropic 推出了自家第一个官方技术认证：\nClaude Certified Architect，Foundations\n（简称 CCAF）。\n这应该是 AI 行业里，第一个由模型厂商自己推出的、面向架构师级别的官方技术认证。\n名字叫\nClaude Certified Architect，Foundations\n（简称 CCA-F）。120 分钟，60 道题，全程监考，只有一次机会。\nCCA-F 认证徽章\n这可不是那种刷刷选择题就能过的入门测试。官方定位是\n~301 level\n，也就是说，你得有实打实的项目经验，才有可能通过。\n考什么\n五个核心领域，权重分配是：\nAgentic Architecture & Orchestration（智能体架构与编排），占了 27%。\n将近三分之一的分数都给了 Agent 架构设计。包括 agentic loop 设计、多 Agent 协调（coordinator-subagent 模式）、任务分解、会话状态管理和工作流控制。\n换句话说，Anthropic 认为 AI 架构师最核心的能力，是设计和编排 Agent 系统。\n下面这张图来自配套课程，列出了当前构建 Agent 面临的核心挑战：什么算 Agent？Agent 和 Workflow 怎么选？设计模式怎么定？测试和评估怎么做？\n构建 Agent 的六大核心挑战\nClaude Code Configuration & Workflows（Claude Code 配置与工作流），占 20%。\n考的是 CLAUDE.md 层级配置、自定义 slash 命令、路径特定规则、plan mode 的使用时机，以及 CI/CD 集成。\n这部分其实挺出乎意料的。Claude Code 才转正没多久，就直接占了考试五分之一的权重了。\n课程里展示了 Claude Code 在项目全生命周期的用法：从探索代码库、设计架构，到实现代码、写测试、部署上线、监控运维，每个环节都能介入。\nClaude Code 覆盖项目全生命周期\nPrompt Engineering & Structured Output（提示工程与结构化输出），同样 20%。\n设计带有明确标准的 prompt、few-shot 技巧、用 JSON Schema 约束结构化输出、校验和重试循环。\n课程把这块拆成了两个维度：Prompt Engineering 负责「写得好」，Prompt Evaluation 负责「测得准」，包括多版本对比、自动打分等。\nPrompt 工程与评估的两个维度\nTool Design & MCP Integration（工具设计与 MCP 集成），18%。\n设计清晰边界的工具接口、结构化错误响应、MCP 服务器集成、跨 Agent 的工具分配。\n下图是 MCP 的基本架构：一个 MCP Client 可以连接多个 MCP Server，每个 Server 提供 Tools、Prompts、Resources 三类能力，再对接外部服务。\nMCP Client 连接多个 Server 的架构\nContext Management & Reliability（上下文管理与可靠性），15%。\n长对话中保持关键信息、设计升级策略、多 Agent 系统的错误传播管理、不确定性的置信度校准。\n加在一起看，这份考卷其实是在问一个问题：你能不能真的用 Claude 搭建一套生产级的 AI 系统？\n远程考试\n考试由 ProctorFree 提供远程监考。120 分钟内完成 60 道选择题，中间不能休息，也不能查资料。\n而且……只有一次机会。没过的话，目前也没说能不能补考。\n成绩在 2 个工作日内出，会给到一份详细的分项成绩报告。通过了就能拿到一个\nCCA-F 数字徽章\n，可以挂在 LinkedIn 上。\n六个实战场景\n考试并非纯理论。每次考试会从 6 个预设场景中\n随机抽取 4 个\n，每个场景模拟的都是真实的生产环境。\n场景一：客户支持 Agent。\n用 Claude Agent SDK 构建一个处理退货、账单争议、账户问题的客服 Agent，接入后端系统的 MCP 工具（get_customer、lookup_order、process_refund、escalate_to_human），目标是 80% 以上的首次解决率，同时知道什么时候该转人工。\n这个场景要求你同时掌握 Agent 架构设计、MCP 工具集成和上下文可靠性管理，算是最综合的一道了。\n下图是课程中关于 MCP 通信机制的讲解：Client 通过 CallToolRequest 调用 Server 端的工具，Server 返回 CallToolResult。\nMCP Client-Server 通信流程\n场景二：Claude Code 代码生成。\n团队用 Claude Code 做代码生成、重构、调试和文档，你需要用自定义 slash 命令和 CLAUDE.md 配置来把它融入开发流程，还得判断什么时候用 plan mode。\n课程里演示了 Claude Code 的 worktree 分支模式：多个 feature 分支可以并行开发，完成后再合并回 main 分支。\nClaude Code worktree 分支合并流程\n场景三：多 Agent 研究系统。\n一个 coordinator Agent 调度多个子 Agent：一个搜网页、一个分析文档、一个综合发现、一个生成报告……最终产出带引用的完整研究报告。\n课程中用下面这张图展示了并行工作流的模式：一个用户任务被拆成多个子任务并行执行，每个子任务可以有不同的 prompt 和工具集，最后由 Aggregator 汇总。\n并行工作流：任务拆分与结果聚合\n场景四：开发者生产力工具。\n帮工程师探索不熟悉的代码库、理解遗留系统、生成样板代码、自动化重复任务……用到 Read、Write、Bash、Grep、Glob 这些内置工具，还得集成 MCP 服务器。\n下图是课程中对 Text Editor Tool 的介绍，这是 Claude 内置的文件编辑工具，可以查看目录、读写文件、替换文本、撤销编辑。\nClaude 内置 Text Editor 工具\n场景五：Claude Code 做 CI/CD。\n把 Claude Code 集成到持续集成流水线里，跑自动 code review、生成测试用例、给 PR 反馈，关键是要减少误报。\n课程里介绍了用分步 prompt 引导 Claude 做复杂决策的方法：列出具体步骤，比如对比市场数据、分析团队表现、审查客户反馈等，让输出更有条理。\n分步 Prompt 引导 Claude 做复杂决策\n场景六：结构化数据抽取。\n从非结构化文档中提取信息，用 JSON Schema 校验输出，处理边界情况，对接下游系统。\n课程中演示了工具函数的最佳实践：用描述性的参数名、校验输入、返回有意义的错误信息，让 Claude 在出错时能自动重试。\n工具函数设计最佳实践\n这六个场景覆盖的范围，基本就是当下企业 AI 应用的主要战场了。\n而这也是评估-优化循环工作流（Evaluator-Optimizer）会被考到的原因：在复杂场景中，一个 Producer 负责生成输出，一个 Grader 负责打分，不合格就反馈回去重做，直到通过为止。\n评估-优化循环工作流\n考试资格\n目前 CCA-F 还在\nEarly Access 阶段\n，只对 Anthropic 合作伙伴公司的员工开放。前 5,000 人免费，之后正式开放定价\n$99\n。\n先决条件也列得挺清楚：至少完成 Anthropic 课程目录中所有 200 级课程，熟悉 Agent SDK，并且用 Claude Code、Agent SDK、Anthropic API 和 MCP 构建过实际项目。\n简单来说，如果你只是日常聊聊天、写写 prompt，这个考试应该不太适合你。\n它面向的是真正在用 Claude 做系统集成的技术人。\n配套课程\nAnthropic 同时推出了一套完整的备考课程体系，其中最核心的一门叫\nBuilding with the Claude API\n，一共 7 个章节、87 节课，免费。\n内容覆盖得确实全面：\nGetting started with Claude（Claude 入门，16 课）。\nAPI 认证、基础请求、对话管理、system prompt、结构化输出。算是打地基的部分。\n课程里讲了个实用技巧叫 Message Prefilling：在发送消息时预填一段 assistant 回复的开头，Claude 就会顺着这个方向继续写，能精准控制输出格式。\nMessage Prefilling 引导 Claude 回复方向\n下面这张图展示了 token 生成的底层原理：输入文本经过神经网络后，模型会为每个候选 token 算出一个概率，概率最高的被选为 Next Token。\nToken 生成与选择概率\nPrompt Engineering & Evaluation（提示工程与评估，16 课）。\n从 prompt 写作策略到评估框架再到系统化测试。课程把 prompt 评估拆解成了「出题→喂模型→打分→汇总」的完整流水线，如下图所示：\nPrompt 评估流水线：从出题到自动打分\nTool Use with Claude（Claude 工具使用，14 课）。\n函数调用、多轮工具交互、批量调用、内置工具。教的是怎么让 Claude 真正「动手干活」。\n下图演示了 Batch Tool 的用法：用户说「设置两个提醒」，Claude 会在一次 ToolUse 调用中批量处理多个操作，减少往返次数。\n批量工具调用：一次请求处理多个操作\nRetrieval Augmented Generation（检索增强生成，10 课）。\n文本分块、Embedding、BM25 混合搜索、多索引架构、reranking、contextual retrieval。这部分相当于手把手教你搭一套生产级 RAG 系统。\n课程从最基础的文档分块讲起：把长文档切成小块，只把和用户问题相关的块塞进 prompt，既省 token 又提高准确率。\nRAG 文档分块与检索流程\n然后是 Text Embedding 的原理：把文本转成一串数字（向量），语义相近的文本在向量空间里也靠得近。\nText Embedding 将文本转为向量表示\n再到 Cosine Similarity 计算两个向量的相似度，用角度来衡量语义接近程度。这是 RAG 检索的核心算法。\n余弦相似度：衡量语义接近程度\nModel Context Protocol（模型上下文协议，12 课）。\n定义自定义工具和资源、实现 MCP 服务端和客户端、走完整个集成生命周期。\n下图展示了 MCP Server 的内部结构：以 GitHub Server 为例，一个 tool 包含 schema（定义）和 fn（实现），Server 负责和外部服务通信，Claude 通过 Client 来调用。\nMCP Server 内部结构\nClaude Code & Computer Use（Claude Code 与计算机操作，8 课）。\nClaude Code 加速开发流程，Computer Use 自动化 UI 操作，包括 MCP 集成模式。\n课程还演示了一个 Image To CAD 的工作流案例：用户上传图片，Claude 先描述物体，再用 Cadquery 建模，生成渲染图，最后自动对比原图修正问题。\nImage To CAD 工作流案例\nAgents and Workflows（智能体与工作流，11 课）。\n并行执行、操作链、条件路由、调试策略。这也是考试权重最高的部分。\n除了这门主课，官方还推荐了另外三门配套课程：\nIntroduction to Model Context Protocol\n、\nClaude Code in Action\n、\nClaude 101\n。\n备考建议是：把 Exam Guide 研究透，然后做模拟考试，目标分数 900/1000 以上。\n说点想法\nAI 行业发展到今天，会用 ChatGPT 写个邮件、用 Claude 改改代码的人已经太多了。\n但能设计一套多 Agent 协作系统、能把 MCP 工具链跑通、能在 CI/CD 里集成 Claude Code 做自动 review 的人……其实还真不多。\nAnthropic 这次做的事情，其实让人想到当年 AWS 推出 Solutions Architect 认证。\n那时候很多人觉得「会用 EC2 就行了」，但企业后来发现，\n架构错了，后面所有代码都是在错误的地基上搭房子。\n从考试权重也能看出来，Agent 架构占了 27%，排第一。\nAnthropic 应该是认为，\nAI 应用的下一个阶段，核心在 Agent 编排。\n目前这个认证还只面向合作伙伴，但 $99 的正式定价说明它迟早会开放给所有人。到时候，AI 架构师这个角色，可能就要有一个官方定义了。\n会用 AI 的人很多。\n能用 AI 搭系统的人，则非常被需要。\n我也需要：\n都 AI 时代了，还需要招人吗？\n相关链接：\n认证申请：https://anthropic.skilljar.com/claude-certified-architect-foundations-access-request\n课程页面：https://anthropic.skilljar.com/claude-with-the-anthropic-api",
+    "metadata": {
+      "source": "openclaw",
+      "source_url": "https://mp.weixin.qq.com/s/GBCgc03eHrOxTEOd1k4aGw",
+      "source_platform": "微信公众号",
+      "author": "AGI Hunt",
+      "images": [],
+      "is_video": false,
+      "video_url": null,
+      "platform": "微信公众号"
+    },
+    "created_by": "openclaw-agent",
+    "id": "ca-mmxb6h2t-qr61mp",
+    "created_at": "2026-03-19T10:09:43.157Z",
+    "updated_at": "2026-03-19T10:09:43.157Z"
+  }
+]

@@ -1,0 +1,8 @@
+packages:
+  - "web"
+  - "engine"
+  - "agent-chat"
+
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

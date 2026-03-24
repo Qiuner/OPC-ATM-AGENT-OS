@@ -64,7 +64,7 @@ export interface ClaudeBridgeOptions {
   /** 恢复已有会话 */
   resumeSessionId?: string;
   /** 权限模式 */
-  permissionMode?: "auto" | "default" | "bypassPermissions";
+  permissionMode?: "auto" | "default" | "bypassPermissions" | "acceptEdits";
   /** 工作目录 */
   cwd?: string;
   /** 超时（毫秒，默认 300000 = 5分钟） */
