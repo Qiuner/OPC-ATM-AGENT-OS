@@ -9,6 +9,7 @@ import { executeTeamTask } from "@/lib/agent-sdk/team-executor";
 import { createTask } from "@/lib/store/tasks";
 import { createContent } from "@/lib/store/contents";
 import { readCollection, writeCollection, generateId, nowISO } from "@/lib/store/index";
+import { runBrandReview } from "@/lib/store/brand-review";
 import type { AgentRun } from "@/types";
 
 export const runtime = "nodejs";
@@ -119,7 +120,7 @@ async function saveTeamResult(prompt: string, result: string) {
     due_date: null,
   });
 
-  await createContent({
+  const content = await createContent({
     task_id: task.id,
     campaign_id: "default",
     title,
@@ -127,12 +128,15 @@ async function saveTeamResult(prompt: string, result: string) {
     platform: "xiaohongshu",
     status: "review",
     media_urls: [],
-    metadata: { mode: "team", prompt },
+    metadata: { mode: "team", prompt, pipelineStage: "ai-review" },
     created_by: "agent:team-lead",
     agent_run_id: null,
     agent_type: "team",
     learning_id: null,
   });
+
+  // Run Brand Reviewer scoring pipeline
+  await runBrandReview(content.id);
 
   const agentRun: AgentRun = {
     id: generateId("run"),

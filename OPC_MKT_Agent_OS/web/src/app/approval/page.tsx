@@ -69,187 +69,6 @@ interface ApprovalItem {
   brandScore: number;
 }
 
-// --- Mock data (English, global marketing) ---
-const MOCK_ITEMS: ApprovalItem[] = [
-  {
-    id: "A-012",
-    title: "X Thread: AI Tools #12",
-    campaign: "Spring Campaign",
-    platform: "X",
-    priority: 0,
-    source: "ai",
-    decision: "pending",
-    timeAgo: "2h ago",
-    pipelineStage: "pending",
-    brandScore: 8.2,
-    body: `Thread: 5 AI tools that transformed our content workflow 🧵
-
-1/ AI-powered content generation
-Gone are the days of staring at blank pages. First drafts in seconds, refined by humans.
-
-2/ Cross-platform distribution
-One piece of content, adapted for 6 platforms automatically. No more copy-paste madness.
-
-3/ Smart scheduling
-AI analyzes your audience's active hours and posts at peak engagement times.
-
-4/ Performance analytics
-Real-time insights across all platforms in one unified dashboard.
-
-5/ Approval workflow
-Team collaboration with built-in review, risk detection, and one-click publishing.
-
-What AI tools are you using? Drop them below 👇`,
-    tags: ["#AItools", "#ContentMarketing", "#Productivity", "#MarTech"],
-    risk: null,
-    fromApi: false,
-  },
-  {
-    id: "A-008",
-    title: "TikTok Script: Behind the Scenes #8",
-    campaign: "Brand Awareness",
-    platform: "TikTok",
-    priority: 1,
-    source: "ai",
-    decision: "pending",
-    timeAgo: "3h ago",
-    pipelineStage: "ai-review",
-    brandScore: 6.5,
-    body: `[HOOK] (0-3s)
-Visual: Fast cuts of AI dashboard, content being generated
-VO: "Still writing content manually in 2026?"
-
-[PAIN POINT] (3-10s)
-Visual: Person frustrated at desk, clock ticking, blank screen
-VO: "3 hours per post. 6 platforms. Zero consistency."
-
-[SOLUTION] (10-25s)
-Visual: Product demo — type topic, AI generates, one-click adapt
-VO: "With OpenClaw, generate professional content in 30 seconds. One click to adapt for X, LinkedIn, TikTok, Meta, Email, and Blog."
-
-[CTA] (25-30s)
-Visual: Growth metrics dashboard
-VO: "1000+ creators already onboard. Link in bio."`,
-    tags: ["#AItools", "#ContentCreation", "#BehindTheScenes"],
-    risk: "Detected claim: '30 seconds' — suggest adding 'as fast as' qualifier",
-    fromApi: false,
-  },
-  {
-    id: "A-005",
-    title: "LinkedIn Article: DTC Guide #5",
-    campaign: "Thought Leadership",
-    platform: "LinkedIn",
-    priority: 2,
-    source: "human",
-    decision: "pending",
-    timeAgo: "5h ago",
-    pipelineStage: "pending",
-    brandScore: 7.8,
-    body: `The Complete DTC Brand Playbook for Global Expansion in 2026
-
-If you're a DTC brand looking to expand beyond your home market, here's what we've learned helping 50+ brands go global:
-
-1. Start with ONE market — don't spread thin
-Pick the market with highest product-market fit signals. For most brands, that's US or UK.
-
-2. Localize content, not just language
-Cultural context matters more than translation. A winning hook in China won't work in the US.
-
-3. Build a local content engine
-AI tools can help generate and adapt content, but you need local voice and cultural sensitivity.
-
-4. Invest in community before paid ads
-Organic community building has 3x higher LTV than paid acquisition in new markets.
-
-5. Measure what matters
-Track brand awareness metrics alongside conversion. New market = new funnel.
-
-What's your biggest challenge with global expansion? Comment below.`,
-    tags: ["#DTC", "#GlobalExpansion", "#MarketingStrategy", "#Ecommerce"],
-    risk: null,
-    fromApi: false,
-  },
-  {
-    id: "A-003",
-    title: "Meta Ad: Product Launch #3",
-    campaign: "Product Launch",
-    platform: "Meta",
-    priority: 0,
-    source: "ai",
-    decision: "approved",
-    timeAgo: "1d ago",
-    pipelineStage: "publishing",
-    brandScore: 9.1,
-    body: "Product launch ad creative for Meta — featuring AI-powered content generation demo video with social proof stats. Approved by brand team.",
-    tags: ["#ProductLaunch", "#MetaAds", "#AI"],
-    risk: null,
-    fromApi: false,
-  },
-  {
-    id: "A-002",
-    title: "Blog: Founder Story #2",
-    campaign: "Brand Story",
-    platform: "Blog",
-    priority: 1,
-    source: "human",
-    decision: "approved",
-    timeAgo: "2d ago",
-    pipelineStage: "published",
-    brandScore: 8.7,
-    body: "Founder interview blog post — from idea to launch, the story of building an AI marketing OS. Published and performing well organically.",
-    tags: ["#FounderStory", "#Startup", "#AIMarketing"],
-    risk: null,
-    fromApi: false,
-  },
-  {
-    id: "A-001",
-    title: "Email: Weekly Newsletter #1",
-    campaign: "Retention",
-    platform: "Email",
-    priority: 1,
-    source: "ai",
-    decision: "rejected",
-    timeAgo: "2d ago",
-    pipelineStage: "pending",
-    brandScore: 4.2,
-    body: "Weekly newsletter draft — rejected due to overly promotional tone and missing personalization tokens.",
-    tags: ["#Newsletter", "#EmailMarketing"],
-    risk: null,
-    fromApi: false,
-  },
-  {
-    id: "A-015",
-    title: "X Post: Quick Tip #15",
-    campaign: "Content Marketing",
-    platform: "X",
-    priority: 2,
-    source: "ai",
-    decision: "pending",
-    timeAgo: "1h ago",
-    pipelineStage: "generating",
-    brandScore: 7.0,
-    body: "Quick tip post about using AI for content repurposing — currently being generated by the content agent.",
-    tags: ["#QuickTip", "#AI"],
-    risk: null,
-    fromApi: false,
-  },
-  {
-    id: "A-014",
-    title: "LinkedIn Post: Case Study #14",
-    campaign: "Social Proof",
-    platform: "LinkedIn",
-    priority: 0,
-    source: "ai",
-    decision: "pending",
-    timeAgo: "30m ago",
-    pipelineStage: "adapting",
-    brandScore: 8.5,
-    body: "Case study post about how a DTC skincare brand used AI marketing OS to 3x their content output — adapting for LinkedIn format.",
-    tags: ["#CaseStudy", "#DTC", "#Results"],
-    risk: null,
-    fromApi: false,
-  },
-];
 
 type TabKey = "all" | "pending" | "approved" | "rejected";
 
@@ -349,9 +168,9 @@ interface DeleteConfirmState {
 }
 
 export default function ApprovalPage() {
-  const [items, setItems] = useState<ApprovalItem[]>(MOCK_ITEMS);
+  const [items, setItems] = useState<ApprovalItem[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
-  const [selectedId, setSelectedId] = useState<string>("A-012");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -399,13 +218,11 @@ export default function ApprovalPage() {
       const json = await res.json() as { success: boolean; data: Content[] };
       if (json.success && json.data.length > 0) {
         const apiItems = json.data.map(mapContentToItem);
-        setItems(apiItems.length > 0 ? apiItems : MOCK_ITEMS);
-        if (apiItems.length > 0) {
-          setSelectedId(apiItems[0].id);
-        }
+        setItems(apiItems);
+        setSelectedId(apiItems[0].id);
       }
     } catch {
-      // fallback to mock
+      // empty state on error
     } finally {
       setLoading(false);
     }
@@ -749,7 +566,7 @@ export default function ApprovalPage() {
     filteredItems = filteredItems.filter((item) => item.pipelineStage === activeStage);
   }
 
-  const selected = items.find((item) => item.id === selectedId) ?? items[0];
+  const selected = (selectedId ? items.find((item) => item.id === selectedId) : null) ?? items[0] ?? null;
   const pendingCount = items.filter((i) => i.decision === "pending").length;
   const checkedPendingCount = Array.from(checkedIds).filter((id) => {
     const item = items.find((i) => i.id === id);

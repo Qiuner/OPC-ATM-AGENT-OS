@@ -71,46 +71,8 @@ interface ExecTask {
 }
 
 // ==========================================
-// Mock Data
+// Empty initial data — populated from EventBus/API at runtime
 // ==========================================
-
-const MOCK_AGENTS: MonitorAgent[] = [
-  { id: 'ceo', name: 'CEO 营销总监', nameEn: 'CEO', role: 'orchestrator', color: '#e74c3c', avatar: 'CEO', status: 'busy', currentTool: 'SendMessage', currentToolInput: '调度子 Agent 执行任务', toolCallCount: 5 },
-  { id: 'xhs-agent', name: '小红书创作专家', nameEn: 'XHS', role: 'specialist', color: '#ff2442', avatar: 'XHS', status: 'busy', currentTool: 'Write', currentToolInput: '撰写种草笔记', toolCallCount: 3 },
-  { id: 'analyst-agent', name: '数据分析专家', nameEn: 'Analyst', role: 'specialist', color: '#22d3ee', avatar: 'AN', status: 'online' },
-  { id: 'growth-agent', name: '增长营销专家', nameEn: 'Growth', role: 'specialist', color: '#00cec9', avatar: 'G', status: 'busy', currentTool: 'WebSearch', currentToolInput: '选题研究', toolCallCount: 7 },
-  { id: 'brand-reviewer', name: '品牌风控审查', nameEn: 'Reviewer', role: 'reviewer', color: '#a855f7', avatar: 'BR', status: 'online', currentToolInput: '等待审查' },
-  { id: 'podcast-agent', name: '播客内容专家', nameEn: 'Podcast', role: 'specialist', color: '#f59e0b', avatar: 'POD', status: 'offline' },
-  { id: 'x-twitter-agent', name: 'X/Twitter 专家', nameEn: 'X/Twitter', role: 'specialist', color: '#1da1f2', avatar: 'X', status: 'offline' },
-  { id: 'visual-gen-agent', name: '视觉设计专家', nameEn: 'Visual', role: 'specialist', color: '#ec4899', avatar: 'VIS', status: 'offline' },
-  { id: 'strategist-agent', name: '策略规划专家', nameEn: 'Strategist', role: 'specialist', color: '#8b5cf6', avatar: 'STR', status: 'offline' },
-];
-
-const MOCK_EXEC_TASKS: ExecTask[] = [
-  { agentId: 'ceo', status: 'running', progress: 60, currentTool: 'SendMessage', toolCallCount: 5, description: '调度子 Agent', content: '## 任务拆解\n\n收到用户需求：「帮我写一篇小红书种草笔记，主题面膜推荐」\n\n### 执行计划\n1. **Growth Agent** — 选题研究，分析平台热点\n2. **XHS Agent** — 按选题方向创作种草笔记\n3. **Brand Reviewer** — 内容审查，确保品牌调性一致\n\n当前：Growth 已完成选题研究，XHS 正在创作中...' },
-  { agentId: 'xhs-agent', status: 'running', progress: 45, currentTool: 'Write', toolCallCount: 3, description: '撰写种草笔记', content: '# 🌟 这款面膜真的绝了！干皮姐妹冲！\n\n姐妹们！！今天必须给你们安利这款宝藏面膜 ✨\n\n用了一周，皮肤状态直接起飞 🚀\n\n## 使用感受\n- 质地：奶油般丝滑，上脸不会搓泥\n- 吸收：3分钟就能感觉到满满的水润感\n- 第二天早上皮肤滑溜溜的\n\n## 成分亮点\n- 5重玻尿酸 — 深层补水\n- 神经酰胺 — 修护屏障\n▌' },
-  { agentId: 'growth-agent', status: 'done', progress: 100, toolCallCount: 7, description: '选题分析完成', content: '## 选题分析报告\n\n### 平台热度分析\n| 话题 | 搜索热度 | 竞争度 | 推荐指数 |\n|------|----------|--------|----------|\n| 干皮护肤 | ↑45% | 中 | ⭐⭐⭐⭐⭐ |\n| 平价面膜测评 | ↑28% | 低 | ⭐⭐⭐⭐ |\n| 换季护肤 | ↑62% | 高 | ⭐⭐⭐ |\n\n### 推荐方向\n选择「干皮护肤 + 面膜测评」组合，热度高且竞品质量一般。\n\n### 建议标签\n#面膜测评 #干皮救星 #护肤分享 #好物推荐' },
-  { agentId: 'brand-reviewer', status: 'waiting', progress: 0, toolCallCount: 0, description: '等待 XHS 内容完成后审查', content: '' },
-];
-
-const now = Date.now();
-const MOCK_LOGS: LogEntry[] = [
-  { id: 1, timestamp: now - 60000, level: 'info', source: 'agent:ceo', message: '收到用户需求：帮我写一篇小红书种草笔记，主题面膜推荐' },
-  { id: 2, timestamp: now - 55000, level: 'info', source: 'agent:ceo', message: '分析需求完成，开始调度子 Agent' },
-  { id: 3, timestamp: now - 52000, level: 'info', source: 'send:ceo', message: 'CEO → Growth: 进行选题研究，分析小红书面膜相关热点' },
-  { id: 4, timestamp: now - 50000, level: 'info', source: 'agent:growth-agent', message: '开始选题研究...' },
-  { id: 5, timestamp: now - 45000, level: 'info', source: 'tool:growth-agent', message: '⚙ WebSearch("小红书 面膜 热门话题 2026")' },
-  { id: 6, timestamp: now - 40000, level: 'info', source: 'tool:growth-agent', message: '⚙ WebSearch("小红书 干皮 面膜 爆款笔记")' },
-  { id: 7, timestamp: now - 35000, level: 'info', source: 'tool:growth-agent', message: '⚙ Read("competitor-analysis.md")' },
-  { id: 8, timestamp: now - 30000, level: 'success', source: 'agent:growth-agent', message: '✓ 选题分析完成，输出 3 个推荐方向' },
-  { id: 9, timestamp: now - 28000, level: 'info', source: 'send:ceo', message: 'CEO → XHS: 按选题方向 #1「干皮护肤+面膜测评」创作种草笔记' },
-  { id: 10, timestamp: now - 26000, level: 'info', source: 'agent:xhs-agent', message: '开始构思笔记结构...' },
-  { id: 11, timestamp: now - 24000, level: 'info', source: 'tool:xhs-agent', message: '⚙ Read("brand-voice.md")' },
-  { id: 12, timestamp: now - 20000, level: 'info', source: 'send:ceo', message: 'CEO → Reviewer: 待命，等待 XHS 完成后进行品牌审查' },
-  { id: 13, timestamp: now - 18000, level: 'info', source: 'tool:xhs-agent', message: '⚙ Read("product-info.json")' },
-  { id: 14, timestamp: now - 15000, level: 'info', source: 'agent:xhs-agent', message: '正在撰写笔记正文...' },
-  { id: 15, timestamp: now - 10000, level: 'info', source: 'tool:xhs-agent', message: '⚙ Write("xhs-draft.md")' },
-];
 
 // ==========================================
 // Helpers
@@ -238,6 +200,7 @@ function AgentStateCard({
   logs,
   execTask,
   allExecTasks,
+  allAgents,
   selected,
   highlighted,
   onSelect,
@@ -247,6 +210,7 @@ function AgentStateCard({
   logs: LogEntry[];
   execTask?: ExecTask;
   allExecTasks: ExecTask[];
+  allAgents: MonitorAgent[];
   selected: boolean;
   highlighted: boolean;
   onSelect: () => void;
@@ -354,7 +318,7 @@ function AgentStateCard({
           <div className="flex items-center gap-1.5 flex-wrap relative z-10">
             <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.25)' }}>调度:</span>
             {dispatchedAgents.map(task => {
-              const targetAgent = MOCK_AGENTS.find(a => a.id === task.agentId);
+              const targetAgent = allAgents.find(a => a.id === task.agentId);
               if (!targetAgent) return null;
               const isDone = task.status === 'done';
               const isError = task.status === 'error';
@@ -677,7 +641,7 @@ function CommandInputBar({ onSend }: { onSend: (msg: string) => void }) {
 // ==========================================
 
 
-function RightSidebar({ tasks, prompt }: { tasks: ExecTask[]; prompt: string }) {
+function RightSidebar({ tasks, agents, prompt }: { tasks: ExecTask[]; agents: MonitorAgent[]; prompt: string }) {
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.status === 'done').length;
   const hasError = tasks.some(t => t.status === 'error');
@@ -746,7 +710,7 @@ function RightSidebar({ tasks, prompt }: { tasks: ExecTask[]; prompt: string }) 
           <div className="space-y-1">
             {tasks.map(task => {
               const taskStatus = getTaskStatusIcon(task.status);
-              const agent = MOCK_AGENTS.find(a => a.id === task.agentId);
+              const agent = agents.find(a => a.id === task.agentId);
               return (
                 <div
                   key={task.agentId}
@@ -793,13 +757,35 @@ function RightSidebar({ tasks, prompt }: { tasks: ExecTask[]; prompt: string }) 
 // ==========================================
 
 export default function TeamStudioV3() {
+  const [agents, setAgents] = useState<MonitorAgent[]>([]);
+  const [execTasks, setExecTasks] = useState<ExecTask[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [highlightAgent, setHighlightAgent] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [taskStartTime] = useState(() => new Date(Date.now() - 65000));
+  const [taskPrompt, setTaskPrompt] = useState('');
 
   const agentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Fetch team state from API
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/team-studio');
+        const json = await res.json() as { success: boolean; data?: { agents?: MonitorAgent[]; tasks?: ExecTask[]; logs?: LogEntry[]; prompt?: string } };
+        if (json.success && json.data) {
+          if (json.data.agents) setAgents(json.data.agents);
+          if (json.data.tasks) setExecTasks(json.data.tasks);
+          if (json.data.logs) setLogs(json.data.logs);
+          if (json.data.prompt) setTaskPrompt(json.data.prompt);
+        }
+      } catch {
+        // empty state on error
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -871,7 +857,7 @@ export default function TeamStudioV3() {
           </span>
           <div className="flex-1 min-w-0">
             <p className="text-lg truncate" style={{ fontFamily: font.body, color: T.text }}>
-              帮我写一篇小红书种草笔记，主题面膜推荐
+              {taskPrompt || 'Waiting for task...'}
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -899,23 +885,34 @@ export default function TeamStudioV3() {
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Agent State Cards — hide offline, sort by status (busy > online > offline) */}
           {(() => {
-            const dispatchedIds = new Set(MOCK_EXEC_TASKS.map(t => t.agentId));
+            if (agents.length === 0) {
+              return (
+                <div className="shrink-0 p-8 flex items-center justify-center" style={{ borderBottom: `1px solid ${T.border}` }}>
+                  <div className="text-center">
+                    <p className="text-sm font-medium" style={{ color: T.textMuted }}>No agents active</p>
+                    <p className="text-xs mt-1" style={{ color: T.textDim }}>Execute a task to see agents working here</p>
+                  </div>
+                </div>
+              );
+            }
+            const dispatchedIds = new Set(execTasks.map(t => t.agentId));
             const statusOrder: Record<AgentStatus, number> = { busy: 0, online: 1, offline: 2 };
-            const visibleAgents = MOCK_AGENTS
+            const visibleAgents = agents
               .filter(a => a.status !== 'offline' || dispatchedIds.has(a.id))
               .sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
             return (
               <div className="shrink-0 p-4 pb-2 overflow-y-auto" style={{ borderBottom: selectedAgent ? 'none' : `1px solid ${T.border}`, maxHeight: '45%' }}>
                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
                   {visibleAgents.map(agent => {
-                    const execTask = MOCK_EXEC_TASKS.find(t => t.agentId === agent.id);
+                    const execTask = execTasks.find(t => t.agentId === agent.id);
                     return (
                       <AgentStateCard
                         key={agent.id}
                         agent={agent}
-                        logs={MOCK_LOGS.filter(l => l.source.includes(agent.id))}
+                        logs={logs.filter(l => l.source.includes(agent.id))}
                         execTask={execTask}
-                        allExecTasks={MOCK_EXEC_TASKS}
+                        allExecTasks={execTasks}
+                        allAgents={agents}
                         selected={selectedAgent === agent.id}
                         highlighted={highlightAgent === agent.id}
                         onSelect={() => toggleSelect(agent.id)}
@@ -930,9 +927,9 @@ export default function TeamStudioV3() {
 
           {/* Detail Panel — between grid and command input */}
           {selectedAgent && (() => {
-            const agent = MOCK_AGENTS.find(a => a.id === selectedAgent);
+            const agent = agents.find(a => a.id === selectedAgent);
             if (!agent) return null;
-            const execTask = MOCK_EXEC_TASKS.find(t => t.agentId === selectedAgent);
+            const execTask = execTasks.find(t => t.agentId === selectedAgent);
             return (
               <DetailPanel
                 key={selectedAgent}
@@ -957,11 +954,11 @@ export default function TeamStudioV3() {
               <div className="flex items-center gap-2">
                 <span className="text-sm" style={{ color: T.textDim }}>●</span>
                 <span className="text-sm font-semibold tracking-wide" style={{ fontFamily: font.heading, color: T.textMuted }}>Terminal</span>
-                <span className="text-sm tabular-nums" style={{ fontFamily: font.mono, color: T.textDim }}>{MOCK_LOGS.length} events</span>
+                <span className="text-sm tabular-nums" style={{ fontFamily: font.mono, color: T.textDim }}>{logs.length} events</span>
               </div>
-              {!terminalOpen && MOCK_LOGS.length > 0 && (
+              {!terminalOpen && logs.length > 0 && (
                 <span className="flex-1 mx-3 text-sm truncate" style={{ fontFamily: font.mono, color: T.textDim }}>
-                  {MOCK_LOGS[MOCK_LOGS.length - 1].message}
+                  {logs[logs.length - 1].message}
                 </span>
               )}
               <svg
@@ -975,14 +972,14 @@ export default function TeamStudioV3() {
 
             {/* Log stream — only rendered when open */}
             {terminalOpen && (
-              <TerminalLogStream logs={MOCK_LOGS} agents={MOCK_AGENTS} onAgentClick={scrollToAgent} />
+              <TerminalLogStream logs={logs} agents={agents} onAgentClick={scrollToAgent} />
             )}
           </div>
         </div>
 
         {/* Right: Sidebar */}
         <div className="hidden lg:flex">
-          <RightSidebar tasks={MOCK_EXEC_TASKS} prompt="帮我写一篇小红书种草笔记，主题面膜推荐" />
+          <RightSidebar tasks={execTasks} agents={agents} prompt={taskPrompt || 'Waiting for task...'} />
         </div>
       </div>
     </div>

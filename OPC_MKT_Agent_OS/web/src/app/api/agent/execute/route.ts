@@ -13,6 +13,7 @@ import { executeAgent } from "@/lib/agent-sdk/executor";
 import { createTask } from "@/lib/store/tasks";
 import { createContent } from "@/lib/store/contents";
 import { readCollection, writeCollection, generateId, nowISO } from "@/lib/store/index";
+import { runBrandReview } from "@/lib/store/brand-review";
 import type { AgentRun } from "@/types";
 
 export const runtime = "nodejs";
@@ -130,8 +131,8 @@ async function saveAgentResult(agentId: string, prompt: string, result: string) 
     due_date: null,
   });
 
-  // 创建 Content（状态 review → 进入 Approval Center）
-  await createContent({
+  // 创建 Content（初始状态 review → Brand Reviewer 评分后可能自动通过）
+  const content = await createContent({
     task_id: task.id,
     campaign_id: "default",
     title,
@@ -139,12 +140,15 @@ async function saveAgentResult(agentId: string, prompt: string, result: string) 
     platform: "xiaohongshu",
     status: "review",
     media_urls: [],
-    metadata: { mode: "fast", agentId, prompt },
+    metadata: { mode: "fast", agentId, prompt, pipelineStage: "ai-review" },
     created_by: `agent:${agentId}`,
     agent_run_id: null,
     agent_type: agentId,
     learning_id: null,
   });
+
+  // Run Brand Reviewer scoring pipeline
+  await runBrandReview(content.id);
 
   // 创建 AgentRun
   const agentRun: AgentRun = {

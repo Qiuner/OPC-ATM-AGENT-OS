@@ -33,97 +33,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "published", label: "已发布" },
 ];
 
-const MOCK_ITEMS: PublishItem[] = [
-  {
-    id: "PUB-012",
-    title: "5 AI Tools That Will 10x Your Productivity in 2026",
-    campaign: "Content Marketing",
-    scheduledAt: "2026-03-12 10:00",
-    tab: "pending",
-    platforms: [
-      { platform: "X", ready: true, format: "Tweet Thread · 5 tweets" },
-      { platform: "LinkedIn", ready: true, format: "Professional Post · Long-form" },
-      { platform: "Blog", ready: true, format: "SEO Article · 1500 words" },
-      { platform: "Email", ready: false, format: "Newsletter · Pending" },
-    ],
-    body: "Discover the top 5 AI tools that are revolutionizing how teams work. From content creation to data analysis, these tools will transform your workflow.",
-    tags: ["AI", "Productivity", "Tools", "2026"],
-    fromApi: false,
-  },
-  {
-    id: "PUB-005",
-    title: "Behind the Scenes: How We Built Our Product",
-    campaign: "Brand Awareness",
-    scheduledAt: "2026-03-13 14:00",
-    tab: "pending",
-    platforms: [
-      { platform: "TikTok", ready: true, format: "Short Video · 60s" },
-      { platform: "Meta", ready: true, format: "IG Reels + FB Post" },
-      { platform: "LinkedIn", ready: false, format: "Article · Pending" },
-    ],
-    body: "From a simple idea to a shipped product — our journey of building, failing, and iterating. Today we take you behind the scenes.",
-    tags: ["Startup", "BehindTheScenes", "BuildInPublic"],
-    fromApi: false,
-  },
-  {
-    id: "PUB-003",
-    title: "The Complete Guide to DTC Marketing in 2026",
-    campaign: "Lead Generation",
-    scheduledAt: "2026-03-14 09:00",
-    tab: "pending",
-    platforms: [
-      { platform: "Blog", ready: true, format: "SEO Article · 2000 words" },
-      { platform: "Email", ready: true, format: "Newsletter · Weekly Digest" },
-      { platform: "X", ready: true, format: "Tweet Thread · 8 tweets" },
-    ],
-    body: "Everything you need to know about direct-to-consumer marketing in 2026. Strategy, channels, tools, and real case studies.",
-    tags: ["DTC", "Marketing", "Guide", "Ecommerce"],
-    fromApi: false,
-  },
-  {
-    id: "PUB-011",
-    title: "Founder Story — From Zero to Launch",
-    campaign: "Brand Awareness",
-    scheduledAt: "2026-03-11 12:00",
-    tab: "exported",
-    platforms: [
-      { platform: "LinkedIn", ready: true, format: "Article · 800 words" },
-      { platform: "TikTok", ready: true, format: "Short Video · 45s" },
-    ],
-    body: "3 years of building, countless pivots. Today I'm sharing my journey from zero to launch — hoping it inspires those still on the path.",
-    tags: ["Founder", "Startup", "Journey"],
-    fromApi: false,
-  },
-  {
-    id: "PUB-010",
-    title: "Product Unboxing & First Impressions",
-    campaign: "Spring Launch",
-    scheduledAt: "2026-03-08 18:00",
-    tab: "published",
-    platforms: [
-      { platform: "TikTok", ready: true, format: "Short Video · 45s" },
-      { platform: "Meta", ready: true, format: "IG Post · Carousel" },
-      { platform: "X", ready: true, format: "Tweet · Single" },
-    ],
-    body: "The new product just arrived! First impressions: premium quality all around. Let's take a closer look at the details.",
-    tags: ["Unboxing", "NewProduct", "Review"],
-    fromApi: false,
-  },
-  {
-    id: "PUB-009",
-    title: "FAQ Collection — Top 10 Questions Answered",
-    campaign: "Customer Education",
-    scheduledAt: "2026-03-07 10:00",
-    tab: "published",
-    platforms: [
-      { platform: "Blog", ready: true, format: "SEO Article · FAQ Schema" },
-      { platform: "Email", ready: true, format: "Drip Email · 3-part series" },
-    ],
-    body: "We collected the most frequently asked questions and answered them all in one place. Bookmark this for future reference!",
-    tags: ["FAQ", "CustomerSupport", "Tutorial"],
-    fromApi: false,
-  },
-];
 
 // --------------- Helpers ---------------
 
@@ -395,7 +304,7 @@ function PlatformPreviewModal({
 // --------------- Main Page ---------------
 
 export default function PublishingPage() {
-  const [items, setItems] = useState<PublishItem[]>(MOCK_ITEMS);
+  const [items, setItems] = useState<PublishItem[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
@@ -424,10 +333,10 @@ export default function PublishingPage() {
       }
 
       if (apiItems.length > 0) {
-        setItems([...apiItems, ...MOCK_ITEMS]);
+        setItems(apiItems);
       }
     } catch {
-      // fallback to mock
+      // empty state on error
     } finally {
       setLoading(false);
     }

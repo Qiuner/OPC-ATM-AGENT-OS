@@ -126,19 +126,15 @@ describe("DELETE API — /api/contents/[id] (T1.5-03)", () => {
     );
   });
 
-  it("TC-1.5-12: DELETE 关联审批记录级联删除（已知缺口）", () => {
-    // EXPECTED: deleteContent should also remove related approval records
-    // ACTUAL: approvals store has no deleteByContentId function
+  it("TC-1.5-12: DELETE 关联审批记录级联删除", () => {
     const approvalStoreSrc = readSrc(APPROVALS_STORE);
-    const hasCascadeDelete =
-      approvalStoreSrc.includes("deleteByContentId") ||
-      approvalStoreSrc.includes("deleteByContent") ||
-      storeSrc.includes("deleteApprovals");
-    // Documenting as known gap — approval cascade delete not yet implemented
-    // This test passes (non-blocking) but records the gap for Phase 2
     assert.ok(
-      true,
-      `Cascade delete status: ${hasCascadeDelete ? "implemented" : "NOT YET — add to Phase 2 backlog"}`
+      approvalStoreSrc.includes("deleteApprovalsByContentId"),
+      "Missing deleteApprovalsByContentId in approvals store"
+    );
+    assert.ok(
+      routeSrc.includes("deleteApprovalsByContentId"),
+      "Missing cascade delete call in DELETE handler"
     );
   });
 });
@@ -229,6 +225,13 @@ describe("Approval Mode Toggle — Auto/Manual (T1.5-05)", () => {
     assert.ok(
       src.includes("auto-approved"),
       "Missing auto-approved label in UI"
+    );
+  });
+
+  it("TC-1.5-51: 自动审批 reviewer 为 brand-reviewer-agent", () => {
+    assert.ok(
+      src.includes("brand-reviewer-agent"),
+      "Missing brand-reviewer-agent as auto-approval reviewer"
     );
   });
 });
