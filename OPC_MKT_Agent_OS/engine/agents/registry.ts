@@ -168,7 +168,51 @@ export class AgentRegistry {
       avatar: "POD",
     });
 
-    // ---- P1 Agents ----
+    // ---- Global / 出海 Agents ----
+
+    this.register({
+      id: "global-content-agent",
+      name: "全球内容创作",
+      nameEn: "Content",
+      description: "Generate English marketing content for Meta/X/TikTok/LinkedIn/Email/Blog",
+      skillFile: "global-content.SKILL.md",
+      model: "claude-sonnet-4-20250514",
+      tools: ["Read", "Write", "Glob"],
+      maxTurns: 8,
+      level: "specialist",
+      color: "#10b981",
+      avatar: "GC",
+    });
+
+    this.register({
+      id: "meta-ads-agent",
+      name: "Meta 广告投手",
+      nameEn: "Meta Ads",
+      description: "Meta/Facebook/Instagram advertising — campaign creation, budget optimization, ROAS analysis",
+      skillFile: "meta-ads.SKILL.md",
+      model: "claude-sonnet-4-20250514",
+      tools: ["Read", "Write", "Glob", "Bash"],
+      maxTurns: 10,
+      level: "specialist",
+      color: "#1877f2",
+      avatar: "MA",
+    });
+
+    this.register({
+      id: "email-agent",
+      name: "邮件营销专家",
+      nameEn: "Email",
+      description: "Email marketing automation — sequences, campaigns, A/B testing, deliverability",
+      skillFile: "email-marketing.SKILL.md",
+      model: "claude-sonnet-4-20250514",
+      tools: ["Read", "Write", "Glob"],
+      maxTurns: 6,
+      level: "specialist",
+      color: "#f59e0b",
+      avatar: "EM",
+    });
+
+    // ---- Platform-Specific Agents ----
 
     this.register({
       id: "x-twitter-agent",
