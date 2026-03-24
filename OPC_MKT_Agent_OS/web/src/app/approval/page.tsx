@@ -250,8 +250,9 @@ export default function ApprovalPage() {
       const res = await fetch("/api/contents");
       const json = await res.json() as { success: boolean; data: Content[] };
       if (json.success && json.data.length > 0) {
+        // Show real data first; only add mock items if no real data exists
         const apiItems = json.data.map(mapContentToItem);
-        setItems([...apiItems, ...MOCK_ITEMS]);
+        setItems(apiItems.length > 0 ? apiItems : MOCK_ITEMS);
         if (apiItems.length > 0) {
           setSelectedId(apiItems[0].id);
         }

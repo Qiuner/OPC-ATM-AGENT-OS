@@ -12,7 +12,6 @@ import {
   BarChart3,
   Pen,
   Zap,
-  Radio,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -26,16 +25,11 @@ interface NavItem {
   badge?: number;
   badgeText?: string;
   badgeColor?: string;
-  group?: string;
-  indent?: boolean;
 }
 
 const navItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  // Team Studio group
-  { href: '/team-studio', label: 'Fast Mode', icon: Zap, badgeText: 'SDK', badgeColor: '#fbbf24', group: 'studio', indent: true },
-  { href: '/team-studio/v3', label: 'Team Mode', icon: Radio, badgeText: 'TEAM', badgeColor: '#22d3ee', group: 'studio', indent: true },
-  // Other pages
+  { href: '/team-studio', label: 'Team Studio', icon: Zap, badgeText: 'LIVE', badgeColor: '#22d3ee' },
   { href: '/context-vault', label: 'Context Vault', icon: Database },
   { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
   { href: '/task-board', label: 'Task Board', icon: KanbanSquare },
@@ -47,7 +41,6 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  let lastGroup: string | undefined;
 
   return (
     <aside className="flex h-screen w-60 flex-col shrink-0"
@@ -76,31 +69,15 @@ export function Sidebar() {
       <nav className="flex-1 space-y-0.5 px-3 py-4">
         {navItems.map((item) => {
           // Active state: exact match, or for /team-studio exact match only (not v3)
-          const isActive = item.href === '/team-studio'
-            ? pathname === '/team-studio'
-            : pathname === item.href;
-
-          // Group header
-          const showGroupHeader = item.group === 'studio' && lastGroup !== 'studio';
-          lastGroup = item.group;
+          const isActive = pathname === item.href || (item.href === '/team-studio' && pathname.startsWith('/team-studio'));
 
           return (
             <div key={item.href}>
-              {showGroupHeader && (
-                <div className="flex items-center gap-2 px-3 pt-3 pb-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.15em]"
-                    style={{ color: 'rgba(255,255,255,0.25)' }}>
-                    Team Studio
-                  </span>
-                  <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-                </div>
-              )}
               <Link
                 href={item.href}
                 data-nav={item.href === '/' ? 'dashboard' : item.href.slice(1)}
                 className={cn(
-                  'flex items-center gap-3 rounded-xl py-2.5 text-[13px] font-medium transition-all duration-200',
-                  item.indent ? 'px-5' : 'px-3',
+                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200',
                   isActive
                     ? 'text-white'
                     : 'text-[rgba(255,255,255,0.4)] hover:text-[rgba(255,255,255,0.7)]'

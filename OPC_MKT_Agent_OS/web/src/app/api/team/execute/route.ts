@@ -1,15 +1,18 @@
 /**
  * POST /api/team/execute — Agent Team 模式执行端点（SSE 流式）
  *
- * 与 /api/agent/execute（SDK 子进程模式）并列。
- * 使用 Claude Code CLI 的 Agent Team 能力：
- *   TeamCreate → Agent spawn → SendMessage 网状通信
+ * 使用 Claude Code CLI 的 Agent Team 能力。
+ * 执行完成后自动保存结果到数据 Store。
  */
 
 import { executeTeamTask } from "@/lib/agent-sdk/team-executor";
+import { createTask } from "@/lib/store/tasks";
+import { createContent } from "@/lib/store/contents";
+import { readCollection, writeCollection, generateId, nowISO } from "@/lib/store/index";
+import type { AgentRun } from "@/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 600; // Team 模式需要更长时间
+export const maxDuration = 600;
 
 interface TeamExecuteRequest {
   message: string;
@@ -39,6 +42,8 @@ export async function POST(req: Request) {
   }
 
   const encoder = new TextEncoder();
+  const textChunks: string[] = [];
+  let hasError = false;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -50,14 +55,37 @@ export async function POST(req: Request) {
         })) {
           const data = JSON.stringify(event);
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+
+          // 收集文本
+          if ("type" in event && event.type === "text") {
+            textChunks.push((event as { content: string }).content);
+          }
+          if ("type" in event && event.type === "team:done") {
+            const doneEvent = event as { result: string };
+            if (doneEvent.result) textChunks.push(doneEvent.result);
+          }
+          if ("type" in event && event.type === "error") {
+            hasError = true;
+          }
         }
       } catch (err) {
+        hasError = true;
         const errMsg = err instanceof Error ? err.message : "Unknown error";
         controller.enqueue(
           encoder.encode(
             `data: ${JSON.stringify({ type: "error", agentId: "team", message: errMsg })}\n\n`,
           ),
         );
+      }
+
+      // 保存结果到 Store
+      if (!hasError && textChunks.length > 0) {
+        try {
+          const fullResult = textChunks.join("\n");
+          await saveTeamResult(message, fullResult);
+        } catch {
+          // silent
+        }
       }
 
       controller.enqueue(
@@ -74,4 +102,67 @@ export async function POST(req: Request) {
       Connection: "keep-alive",
     },
   });
+}
+
+async function saveTeamResult(prompt: string, result: string) {
+  const now = nowISO();
+  const title = extractTitle(result) || prompt.slice(0, 80);
+
+  const task = await createTask({
+    campaign_id: "default",
+    title,
+    description: prompt,
+    status: "review",
+    assignee_type: "agent",
+    assignee_id: "team-lead",
+    priority: 1,
+    due_date: null,
+  });
+
+  await createContent({
+    task_id: task.id,
+    campaign_id: "default",
+    title,
+    body: result,
+    platform: "xiaohongshu",
+    status: "review",
+    media_urls: [],
+    metadata: { mode: "team", prompt },
+    created_by: "agent:team-lead",
+    agent_run_id: null,
+    agent_type: "team",
+    learning_id: null,
+  });
+
+  const agentRun: AgentRun = {
+    id: generateId("run"),
+    task_id: task.id,
+    agent_type: "team",
+    provider: "anthropic",
+    model: "claude-code-team",
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    status: "success",
+    input: { prompt },
+    output: { result: result.slice(0, 2000) },
+    error: null,
+    started_at: now,
+    finished_at: now,
+    hypothesis: null,
+    experiment_result: null,
+    learnings: null,
+  };
+
+  const runs = readCollection<AgentRun>("agent-runs");
+  runs.push(agentRun);
+  writeCollection("agent-runs", runs);
+}
+
+function extractTitle(text: string): string | null {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    const clean = line.replace(/^#+\s*/, "").replace(/^\*+/, "").trim();
+    if (clean.length > 5 && clean.length < 100) return clean;
+  }
+  return null;
 }

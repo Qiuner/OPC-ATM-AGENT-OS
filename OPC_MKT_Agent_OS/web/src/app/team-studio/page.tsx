@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, lazy, Suspense, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Send, Trash2, Hash, Users, Monitor, MessageSquare, Power, PowerOff,
@@ -8,8 +8,11 @@ import {
   Square, Loader2, CheckCircle, AlertCircle, Clock, Wrench, RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AgentMonitor } from '@/components/features/agent-monitor';
 import { PixelAgentSVG } from '@/components/features/agent-monitor/pixel-agents';
+
+// Lazy-load Team Mode (v3 monitor) — only loaded when user switches to Team Mode tab
+const TeamModeView = lazy(() => import('./v3/page'));
+
 
 // ==========================================
 // Constants — Agent definitions
@@ -451,7 +454,7 @@ function renderContentWithMentions(content: string) {
     const matched = agentLabelMap[part.toLowerCase()];
     if (matched) {
       return (
-        <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xl font-semibold mx-0.5 align-middle"
+        <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-sm font-semibold mx-0.5 align-middle"
           style={{ background: `${matched.color}15`, color: matched.color, border: `1px solid ${matched.color}25` }}
         >
           <span className="w-3.5 h-3.5 inline-block">
@@ -477,7 +480,7 @@ function AgentBubble({ msg }: { msg: StudioMessage }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xl font-semibold text-white">{agent.label}</span>
+          <span className="text-sm font-semibold text-white">{agent.label}</span>
           <span className="text-lg" style={{ color: 'rgba(255,255,255,0.25)' }}>{formatTime(msg.timestamp)}</span>
           {msg.isStreaming && (
             <span className="flex gap-0.5">
@@ -487,7 +490,7 @@ function AgentBubble({ msg }: { msg: StudioMessage }) {
             </span>
           )}
         </div>
-        <div className="text-xl mt-0.5 whitespace-pre-wrap leading-relaxed" style={{ color: 'rgba(255,255,255,0.75)' }}>
+        <div className="text-sm mt-0.5 whitespace-pre-wrap leading-relaxed" style={{ color: 'rgba(255,255,255,0.75)' }}>
           {msg.content ? renderContentWithMentions(msg.content) : (msg.isStreaming ? '思考中...' : '')}
         </div>
       </div>
@@ -502,9 +505,9 @@ function UserBubble({ msg }: { msg: StudioMessage }) {
         <div className="flex flex-col items-end">
           <div className="flex items-center gap-2 mb-0.5">
             <span className="text-lg" style={{ color: 'rgba(255,255,255,0.25)' }}>{formatTime(msg.timestamp)}</span>
-            <span className="text-xl font-semibold text-white">老板</span>
+            <span className="text-sm font-semibold text-white">老板</span>
           </div>
-          <div className="text-xl px-4 py-2.5 rounded-2xl rounded-br-md whitespace-pre-wrap leading-relaxed"
+          <div className="text-sm px-4 py-2.5 rounded-2xl rounded-br-md whitespace-pre-wrap leading-relaxed"
             style={{ background: 'linear-gradient(135deg, #a78bfa, #818cf8)', color: '#ffffff' }}
           >{msg.content}</div>
         </div>
@@ -1025,44 +1028,39 @@ export default function TeamStudioPage() {
       {/* Portal tab buttons + controls into header */}
       {headerSlot && createPortal(
         <>
-          {/* Mode badge */}
-          <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-bold tracking-wider"
-            style={{ background: 'rgba(251,191,36,0.10)', color: '#fbbf24' }}
-          >
-            <Zap className="h-3 w-3" />SDK FAST
-          </span>
-
-          {/* Tab buttons — Execute | Chat | Monitor */}
+          {/* Tab buttons — Fast Mode | Chat | Team Mode */}
           <button onClick={() => setActiveTab('execute')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xl font-medium transition-all duration-200 cursor-pointer"
-            style={activeTab === 'execute' ? { background: 'rgba(167,139,250,0.10)', color: '#ffffff' } : { color: 'rgba(255,255,255,0.35)' }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
+            style={activeTab === 'execute' ? { background: 'rgba(251,191,36,0.10)', color: '#fbbf24' } : { color: 'rgba(255,255,255,0.35)' }}
           >
-            <Terminal className="h-5 w-5" />执行模式
+            <Zap className="h-4 w-4" />Fast Mode
+            {activeTab === 'execute' && <span className="text-[10px] font-bold tracking-wider ml-0.5 px-1 py-0.5 rounded" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>FAST</span>}
           </button>
           <button onClick={() => setActiveTab('chat')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xl font-medium transition-all duration-200 cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
             style={activeTab === 'chat' ? { background: 'rgba(167,139,250,0.10)', color: '#ffffff' } : { color: 'rgba(255,255,255,0.35)' }}
           >
-            <MessageSquare className="h-5 w-5" />团队对话
+            <MessageSquare className="h-4 w-4" />团队对话
           </button>
           <button data-team-monitor onClick={() => setActiveTab('monitor')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xl font-medium transition-all duration-200 cursor-pointer"
-            style={activeTab === 'monitor' ? { background: 'rgba(167,139,250,0.10)', color: '#ffffff' } : { color: 'rgba(255,255,255,0.35)' }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
+            style={activeTab === 'monitor' ? { background: 'rgba(34,211,238,0.10)', color: '#22d3ee' } : { color: 'rgba(255,255,255,0.35)' }}
           >
-            <Monitor className="h-5 w-5" />Monitor
+            <Monitor className="h-4 w-4" />Team Mode
+            {activeTab === 'monitor' && <span className="text-[10px] font-bold tracking-wider ml-0.5 px-1 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee' }}>TEAM</span>}
           </button>
 
           {/* Launch / Stop */}
           {teamLaunched ? (
             <button onClick={handleStopTeam}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-base font-medium transition-all cursor-pointer hover:brightness-110"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer hover:brightness-110"
               style={{ background: 'rgba(239,68,68,0.10)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}
-            ><PowerOff className="h-4 w-4" />Stop</button>
+            ><PowerOff className="h-3.5 w-3.5" />Stop</button>
           ) : (
             <button data-team-launch onClick={handleLaunchTeam} disabled={launching}
-              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-base font-medium transition-all cursor-pointer hover:brightness-110', launching && 'opacity-50 cursor-wait')}
+              className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer hover:brightness-110', launching && 'opacity-50 cursor-wait')}
               style={{ background: 'rgba(34,197,94,0.10)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)' }}
-            ><Power className="h-4 w-4" />{launching ? '...' : 'Launch'}</button>
+            ><Power className="h-3.5 w-3.5" />{launching ? '...' : 'Launch'}</button>
           )}
         </>,
         headerSlot,
@@ -1234,27 +1232,16 @@ export default function TeamStudioPage() {
         </div>
       )}
 
-      {/* ===== Monitor Tab ===== */}
+      {/* ===== Team Mode Tab (Agent Team v3 Monitor) ===== */}
       {activeTab === 'monitor' && (
         <div className="flex-1 overflow-hidden">
-          <AgentMonitor
-            taskSummary={execState.prompt || taskSummary}
-            onStopTeam={handleStopTeam}
-            teamLaunched={teamLaunched}
-            onSendMessage={sendMessage}
-            execOverlay={execState.isRunning || execState.tasks.length > 0 ? {
-              isRunning: execState.isRunning,
-              tasks: execState.tasks.map(t => ({
-                agentId: t.agentId,
-                status: t.status,
-                progress: t.progress,
-                currentTool: t.currentTool,
-                toolCallCount: t.toolCallCount,
-                description: t.description,
-                content: t.content,
-              })),
-            } : undefined}
-          />
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-full" style={{ background: '#030305' }}>
+              <Loader2 className="w-6 h-6 animate-spin" style={{ color: '#22d3ee' }} />
+            </div>
+          }>
+            <TeamModeView />
+          </Suspense>
         </div>
       )}
 
@@ -1285,7 +1272,7 @@ export default function TeamStudioPage() {
                         ><PixelAgentSVG agentId={a.id as 'ceo' | 'xhs-agent' | 'growth-agent' | 'brand-reviewer'} status={teamLaunched ? (isProcessing ? 'busy' : 'online') : 'offline'} className="w-5 h-5" /></div>
                         <div className="flex flex-col items-start">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xl font-semibold text-white">{a.labelCn}</span>
+                            <span className="text-sm font-semibold text-white">{a.labelCn}</span>
                             <span className="text-sm px-1.5 py-px rounded-full font-medium" style={{ background: lvl.bg, color: lvl.text, border: `1px solid ${lvl.border}` }}>{a.level}</span>
                           </div>
                           <span className="text-base" style={{ color: 'rgba(255,255,255,0.3)' }}>
@@ -1296,7 +1283,7 @@ export default function TeamStudioPage() {
                       </button>
                     );
                   })() : (
-                    <><Hash className="h-4 w-4 hidden md:block" style={{ color: 'rgba(255,255,255,0.25)' }} /><span className="text-xl font-semibold text-white">全员</span></>
+                    <><Hash className="h-4 w-4 hidden md:block" style={{ color: 'rgba(255,255,255,0.25)' }} /><span className="text-sm font-semibold text-white">全员</span></>
                   )}
                 </div>
                 <button onClick={handleClear} className="p-2 rounded-lg transition-colors hover:bg-[rgba(255,255,255,0.05)]" style={{ color: 'rgba(255,255,255,0.3)' }} title="清空消息">
@@ -1332,7 +1319,7 @@ export default function TeamStudioPage() {
                 <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
                   placeholder={isProcessing ? 'Agent 工作中...' : `发送指令给 ${activeChannel === 'all' ? 'CEO（全员编排）' : AGENT_MAP.get(activeChannel)?.label ?? 'Agent'}...`}
                   disabled={isProcessing} rows={1}
-                  className={cn('flex-1 min-h-10 max-h-32 resize-none rounded-xl px-4 py-2.5 text-xl text-white placeholder:text-[rgba(255,255,255,0.25)] focus:outline-none transition-all', isProcessing && 'opacity-50 cursor-not-allowed')}
+                  className={cn('flex-1 min-h-10 max-h-32 resize-none rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-[rgba(255,255,255,0.25)] focus:outline-none transition-all', isProcessing && 'opacity-50 cursor-not-allowed')}
                   style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                   onFocus={e => (e.target as HTMLElement).style.borderColor = 'rgba(167,139,250,0.3)'}
                   onBlur={e => (e.target as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'}
