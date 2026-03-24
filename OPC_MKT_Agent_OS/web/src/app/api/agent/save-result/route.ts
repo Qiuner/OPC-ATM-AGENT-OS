@@ -11,6 +11,7 @@ import { createTask } from "@/lib/store/tasks";
 import { createContent } from "@/lib/store/contents";
 import { generateId, nowISO } from "@/lib/store/index";
 import { readCollection, writeCollection } from "@/lib/store/index";
+import { runBrandReview } from "@/lib/store/brand-review";
 import type { AgentRun } from "@/types";
 
 interface SaveResultRequest {
@@ -75,12 +76,16 @@ export async function POST(req: Request) {
       mode,
       agentId,
       prompt,
+      pipelineStage: "ai-review",
     },
     created_by: `agent:${agentId}`,
     agent_run_id: null,
     agent_type: agentId,
     learning_id: null,
   });
+
+  // 2.5 Run Brand Reviewer scoring pipeline
+  await runBrandReview(content.id);
 
   // 3. 创建 AgentRun 记录
   const agentRun: AgentRun = {
