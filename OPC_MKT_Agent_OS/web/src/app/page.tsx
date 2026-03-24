@@ -93,7 +93,7 @@ interface OpenClawLog {
 
 function OpenClawPanel() {
   const [command, setCommand] = useState('');
-  const [platform, setPlatform] = useState('小红书');
+  const [platform, setPlatform] = useState('X');
   const [logs, setLogs] = useState<OpenClawLog[]>([]);
   const [sending, setSending] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -117,7 +117,7 @@ function OpenClawPanel() {
     setSending(true);
     const newLog: OpenClawLog = {
       time: new Date().toLocaleTimeString('zh-CN'),
-      command: cmd === 'generate_script' ? `生成脚本: ${topic}` : cmd === 'get_status' ? '查询状态' : `${cmd}: ${topic}`,
+      command: cmd === 'generate_content' ? `生成内容: ${topic}` : cmd === 'get_status' ? '查询状态' : `${cmd}: ${topic}`,
       status: 'pending',
     };
     setLogs((prev) => [newLog, ...prev]);
@@ -149,12 +149,12 @@ function OpenClawPanel() {
   };
 
   const quickCommands = [
-    { label: '生成脚本', icon: PenTool, cmd: 'generate_script' },
+    { label: '生成内容', icon: PenTool, cmd: 'generate_content' },
     { label: '系统状态', icon: BarChart3, cmd: 'get_status' },
-    { label: '搜集素材', icon: MessageSquare, cmd: 'collect_materials' },
+    { label: '竞品分析', icon: MessageSquare, cmd: 'competitor_analysis' },
   ];
 
-  const platforms = ['小红书', '抖音', '视频号', 'X', '即刻'];
+  const platforms = ['X', 'LinkedIn', 'TikTok', 'Meta', 'Email', 'Blog'];
 
   return (
     <div className="cotify-card p-6 relative overflow-hidden">
@@ -191,7 +191,7 @@ function OpenClawPanel() {
               </span>
             </div>
             <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-              {connected ? `飞书 Bot: ${botName} — 通过飞书对话驱动 Agent OS` : '正在连接...'}
+              {connected ? `Bot: ${botName} — 通过指令驱动 Agent OS 生成出海内容` : '正在连接...'}
             </p>
           </div>
         </div>
@@ -219,28 +219,28 @@ function OpenClawPanel() {
         style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}
       >
         <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          <MessageSquare className="h-3.5 w-3.5" style={{ color: '#22d3ee' }} />
-          <span>飞书指令</span>
+          <Megaphone className="h-3.5 w-3.5" style={{ color: '#22d3ee' }} />
+          <span>Campaign</span>
         </div>
         <ArrowRight className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.15)' }} />
         <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
           <Zap className="h-3.5 w-3.5" style={{ color: '#a78bfa' }} />
-          <span>Agent OS 处理</span>
+          <span>Agent OS</span>
         </div>
         <ArrowRight className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.15)' }} />
         <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
           <PenTool className="h-3.5 w-3.5" style={{ color: '#fbbf24' }} />
-          <span>生成内容</span>
+          <span>Content</span>
         </div>
         <ArrowRight className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.15)' }} />
         <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
           <Send className="h-3.5 w-3.5" style={{ color: '#22c55e' }} />
-          <span>推送飞书</span>
+          <span>Publish</span>
         </div>
         <ArrowRight className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.15)' }} />
         <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
           <BarChart3 className="h-3.5 w-3.5" style={{ color: '#f472b6' }} />
-          <span>数据闭环</span>
+          <span>Analytics</span>
         </div>
       </div>
 
@@ -250,9 +250,9 @@ function OpenClawPanel() {
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !sending) void handleSend('generate_script', command);
+            if (e.key === 'Enter' && !sending) void handleSend('generate_content', command);
           }}
-          placeholder="输入主题，如「AI Agent 工具推荐」..."
+          placeholder="输入主题，如「AI tools for productivity」..."
           className="flex-1 rounded-xl px-4 py-2.5 text-sm text-white placeholder-[rgba(255,255,255,0.2)] outline-none"
           style={{
             background: 'rgba(255,255,255,0.04)',
@@ -260,7 +260,7 @@ function OpenClawPanel() {
           }}
         />
         <button
-          onClick={() => void handleSend('generate_script', command)}
+          onClick={() => void handleSend('generate_content', command)}
           disabled={sending || !command.trim()}
           className="rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
           style={{
@@ -277,7 +277,7 @@ function OpenClawPanel() {
         {quickCommands.map((qc) => (
           <button
             key={qc.cmd}
-            onClick={() => void handleSend(qc.cmd, command || 'AI自媒体运营')}
+            onClick={() => void handleSend(qc.cmd, command || 'AI marketing tools')}
             disabled={sending}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all hover:brightness-110 disabled:opacity-40"
             style={{

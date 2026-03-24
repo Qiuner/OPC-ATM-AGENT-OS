@@ -245,5 +245,18 @@
     "id": "task-mmxiwrwu-4npavz",
     "created_at": "2026-03-19T13:46:07.566Z",
     "updated_at": "2026-03-19T13:46:07.566Z"
+  },
+  {
+    "campaign_id": "default",
+    "title": "5个AI工具推荐",
+    "description": "写一篇AI工具推荐",
+    "status": "review",
+    "assignee_type": "agent",
+    "assignee_id": "xhs-agent",
+    "priority": 1,
+    "due_date": null,
+    "id": "task-mn42bj76-ereeum",
+    "created_at": "2026-03-24T03:36:05.874Z",
+    "updated_at": "2026-03-24T03:36:05.874Z"
   }
 ]

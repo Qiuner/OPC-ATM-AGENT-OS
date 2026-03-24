@@ -1,26 +1,124 @@
+# ============================================================
+# Marketing Agent OS — Platform Configuration
+# ============================================================
+# Copy to platforms.yaml and adjust per your needs.
+#
+# Global (出海) platforms are the primary focus.
+# Legacy (国内) platforms are kept for backward compatibility.
+# ============================================================
+
+# ============================================================
+# Global Platforms (出海 — Primary)
+# ============================================================
 platforms:
-  xiaohongshu:
+  meta:
     enabled: true
-    format: "note"
-    max_length: 1000
-    cta_style: "评论关键词引导"
-  douyin:
-    enabled: true
-    format: "short_video_script"
-    max_length: 500
-    cta_style: "私信关键词"
-  shipinhao:
-    enabled: true
-    format: "video_caption"
-    max_length: 500
-    cta_style: "关注+私信"
+    format: "post"
+    sub_platforms: ["facebook", "instagram"]
+    max_length: 2200          # Instagram caption limit
+    ad_copy:
+      primary_text: 125       # above fold
+      headline: 40
+      description: 30
+    image_specs:
+      feed: "1080x1080"
+      stories: "1080x1920"
+      carousel: "1080x1080"
+    cta_style: "link_click"
+    agent: "global-content-agent"
+    ads_agent: "meta-ads-agent"
+
   x:
     enabled: true
     format: "thread"
     max_length: 280
+    thread_max: 7             # max tweets in a thread
     cta_style: "link_in_bio"
-  jike:
+    agent: "x-twitter-agent"
+
+  tiktok:
     enabled: true
+    format: "short_video_script"
+    script_duration: "15-60s"
+    caption_max: 150
+    hashtags: 5
+    cta_style: "follow_link_in_bio"
+    agent: "global-content-agent"
+
+  linkedin:
+    enabled: true
+    format: "post"
+    max_length: 3000
+    hashtags: 5               # at bottom, not in body
+    cta_style: "comment_engagement"
+    agent: "global-content-agent"
+
+  email:
+    enabled: true
+    format: "email_sequence"
+    subject_max: 60           # 6-10 words
+    preview_text: 90
+    body_format: "html"
+    cta_style: "button_click"
+    agent: "email-agent"
+
+  blog:
+    enabled: true
+    format: "article"
+    min_length: 1000
+    max_length: 2000
+    meta_description: 155
+    cta_style: "internal_link"
+    agent: "global-content-agent"
+    seo_agent: "seo-agent"
+    geo_agent: "geo-agent"
+
+# ============================================================
+# Legacy Platforms (国内 — Deprecated, kept for compatibility)
+# ============================================================
+legacy_platforms:
+  xiaohongshu:
+    enabled: false
+    format: "note"
+    max_length: 1000
+    cta_style: "评论关键词引导"
+    agent: "xhs-agent"
+    deprecated: true
+    note: "Migrated to global focus. Re-enable if targeting CN market."
+
+  douyin:
+    enabled: false
+    format: "short_video_script"
+    max_length: 500
+    cta_style: "私信关键词"
+    deprecated: true
+    note: "Migrated to global focus. Re-enable if targeting CN market."
+
+  shipinhao:
+    enabled: false
+    format: "video_caption"
+    max_length: 500
+    cta_style: "关注+私信"
+    deprecated: true
+    note: "Migrated to global focus. Re-enable if targeting CN market."
+
+  jike:
+    enabled: false
     format: "post"
     max_length: 1200
     cta_style: "评论互动"
+    deprecated: true
+    note: "Migrated to global focus. Re-enable if targeting CN market."
+
+# ============================================================
+# Cross-Platform Settings
+# ============================================================
+settings:
+  default_language: "en"
+  supported_languages: ["en", "zh"]
+  default_market: "us"
+  supported_markets: ["us", "eu", "uk", "sea", "latam"]
+  content_review_required: true
+  review_agent: "brand-compliance-agent"
+  seo_optimization: true
+  geo_optimization: true

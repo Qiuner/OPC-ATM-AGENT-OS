@@ -6,7 +6,7 @@
 -- ============================================================
 CREATE TABLE content_pieces (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  channel         TEXT NOT NULL,           -- 'xhs' | 'douyin' | 'x' | 'email' | 'video'
+  channel         TEXT NOT NULL,           -- 'meta' | 'x' | 'tiktok' | 'linkedin' | 'email' | 'blog' | 'xhs' | 'douyin' | 'video'
   title           TEXT,                    -- 标题/主题行
   body            TEXT NOT NULL,           -- 正文内容
   hook_type       TEXT,                    -- 'question' | 'number' | 'story' | 'controversy' | 'pain_point'
@@ -15,7 +15,11 @@ CREATE TABLE content_pieces (
   campaign_id     UUID,                    -- 关联营销活动（可选）
   external_id     TEXT,                    -- 平台侧 ID（发布后回填）
   status          TEXT DEFAULT 'draft',    -- 'draft' | 'review' | 'approved' | 'published' | 'rejected'
-  created_by      TEXT NOT NULL,           -- agent name: 'xhs-agent' | 'x-agent' 等
+  created_by      TEXT NOT NULL,           -- agent name: 'global-content-agent' | 'email-agent' 等
+  language        TEXT DEFAULT 'en',       -- 内容语言: 'en' | 'zh'
+  target_market   TEXT DEFAULT 'us',       -- 目标市场: 'us' | 'eu' | 'uk' | 'sea' | 'latam' | 'global'
+  published_url   TEXT,                    -- 发布后的外部 URL（SEO/GEO 追踪用）
+  geo_optimized   BOOLEAN DEFAULT FALSE,   -- 是否经过 GEO Agent 优化
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   published_at    TIMESTAMPTZ
 );
@@ -23,6 +27,9 @@ CREATE TABLE content_pieces (
 CREATE INDEX idx_content_channel ON content_pieces(channel);
 CREATE INDEX idx_content_status ON content_pieces(status);
 CREATE INDEX idx_content_created ON content_pieces(created_at DESC);
+CREATE INDEX idx_content_language ON content_pieces(language);
+CREATE INDEX idx_content_market ON content_pieces(target_market);
+CREATE INDEX idx_content_geo ON content_pieces(geo_optimized) WHERE geo_optimized = TRUE;
 
 -- ============================================================
 -- 2. 性能指标表：各渠道数据（webhook 或定期拉取写入）
@@ -139,7 +146,11 @@ CREATE OR REPLACE FUNCTION calculate_score(
   p_shares INTEGER,
   p_collects INTEGER DEFAULT 0,
   p_view_count INTEGER DEFAULT 0,
-  p_completion_rate DECIMAL DEFAULT 0
+  p_completion_rate DECIMAL DEFAULT 0,
+  p_open_rate DECIMAL DEFAULT 0,
+  p_click_rate DECIMAL DEFAULT 0,
+  p_ctr DECIMAL DEFAULT 0,
+  p_roas DECIMAL DEFAULT 0
 ) RETURNS DECIMAL AS $$
 BEGIN
   CASE p_channel
@@ -157,6 +168,29 @@ BEGIN
     WHEN 'x' THEN
       IF p_impressions > 0 THEN
         RETURN LEAST(100, (p_likes + p_shares * 3 + p_comments * 2)::DECIMAL / p_impressions * 100);
+      END IF;
+    -- Meta (Facebook/Instagram): (likes + comments×2 + shares×3) / impressions × 100
+    WHEN 'meta' THEN
+      IF p_impressions > 0 THEN
+        RETURN LEAST(100, (p_likes + p_comments * 2 + p_shares * 3)::DECIMAL / p_impressions * 100);
+      END IF;
+    -- TikTok: 完播率×40 + (likes + shares×3 + comments×2) / views × 60
+    WHEN 'tiktok' THEN
+      IF p_view_count > 0 THEN
+        RETURN LEAST(100, p_completion_rate * 40 + (p_likes + p_shares * 3 + p_comments * 2)::DECIMAL / p_view_count * 60);
+      END IF;
+    -- LinkedIn: (likes + comments×3 + shares×2) / impressions × 100
+    WHEN 'linkedin' THEN
+      IF p_impressions > 0 THEN
+        RETURN LEAST(100, (p_likes + p_comments * 3 + p_shares * 2)::DECIMAL / p_impressions * 100);
+      END IF;
+    -- Email: open_rate×40 + click_rate×60 (0-1 scale → 0-100)
+    WHEN 'email' THEN
+      RETURN LEAST(100, p_open_rate * 40 + p_click_rate * 60);
+    -- Blog: engagement (comments + shares) / impressions
+    WHEN 'blog' THEN
+      IF p_impressions > 0 THEN
+        RETURN LEAST(100, (p_comments * 5 + p_shares * 3)::DECIMAL / p_impressions * 100);
       END IF;
     ELSE
       RETURN 0;

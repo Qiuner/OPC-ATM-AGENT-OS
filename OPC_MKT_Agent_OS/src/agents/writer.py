@@ -1,0 +1,29 @@
+def build_content_pack(context: dict) -> dict:
+    offer = context.get("offers", [{}])[0].get("name", "OPC增长站")
+
+    return {
+        "xiaohongshu": {
+            "title": "有内容有能力，为什么就是接不到高质量客户？",
+            "body": f"你缺的不是努力，是承接系统。\n\n我最近在做{offer}，核心是把产品、案例、教程和转化入口放在同一个业务站里。\n\n想看模板，评论：OPC"
+        },
+        "douyin": {
+            "hook": "3秒告诉你，为什么老板一定要有自己的AI业务网站",
+            "script": "第一，你的流量都在平台，不在自己手里。第二，客户看不懂你到底卖什么。第三，没有转化路径。解决方案：OPC增长站。"
+        },
+        "wechat_article": {
+            "title": "我为什么开始做一人公司的OPC营销系统",
+            "outline": [
+                "为什么做这件事",
+                "OPC系统的4个模块",
+                "一个14天可上线的MVP方案",
+                "首批内测招募"
+            ]
+        },
+        "x": {
+            "thread": [
+                "Most founders don't need more content. They need a conversion-ready personal AI site.",
+                "I call it OPC Growth Site: product + proof + content + CTA.",
+                "Building the first public case now. Reply 'OPC' if you want the framework."
+            ]
+        }
+    }

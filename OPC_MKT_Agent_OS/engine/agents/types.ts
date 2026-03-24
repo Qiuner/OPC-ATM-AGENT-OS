@@ -7,7 +7,10 @@
 // ============================================================
 
 /** 支持的营销渠道 */
-export type Channel = "xhs" | "douyin" | "x" | "email" | "video";
+export type Channel = "meta" | "x" | "tiktok" | "linkedin" | "email" | "blog" | "xhs" | "douyin" | "video";
+
+/** 目标市场 */
+export type TargetMarket = "us" | "eu" | "uk" | "sea" | "latam" | "global";
 
 /** 内容状态 */
 export type ContentStatus = "draft" | "review" | "approved" | "published" | "rejected";
@@ -37,6 +40,10 @@ export interface ContentPiece {
   external_id: string | null;
   status: ContentStatus;
   created_by: string;
+  language: string;
+  target_market: TargetMarket;
+  published_url: string | null;
+  geo_optimized: boolean;
   created_at: string;
   published_at: string | null;
 }

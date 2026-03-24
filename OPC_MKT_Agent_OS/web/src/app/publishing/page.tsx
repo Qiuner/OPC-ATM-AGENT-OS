@@ -36,91 +36,91 @@ const TABS: { key: TabKey; label: string }[] = [
 const MOCK_ITEMS: PublishItem[] = [
   {
     id: "PUB-012",
-    title: "小红书种草笔记 #12",
-    campaign: "春季推广",
+    title: "5 AI Tools That Will 10x Your Productivity in 2026",
+    campaign: "Content Marketing",
     scheduledAt: "2026-03-12 10:00",
     tab: "pending",
     platforms: [
-      { platform: "小红书", ready: true, format: "图文笔记 · 9图 + 正文" },
-      { platform: "抖音", ready: true, format: "短视频脚本 · 30s" },
-      { platform: "视频号", ready: false, format: "竖版视频 · 待适配" },
-      { platform: "X", ready: true, format: "推文线程 · 5条" },
+      { platform: "X", ready: true, format: "Tweet Thread · 5 tweets" },
+      { platform: "LinkedIn", ready: true, format: "Professional Post · Long-form" },
+      { platform: "Blog", ready: true, format: "SEO Article · 1500 words" },
+      { platform: "Email", ready: false, format: "Newsletter · Pending" },
     ],
-    body: "春季新品推荐，打工人必备好物清单！从护肤到办公，每一件都是精挑细选。",
-    tags: ["春季好物", "打工人必备", "种草"],
+    body: "Discover the top 5 AI tools that are revolutionizing how teams work. From content creation to data analysis, these tools will transform your workflow.",
+    tags: ["AI", "Productivity", "Tools", "2026"],
     fromApi: false,
   },
   {
     id: "PUB-005",
-    title: "品牌故事短视频 #5",
-    campaign: "品牌曝光",
+    title: "Behind the Scenes: How We Built Our Product",
+    campaign: "Brand Awareness",
     scheduledAt: "2026-03-13 14:00",
     tab: "pending",
     platforms: [
-      { platform: "抖音", ready: true, format: "竖版短视频 · 60s" },
-      { platform: "视频号", ready: true, format: "竖版视频 · 60s" },
-      { platform: "小红书", ready: false, format: "视频笔记 · 待适配封面" },
+      { platform: "TikTok", ready: true, format: "Short Video · 60s" },
+      { platform: "Meta", ready: true, format: "IG Reels + FB Post" },
+      { platform: "LinkedIn", ready: false, format: "Article · Pending" },
     ],
-    body: "从一个想法到一个产品，我们的故事从未停止。今天带你走进幕后，看看产品是怎么诞生的。",
-    tags: ["品牌故事", "幕后", "创业"],
+    body: "From a simple idea to a shipped product — our journey of building, failing, and iterating. Today we take you behind the scenes.",
+    tags: ["Startup", "BehindTheScenes", "BuildInPublic"],
     fromApi: false,
   },
   {
     id: "PUB-003",
-    title: "AI 工具推荐帖 #3",
-    campaign: "内容营销",
+    title: "The Complete Guide to DTC Marketing in 2026",
+    campaign: "Lead Generation",
     scheduledAt: "2026-03-14 09:00",
     tab: "pending",
     platforms: [
-      { platform: "小红书", ready: true, format: "图文笔记 · 6图 + 正文" },
-      { platform: "即刻", ready: true, format: "动态帖子 · 正文" },
-      { platform: "X", ready: true, format: "推文 · 单条" },
+      { platform: "Blog", ready: true, format: "SEO Article · 2000 words" },
+      { platform: "Email", ready: true, format: "Newsletter · Weekly Digest" },
+      { platform: "X", ready: true, format: "Tweet Thread · 8 tweets" },
     ],
-    body: "2026年最值得用的AI工具合集！效率直接翻倍，第3个真的绝了。",
-    tags: ["AI工具", "效率提升", "推荐"],
+    body: "Everything you need to know about direct-to-consumer marketing in 2026. Strategy, channels, tools, and real case studies.",
+    tags: ["DTC", "Marketing", "Guide", "Ecommerce"],
     fromApi: false,
   },
   {
     id: "PUB-011",
-    title: "创始人故事 — 从0到1",
-    campaign: "品牌曝光",
+    title: "Founder Story — From Zero to Launch",
+    campaign: "Brand Awareness",
     scheduledAt: "2026-03-11 12:00",
     tab: "exported",
     platforms: [
-      { platform: "视频号", ready: true, format: "竖版视频 · 90s" },
-      { platform: "抖音", ready: true, format: "竖版短视频 · 60s" },
+      { platform: "LinkedIn", ready: true, format: "Article · 800 words" },
+      { platform: "TikTok", ready: true, format: "Short Video · 45s" },
     ],
-    body: "创业3年，踩过无数坑。今天分享我从0到1的心路历程，希望能给正在路上的你一些启发。",
-    tags: ["创始人", "创业故事", "心路历程"],
+    body: "3 years of building, countless pivots. Today I'm sharing my journey from zero to launch — hoping it inspires those still on the path.",
+    tags: ["Founder", "Startup", "Journey"],
     fromApi: false,
   },
   {
     id: "PUB-010",
-    title: "开箱测评 — 新品首发",
-    campaign: "春季推广",
+    title: "Product Unboxing & First Impressions",
+    campaign: "Spring Launch",
     scheduledAt: "2026-03-08 18:00",
     tab: "published",
     platforms: [
-      { platform: "抖音", ready: true, format: "竖版短视频 · 45s" },
-      { platform: "小红书", ready: true, format: "视频笔记 · 45s" },
-      { platform: "X", ready: true, format: "推文 · 单条" },
+      { platform: "TikTok", ready: true, format: "Short Video · 45s" },
+      { platform: "Meta", ready: true, format: "IG Post · Carousel" },
+      { platform: "X", ready: true, format: "Tweet · Single" },
     ],
-    body: "新品到了！开箱第一感受：质感拉满。来看看细节做得怎么样。",
-    tags: ["开箱", "新品", "测评"],
+    body: "The new product just arrived! First impressions: premium quality all around. Let's take a closer look at the details.",
+    tags: ["Unboxing", "NewProduct", "Review"],
     fromApi: false,
   },
   {
     id: "PUB-009",
-    title: "FAQ 合集 — 高频问题解答",
-    campaign: "用户教育",
+    title: "FAQ Collection — Top 10 Questions Answered",
+    campaign: "Customer Education",
     scheduledAt: "2026-03-07 10:00",
     tab: "published",
     platforms: [
-      { platform: "小红书", ready: true, format: "图文笔记 · 12图" },
-      { platform: "即刻", ready: true, format: "动态帖子" },
+      { platform: "Blog", ready: true, format: "SEO Article · FAQ Schema" },
+      { platform: "Email", ready: true, format: "Drip Email · 3-part series" },
     ],
-    body: "收集了大家问得最多的10个问题，一次性全部解答！收藏起来随时查看。",
-    tags: ["FAQ", "问题解答", "教程"],
+    body: "We collected the most frequently asked questions and answered them all in one place. Bookmark this for future reference!",
+    tags: ["FAQ", "CustomerSupport", "Tutorial"],
     fromApi: false,
   },
 ];
@@ -147,7 +147,7 @@ function mapContentToPublishItem(content: Content): PublishItem {
           ? "pending"
           : "pending",
     platforms: [
-      { platform: content.platform || "小红书", ready: true, format: "AI 生成内容" },
+      { platform: content.platform || "X", ready: true, format: "AI Generated" },
     ],
     body: content.body,
     tags,
@@ -200,51 +200,63 @@ function itemToMarkdown(item: PublishItem): string {
 }
 
 // Platform preview formatters
-function formatXiaoHongShu(item: PublishItem): string {
-  const emoji = "🌸";
-  const title = `${emoji} ${item.title}`;
-  const body = (item.body ?? "").slice(0, 1000);
-  const tags = (item.tags ?? []).map((t) => `#${t}`).join(" ");
-  return `${title}\n\n${body}\n\n${tags}`;
-}
-
-function formatDouyin(item: PublishItem): string {
-  const body = item.body ?? "";
-  const hook = body.slice(0, 50) + (body.length > 50 ? "..." : "");
-  const mainBody = body.slice(0, 200);
-  return `【Hook】${hook}\n\n【正文】${mainBody}\n\n【CTA】关注我，获取更多好内容！`;
-}
-
 function formatX(item: PublishItem): string {
   const full = `${item.title}\n\n${item.body ?? ""}`;
-  return full.slice(0, 280);
+  const tags = (item.tags ?? []).map((t) => `#${t}`).join(" ");
+  const tweet = full.slice(0, 260) + (tags ? `\n\n${tags}` : "");
+  return tweet.slice(0, 280);
 }
 
-function formatJike(item: PublishItem): string {
-  return `${item.title}\n\n${item.body ?? ""}\n\n${(item.tags ?? []).map((t) => `#${t}`).join(" ")}`;
-}
-
-function formatShiPinHao(item: PublishItem): string {
+function formatLinkedIn(item: PublishItem): string {
+  const title = item.title;
   const body = item.body ?? "";
-  return `【视频号脚本】\n\n标题：${item.title}\n\n开场白：${body.slice(0, 80)}\n\n正文：${body}\n\n结尾CTA：点赞关注不迷路！`;
+  const tags = (item.tags ?? []).map((t) => `#${t}`).join(" ");
+  return `${title}\n\n${body}\n\n${tags}\n\n---\nWhat are your thoughts? Drop a comment below.`;
 }
 
-type PlatformKey = "小红书" | "抖音" | "X" | "即刻" | "视频号";
+function formatTikTok(item: PublishItem): string {
+  const body = item.body ?? "";
+  const hook = body.slice(0, 50) + (body.length > 50 ? "..." : "");
+  return `[Hook - 3s] ${hook}\n\n[Main Content - 15-45s]\n${body}\n\n[CTA - 3s] Follow for more! Like & Share!`;
+}
+
+function formatMeta(item: PublishItem): string {
+  const body = item.body ?? "";
+  const tags = (item.tags ?? []).map((t) => `#${t}`).join(" ");
+  return `${item.title}\n\n${body}\n\n${tags}`;
+}
+
+function formatEmail(item: PublishItem): string {
+  const subject = item.title;
+  const body = item.body ?? "";
+  return `Subject: ${subject}\nPreheader: ${body.slice(0, 80)}\n\n---\n\nHi [First Name],\n\n${body}\n\nBest regards,\n[Brand Name]\n\n---\nUnsubscribe | View in browser`;
+}
+
+function formatBlog(item: PublishItem): string {
+  const title = item.title;
+  const body = item.body ?? "";
+  const tags = (item.tags ?? []).map((t) => t).join(", ");
+  return `# ${title}\n\nMeta Description: ${body.slice(0, 155)}\nKeywords: ${tags}\n\n---\n\n${body}\n\n---\n\n## Key Takeaways\n\n- [Takeaway 1]\n- [Takeaway 2]\n- [Takeaway 3]`;
+}
+
+type PlatformKey = "X" | "LinkedIn" | "TikTok" | "Meta" | "Email" | "Blog";
 
 const PLATFORM_FORMATTERS: Record<PlatformKey, (item: PublishItem) => string> = {
-  "小红书": formatXiaoHongShu,
-  "抖音": formatDouyin,
   X: formatX,
-  "即刻": formatJike,
-  "视频号": formatShiPinHao,
+  LinkedIn: formatLinkedIn,
+  TikTok: formatTikTok,
+  Meta: formatMeta,
+  Email: formatEmail,
+  Blog: formatBlog,
 };
 
 const PLATFORM_LABELS: Record<PlatformKey, string> = {
-  "小红书": "小红书 · 图文笔记",
-  "抖音": "抖音 · 短视频脚本",
-  X: "X · 推文 (280字符)",
-  "即刻": "即刻 · 社区动态",
-  "视频号": "视频号 · 视频脚本",
+  X: "X · 推文 (280 chars)",
+  LinkedIn: "LinkedIn · 专业文章",
+  TikTok: "TikTok · 短视频脚本",
+  Meta: "Meta · FB/IG 帖子",
+  Email: "Email · 营销邮件",
+  Blog: "Blog · SEO 长文",
 };
 
 // --------------- Toast Component ---------------
@@ -276,11 +288,11 @@ function PlatformPreviewModal({
   item: PublishItem;
   onClose: () => void;
 }) {
-  const [activePlatform, setActivePlatform] = useState<PlatformKey>("小红书");
+  const [activePlatform, setActivePlatform] = useState<PlatformKey>("X");
   const [toast, setToast] = useState("");
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  const allPlatforms: PlatformKey[] = ["小红书", "抖音", "X", "即刻", "视频号"];
+  const allPlatforms: PlatformKey[] = ["X", "LinkedIn", "TikTok", "Meta", "Email", "Blog"];
 
   const formatted = PLATFORM_FORMATTERS[activePlatform](item);
 
@@ -497,7 +509,7 @@ export default function PublishingPage() {
   };
 
   const handleCopyToClipboard = async (item: PublishItem) => {
-    const text = formatXiaoHongShu(item);
+    const text = formatX(item);
     try {
       await navigator.clipboard.writeText(text);
       setToast(`已复制: ${item.title}`);

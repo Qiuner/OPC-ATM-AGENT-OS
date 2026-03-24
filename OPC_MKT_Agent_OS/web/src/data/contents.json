@@ -1415,5 +1415,26 @@
     "id": "cnt-mmxi8gbn-pmxn0n",
     "created_at": "2026-03-19T13:27:12.802Z",
     "updated_at": "2026-03-19T13:27:12.802Z"
+  },
+  {
+    "task_id": "task-mn42bj76-ereeum",
+    "campaign_id": "default",
+    "title": "5个AI工具推荐",
+    "body": "# 5个AI工具推荐\n\n今天给大家推荐5个超好用的AI工具...\n\n1. Claude - 最强AI助手\n2. Midjourney - AI绘画\n3. Cursor - AI编程\n\n#AI工具# #效率提升#",
+    "platform": "xiaohongshu",
+    "status": "review",
+    "media_urls": [],
+    "metadata": {
+      "mode": "fast",
+      "agentId": "xhs-agent",
+      "prompt": "写一篇AI工具推荐"
+    },
+    "created_by": "agent:xhs-agent",
+    "agent_run_id": null,
+    "agent_type": "xhs-agent",
+    "learning_id": null,
+    "id": "cnt-mn42bj7a-znf9rf",
+    "created_at": "2026-03-24T03:36:05.878Z",
+    "updated_at": "2026-03-24T03:36:05.878Z"
   }
 ]

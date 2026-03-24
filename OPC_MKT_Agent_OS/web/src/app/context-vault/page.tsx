@@ -41,6 +41,16 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   HistoryIcon,
+  SettingsIcon,
+  GlobeIcon,
+  LinkIcon,
+  Trash2Icon,
+  PencilIcon,
+  MailIcon,
+  FileUpIcon,
+  InfoIcon,
+  CheckCircleIcon,
+  AlertCircleIcon,
 } from "lucide-react";
 import type { ContextAsset, ContextAssetType } from "@/types";
 
@@ -107,6 +117,18 @@ const typeLabels: Record<ContextAssetType, string> = {
   content: "案例",
 };
 
+// ---------- Product card (scraped) ----------
+interface ProductCard {
+  id: string;
+  name: string;
+  description: string;
+  price: string | null;
+  image: string | null;
+  features: string[];
+  url: string;
+  scraped_at: string;
+}
+
 // ---------- Validation errors ----------
 interface FormErrors {
   title?: string;
@@ -128,11 +150,33 @@ export default function ContextVaultPage() {
   const [versionDialogAsset, setVersionDialogAsset] = useState<ContextAssetWithVersions | null>(null);
   const [importing, setImporting] = useState(false);
 
+  // ---------- Brand Setup state ----------
+  const [brandSetupOpen, setBrandSetupOpen] = useState(true);
+  const [brandTab, setBrandTab] = useState<"product-url" | "skills" | "email">("product-url");
+  const [scrapeUrl, setScrapeUrl] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [productCards, setProductCards] = useState<ProductCard[]>([]);
+
+  // Custom Skills state
+  const [customSkills, setCustomSkills] = useState<
+    { id: string; name: string; description: string; content: string; updatedAt: string }[]
+  >([]);
+  const [skillName, setSkillName] = useState("");
+  const [skillContent, setSkillContent] = useState("");
+  const [skillSaving, setSkillSaving] = useState(false);
+
+  // Email Config state
+  const [emailAddress, setEmailAddress] = useState("");
+  const [senderName, setSenderName] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
+
   const titleRef = useRef<HTMLInputElement>(null);
   const typeRef = useRef<ContextAssetType>("product");
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
+  const skillFileInputRef = useRef<HTMLInputElement>(null);
 
   const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
   const MAX_IMAGES = 9;
@@ -144,6 +188,230 @@ export default function ContextVaultPage() {
     setNotification(msg);
     setTimeout(() => setNotification(null), 3000);
   }, []);
+
+  // ---------- Scrape product URL ----------
+  const handleScrape = useCallback(async () => {
+    if (!scrapeUrl.trim()) return;
+    setScraping(true);
+    try {
+      const res = await fetch("/api/context/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: scrapeUrl.trim() }),
+      });
+      const json = (await res.json()) as {
+        success: boolean;
+        data?: ContextAssetWithVersions;
+        product?: ProductCard;
+        error?: string;
+      };
+      if (json.success && json.data) {
+        // Add to assets list
+        setAssets((prev) => [...prev, json.data as ContextAssetWithVersions]);
+        // Add to product cards
+        const meta = json.data.metadata as Record<string, unknown>;
+        setProductCards((prev) => [
+          ...prev,
+          {
+            id: json.data!.id,
+            name: (meta.product_name as string) || json.data!.title,
+            description: (meta.product_description as string) || "",
+            price: (meta.product_price as string) || null,
+            image: (meta.product_image as string) || null,
+            features: (meta.product_features as string[]) || [],
+            url: (meta.source_url as string) || scrapeUrl,
+            scraped_at: (meta.scraped_at as string) || new Date().toISOString(),
+          },
+        ]);
+        setScrapeUrl("");
+        showNotification("Product scraped successfully");
+      } else {
+        showNotification(json.error || "Scrape failed");
+      }
+    } catch {
+      showNotification("Network error during scrape");
+    } finally {
+      setScraping(false);
+    }
+  }, [scrapeUrl, showNotification]);
+
+  // Load existing product cards from assets on mount
+  useEffect(() => {
+    const products = assets
+      .filter((a) => a.type === "product" && a.metadata?.source_url)
+      .map((a) => {
+        const meta = a.metadata as Record<string, unknown>;
+        return {
+          id: a.id,
+          name: (meta.product_name as string) || a.title,
+          description: (meta.product_description as string) || "",
+          price: (meta.product_price as string) || null,
+          image: (meta.product_image as string) || null,
+          features: (meta.product_features as string[]) || [],
+          url: (meta.source_url as string) || "",
+          scraped_at: (meta.scraped_at as string) || a.created_at,
+        };
+      });
+    setProductCards(products);
+  }, [assets]);
+
+  // ---------- Delete product card ----------
+  const handleDeleteProduct = useCallback(async (productId: string) => {
+    try {
+      const res = await fetch(`/api/context/${productId}`, { method: "DELETE" });
+      const json = (await res.json()) as { success: boolean };
+      if (json.success) {
+        setAssets((prev) => prev.filter((a) => a.id !== productId));
+        setProductCards((prev) => prev.filter((p) => p.id !== productId));
+        showNotification("Product deleted");
+      }
+    } catch {
+      showNotification("Delete failed");
+    }
+  }, [showNotification]);
+
+  // ---------- Custom Skills handlers ----------
+  const fetchSkills = useCallback(async () => {
+    try {
+      const res = await fetch("/api/skills/custom");
+      const json = (await res.json()) as {
+        success: boolean;
+        data?: { id: string; name: string; description: string; content: string; updatedAt: string }[];
+      };
+      if (json.success && json.data) {
+        setCustomSkills(json.data);
+      }
+    } catch {
+      // silently fail
+    }
+  }, []);
+
+  const handleAddSkill = useCallback(async () => {
+    if (!skillName.trim() || !skillContent.trim()) return;
+    setSkillSaving(true);
+    try {
+      const res = await fetch("/api/skills/custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: skillName.trim(), content: skillContent.trim() }),
+      });
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (json.success) {
+        setSkillName("");
+        setSkillContent("");
+        showNotification("Skill saved successfully");
+        fetchSkills();
+      } else {
+        showNotification(json.error || "Save failed");
+      }
+    } catch {
+      showNotification("Network error");
+    } finally {
+      setSkillSaving(false);
+    }
+  }, [skillName, skillContent, showNotification, fetchSkills]);
+
+  const handleDeleteSkill = useCallback(async (id: string) => {
+    try {
+      const res = await fetch("/api/skills/custom", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const json = (await res.json()) as { success: boolean };
+      if (json.success) {
+        setCustomSkills((prev) => prev.filter((s) => s.id !== id));
+        showNotification("Skill deleted");
+      }
+    } catch {
+      showNotification("Delete failed");
+    }
+  }, [showNotification]);
+
+  const handleSkillFileUpload = useCallback(async (files: FileList | null) => {
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      if (!file.name.match(/\.(md|txt)$/i)) {
+        showNotification("Only .md and .txt files are supported");
+        continue;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        showNotification("File too large (max 10MB)");
+        continue;
+      }
+      try {
+        const content = await file.text();
+        const name = file.name.replace(/\.(md|txt)$/i, "");
+        const res = await fetch("/api/skills/custom", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, content }),
+        });
+        const json = (await res.json()) as { success: boolean };
+        if (json.success) {
+          showNotification(`Skill "${name}" uploaded`);
+          fetchSkills();
+        }
+      } catch {
+        showNotification(`Failed to upload ${file.name}`);
+      }
+    }
+    if (skillFileInputRef.current) skillFileInputRef.current.value = "";
+  }, [showNotification, fetchSkills]);
+
+  // ---------- Email Config handlers ----------
+  const fetchSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/settings");
+      const json = (await res.json()) as {
+        success: boolean;
+        data?: { email?: { address: string; senderName: string; verified: boolean } };
+      };
+      if (json.success && json.data?.email) {
+        setEmailAddress(json.data.email.address);
+        setSenderName(json.data.email.senderName);
+        setEmailVerified(json.data.email.verified);
+      }
+    } catch {
+      // silently fail
+    }
+  }, []);
+
+  const handleSaveEmail = useCallback(async () => {
+    if (!emailAddress.trim()) return;
+    setSavingEmail(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: {
+            address: emailAddress.trim(),
+            senderName: senderName.trim() || emailAddress.trim().split("@")[0],
+            verified: false,
+            configuredAt: new Date().toISOString(),
+          },
+        }),
+      });
+      const json = (await res.json()) as { success: boolean };
+      if (json.success) {
+        setEmailVerified(false);
+        showNotification("Email config saved");
+      } else {
+        showNotification("Save failed");
+      }
+    } catch {
+      showNotification("Network error");
+    } finally {
+      setSavingEmail(false);
+    }
+  }, [emailAddress, senderName, showNotification]);
+
+  // Load skills and settings on mount
+  useEffect(() => {
+    fetchSkills();
+    fetchSettings();
+  }, [fetchSkills, fetchSettings]);
 
   // ---------- Image handling ----------
   const handleImageUpload = useCallback(
@@ -454,6 +722,364 @@ export default function ContextVaultPage() {
             新增资产
           </Button>
         </div>
+      </div>
+
+      {/* Brand Setup Section */}
+      <div
+        className="rounded-2xl p-6 bg-[#0a0a0f]"
+        style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+      >
+        {/* Collapsible Header */}
+        <button
+          onClick={() => setBrandSetupOpen((v) => !v)}
+          className="flex items-center justify-between w-full"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center size-9 rounded-lg bg-[#a78bfa]/20">
+              <SettingsIcon className="size-4 text-[#a78bfa]" />
+            </div>
+            <h2 className="text-lg font-semibold text-white">Brand Setup</h2>
+            <Badge className="bg-[#22d3ee]/20 text-[#22d3ee] border-transparent text-xs">
+              {brandTab === "product-url" ? "Product URL" : brandTab === "skills" ? "Custom Skills" : "Email"}
+            </Badge>
+          </div>
+          {brandSetupOpen ? (
+            <ChevronUpIcon className="size-5" style={{ color: "rgba(255,255,255,0.4)" }} />
+          ) : (
+            <ChevronDownIcon className="size-5" style={{ color: "rgba(255,255,255,0.4)" }} />
+          )}
+        </button>
+
+        {/* Collapsible Content */}
+        {brandSetupOpen && (
+          <div className="mt-5 space-y-5">
+            {/* Brand Tab Switcher */}
+            <div
+              className="flex gap-1 rounded-lg p-1"
+              style={{ background: "rgba(255,255,255,0.04)" }}
+            >
+              {[
+                { label: "Product URL", value: "product-url" as const, icon: LinkIcon },
+                { label: "Custom Skills", value: "skills" as const, icon: FileTextIcon },
+                { label: "Email Config", value: "email" as const, icon: MailIcon },
+              ].map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setBrandTab(tab.value)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    brandTab === tab.value
+                      ? "bg-white/10 text-white shadow-sm font-medium"
+                      : "hover:text-white/80"
+                  }`}
+                  style={brandTab !== tab.value ? { color: "rgba(255,255,255,0.4)" } : undefined}
+                >
+                  <tab.icon className="size-3.5" />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ===== Product URL Tab ===== */}
+            {brandTab === "product-url" && (
+              <div className="space-y-5">
+                <div className="flex gap-3">
+                  <Input
+                    placeholder="Enter product page URL, e.g. https://example.com/product"
+                    className="flex-1"
+                    value={scrapeUrl}
+                    onChange={(e) => setScrapeUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleScrape();
+                    }}
+                    disabled={scraping}
+                  />
+                  <Button
+                    className="bg-gradient-to-r from-[#a78bfa] to-[#7c3aed] text-white hover:opacity-90 border-0 shrink-0"
+                    onClick={handleScrape}
+                    disabled={scraping || !scrapeUrl.trim()}
+                  >
+                    {scraping ? (
+                      <Loader2Icon className="size-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <GlobeIcon className="size-4 mr-1.5" />
+                    )}
+                    {scraping ? "Scraping..." : "Scrape"}
+                  </Button>
+                </div>
+
+                {productCards.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <GlobeIcon className="size-10 mb-3" style={{ color: "rgba(255,255,255,0.15)" }} />
+                    <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+                      Enter a product URL and click Scrape to auto-generate product cards
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {productCards.map((product) => (
+                      <div
+                        key={product.id}
+                        className="rounded-xl p-4 bg-white/[0.03] transition-all hover:-translate-y-0.5"
+                        style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+                      >
+                        {product.image ? (
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            className="rounded-lg h-40 w-full object-cover mb-3"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div
+                            className="rounded-lg h-40 w-full flex items-center justify-center mb-3"
+                            style={{ background: "rgba(255,255,255,0.04)" }}
+                          >
+                            <PackageIcon className="size-8" style={{ color: "rgba(255,255,255,0.15)" }} />
+                          </div>
+                        )}
+                        <h3 className="text-sm font-semibold text-white truncate">{product.name}</h3>
+                        {product.price && (
+                          <p className="text-base font-bold text-[#a78bfa] mt-1">{product.price}</p>
+                        )}
+                        <p
+                          className="text-xs line-clamp-2 mt-1.5"
+                          style={{ color: "rgba(255,255,255,0.4)" }}
+                        >
+                          {product.description}
+                        </p>
+                        <div className="flex items-center gap-1 mt-2">
+                          <LinkIcon className="size-3" style={{ color: "rgba(255,255,255,0.25)" }} />
+                          <span
+                            className="text-xs truncate"
+                            style={{ color: "rgba(255,255,255,0.25)" }}
+                          >
+                            {product.url}
+                          </span>
+                        </div>
+                        <div className="flex gap-2 mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-white/[0.08] bg-transparent hover:bg-white/5 text-xs"
+                            style={{ color: "rgba(255,255,255,0.6)" }}
+                            onClick={() => {
+                              const asset = assets.find((a) => a.id === product.id);
+                              if (asset) handleOpenSheet(asset);
+                            }}
+                          >
+                            <PencilIcon className="size-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
+                            onClick={() => handleDeleteProduct(product.id)}
+                          >
+                            <Trash2Icon className="size-3 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ===== Custom Skills Tab ===== */}
+            {brandTab === "skills" && (
+              <div className="space-y-5">
+                {/* File upload dropzone */}
+                <label
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer hover:border-[#a78bfa] hover:bg-white/[0.02] transition-colors"
+                  style={{ borderColor: "rgba(255,255,255,0.08)" }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleSkillFileUpload(e.dataTransfer.files);
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                >
+                  <FileUpIcon className="size-8 mb-2" style={{ color: "rgba(255,255,255,0.25)" }} />
+                  <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    Click or drag to upload Skills files
+                  </span>
+                  <span className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.25)" }}>
+                    Supports .md / .txt, max 10MB per file
+                  </span>
+                  <input
+                    ref={skillFileInputRef}
+                    type="file"
+                    accept=".md,.txt"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleSkillFileUpload(e.target.files)}
+                  />
+                </label>
+
+                {/* Skills list */}
+                {customSkills.length > 0 && (
+                  <div
+                    className="rounded-xl overflow-hidden"
+                    style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+                  >
+                    {customSkills.map((skill, idx) => (
+                      <div
+                        key={skill.id}
+                        className="flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.02]"
+                        style={idx < customSkills.length - 1 ? { borderBottom: "1px solid rgba(255,255,255,0.08)" } : undefined}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center justify-center size-8 rounded-lg bg-[#a78bfa]/20 shrink-0">
+                            <FileTextIcon className="size-4 text-[#a78bfa]" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-medium text-white truncate">{skill.name}</p>
+                            <p className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
+                              {skill.description || skill.id + ".SKILL.md"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-4">
+                          <span className="text-xs whitespace-nowrap" style={{ color: "rgba(255,255,255,0.25)" }}>
+                            {skill.updatedAt ? skill.updatedAt.split("T")[0] : ""}
+                          </span>
+                          <button
+                            className="text-white/25 hover:text-red-400 transition-colors"
+                            title="Delete"
+                            onClick={() => handleDeleteSkill(skill.id)}
+                          >
+                            <XIcon className="size-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Divider: or manual input */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+                  <span className="text-xs shrink-0" style={{ color: "rgba(255,255,255,0.25)" }}>
+                    or manual input
+                  </span>
+                  <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+                </div>
+
+                {/* Manual input */}
+                <div className="space-y-3">
+                  <Input
+                    placeholder="Skill name, e.g. Holiday Campaign SOP"
+                    value={skillName}
+                    onChange={(e) => setSkillName(e.target.value)}
+                  />
+                  <Textarea
+                    placeholder="Paste your marketing SOP / skill content here (Markdown supported)..."
+                    className="min-h-[120px] resize-y"
+                    value={skillContent}
+                    onChange={(e) => setSkillContent(e.target.value)}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/[0.08] bg-transparent hover:bg-white/5"
+                    style={{ color: "rgba(255,255,255,0.6)" }}
+                    onClick={handleAddSkill}
+                    disabled={skillSaving || !skillName.trim() || !skillContent.trim()}
+                  >
+                    {skillSaving ? (
+                      <Loader2Icon className="size-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <PlusIcon className="size-4 mr-1.5" />
+                    )}
+                    {skillSaving ? "Saving..." : "Add Skill"}
+                  </Button>
+                </div>
+
+                {/* Empty state (only when no skills and no upload) */}
+                {customSkills.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
+                      No custom skills yet
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ===== Email Config Tab ===== */}
+            {brandTab === "email" && (
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>
+                      Email Address
+                    </label>
+                    <Input
+                      type="email"
+                      placeholder="marketing@yourbrand.com"
+                      value={emailAddress}
+                      onChange={(e) => setEmailAddress(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>
+                      Sender Name
+                    </label>
+                    <Input
+                      placeholder="Your Brand Name"
+                      value={senderName}
+                      onChange={(e) => setSenderName(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Verification status */}
+                  <div className="flex items-center gap-2">
+                    {emailVerified ? (
+                      <Badge className="bg-emerald-500/20 text-emerald-400 border-transparent">
+                        <CheckCircleIcon className="size-3 mr-1" />
+                        Verified
+                      </Badge>
+                    ) : emailAddress ? (
+                      <Badge className="bg-amber-500/20 text-amber-400 border-transparent">
+                        <AlertCircleIcon className="size-3 mr-1" />
+                        Not Verified
+                      </Badge>
+                    ) : null}
+                  </div>
+
+                  {/* Info note */}
+                  <div
+                    className="flex items-start gap-2 rounded-lg px-3 py-2.5"
+                    style={{ background: "rgba(167,139,250,0.08)", border: "1px solid rgba(167,139,250,0.15)" }}
+                  >
+                    <InfoIcon className="size-4 shrink-0 mt-0.5 text-[#a78bfa]" />
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
+                      Email sending will be available in Phase 2. Configure your address now so the Email Marketing Agent knows your sender identity.
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      className="bg-gradient-to-r from-[#a78bfa] to-[#7c3aed] text-white hover:opacity-90 border-0"
+                      onClick={handleSaveEmail}
+                      disabled={savingEmail || !emailAddress.trim()}
+                    >
+                      {savingEmail ? (
+                        <Loader2Icon className="size-4 mr-1.5 animate-spin" />
+                      ) : (
+                        <MailIcon className="size-4 mr-1.5" />
+                      )}
+                      {savingEmail ? "Saving..." : "Save Email Config"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tab Filter */}
