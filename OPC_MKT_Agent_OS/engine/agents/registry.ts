@@ -212,6 +212,34 @@ export class AgentRegistry {
       avatar: "EM",
     });
 
+    this.register({
+      id: "seo-agent",
+      name: "SEO 专家",
+      nameEn: "SEO",
+      description: "Technical & content SEO — keyword research, on-page optimization, international SEO, link building strategy",
+      skillFile: "seo-expert.SKILL.md",
+      model: "claude-sonnet-4-20250514",
+      tools: ["Read", "Write", "Glob", "Grep", "Bash"],
+      maxTurns: 10,
+      level: "specialist",
+      color: "#059669",
+      avatar: "SEO",
+    });
+
+    this.register({
+      id: "geo-agent",
+      name: "GEO 专家",
+      nameEn: "GEO",
+      description: "Generative Engine Optimization — optimize content for AI search engines (ChatGPT, Perplexity, Google AI Overview, Copilot)",
+      skillFile: "geo-expert.SKILL.md",
+      model: "claude-sonnet-4-20250514",
+      tools: ["Read", "Write", "Glob", "Grep"],
+      maxTurns: 8,
+      level: "specialist",
+      color: "#7c3aed",
+      avatar: "GEO",
+    });
+
     // ---- Platform-Specific Agents ----
 
     this.register({
