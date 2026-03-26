@@ -6,9 +6,11 @@ import {
   Send, Trash2, Hash, Users, Monitor, MessageSquare, Power, PowerOff,
   ChevronUp, FileText, Cpu, Edit3, Save, Zap, Shield, Settings, Terminal,
   Square, Loader2, CheckCircle, AlertCircle, Clock, Wrench, RotateCcw,
+  ListChecks, Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PixelAgentSVG } from '@/components/features/agent-monitor/pixel-agents';
+import PlanReview from '@/components/features/plan-review/plan-review';
 
 // Lazy-load Team Mode (v3 monitor) — only loaded when user switches to Team Mode tab
 const TeamModeView = lazy(() => import('./v3/page'));
@@ -151,6 +153,49 @@ const INITIAL_EXEC: ExecState = {
   logs: [],
   result: '',
 };
+
+// ==========================================
+// Plan-Execute mode types
+// ==========================================
+
+type PlanStatus = 'pending' | 'approved' | 'rejected' | 'modified' | 'executing' | 'completed' | 'failed';
+type StepStatusType = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+
+interface PlanStepData {
+  id: string;
+  order: number;
+  agentId: string;
+  action: string;
+  inputs: Record<string, unknown>;
+  dependencies: string[];
+  status: StepStatusType;
+  result?: string;
+  error?: string;
+}
+
+interface ExecutionPlanData {
+  id: string;
+  taskSummary: string;
+  steps: PlanStepData[];
+  estimatedAgents: string[];
+  status: PlanStatus;
+  createdAt: string;
+  originalPrompt: string;
+  feedback?: string;
+}
+
+interface PlanState {
+  /** Whether plan mode is active (vs direct execute) */
+  enabled: boolean;
+  /** Whether we're currently generating a plan */
+  isGenerating: boolean;
+  /** Whether we're currently executing an approved plan */
+  isExecuting: boolean;
+  /** The current plan being reviewed */
+  plan: ExecutionPlanData | null;
+  /** Real-time progress text per step */
+  stepProgress: Record<string, string>;
+}
 
 // ==========================================
 // Chat mode types (preserved from original)
@@ -713,6 +758,16 @@ export default function TeamStudioPage() {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
 
+  // Plan-Execute mode state
+  const [planState, setPlanState] = useState<PlanState>({
+    enabled: true,
+    isGenerating: false,
+    isExecuting: false,
+    plan: null,
+    stepProgress: {},
+  });
+  const planAbortRef = useRef<AbortController | null>(null);
+
   const scrollToBottom = useCallback(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, []);
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
@@ -946,6 +1001,260 @@ export default function TeamStudioPage() {
     setExpandedCards(new Set());
   }, []);
 
+  // ===== Plan-Execute mode handlers =====
+
+  /** Generate a plan from user prompt */
+  const handleGeneratePlan = useCallback(async (prompt: string) => {
+    if (planAbortRef.current) planAbortRef.current.abort();
+    const controller = new AbortController();
+    planAbortRef.current = controller;
+
+    setPlanState(prev => ({
+      ...prev,
+      isGenerating: true,
+      isExecuting: false,
+      plan: null,
+      stepProgress: {},
+    }));
+    setExecState(prev => ({ ...prev, prompt }));
+
+    try {
+      const res = await fetch('/api/agent/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: prompt }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response stream');
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const event = JSON.parse(jsonStr) as Record<string, unknown>;
+            if (event.type === 'plan') {
+              const plan = event.plan as ExecutionPlanData;
+              setPlanState(prev => ({ ...prev, plan, isGenerating: false }));
+            } else if (event.type === 'plan_error') {
+              throw new Error(event.message as string);
+            }
+          } catch (e) {
+            if (e instanceof Error && e.message !== 'Unexpected end of JSON input') {
+              throw e;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setPlanState(prev => ({ ...prev, isGenerating: false }));
+      execAddLog({ timestamp: Date.now(), agentId: 'ceo', type: 'error', message: `Plan failed: ${msg}` });
+    } finally {
+      planAbortRef.current = null;
+    }
+  }, [execAddLog]);
+
+  /** Approve plan and start execution */
+  const handleApprovePlan = useCallback(async (planId: string) => {
+    if (planAbortRef.current) planAbortRef.current.abort();
+    const controller = new AbortController();
+    planAbortRef.current = controller;
+
+    setPlanState(prev => ({
+      ...prev,
+      isExecuting: true,
+      stepProgress: {},
+      plan: prev.plan ? { ...prev.plan, status: 'executing' as PlanStatus } : null,
+    }));
+
+    try {
+      const res = await fetch(`/api/agent/plan/${planId}/approve`, {
+        method: 'PUT',
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response stream');
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const event = JSON.parse(jsonStr) as Record<string, unknown>;
+            const type = event.type as string;
+
+            switch (type) {
+              case 'step_start': {
+                const stepId = event.stepId as string;
+                const agentId = event.agentId as string;
+                setPlanState(prev => {
+                  if (!prev.plan) return prev;
+                  return {
+                    ...prev,
+                    plan: {
+                      ...prev.plan,
+                      steps: prev.plan.steps.map(s =>
+                        s.id === stepId ? { ...s, status: 'running' as StepStatusType } : s
+                      ),
+                    },
+                  };
+                });
+                execAddLog({ timestamp: Date.now(), agentId, type: 'info', message: `Step ${stepId} started` });
+                break;
+              }
+              case 'step_progress': {
+                const stepId = event.stepId as string;
+                const content = event.content as string;
+                setPlanState(prev => ({
+                  ...prev,
+                  stepProgress: {
+                    ...prev.stepProgress,
+                    [stepId]: (prev.stepProgress[stepId] ?? '') + content,
+                  },
+                }));
+                break;
+              }
+              case 'step_complete': {
+                const stepId = event.stepId as string;
+                const agentId = event.agentId as string;
+                const success = event.success as boolean;
+                setPlanState(prev => {
+                  if (!prev.plan) return prev;
+                  return {
+                    ...prev,
+                    plan: {
+                      ...prev.plan,
+                      steps: prev.plan.steps.map(s =>
+                        s.id === stepId
+                          ? { ...s, status: (success ? 'completed' : 'failed') as StepStatusType, result: event.result as string | undefined }
+                          : s
+                      ),
+                    },
+                  };
+                });
+                execAddLog({
+                  timestamp: Date.now(),
+                  agentId,
+                  type: success ? 'result' : 'error',
+                  message: `Step ${stepId} ${success ? 'completed' : 'failed'}`,
+                });
+                break;
+              }
+              case 'plan_complete': {
+                setPlanState(prev => ({
+                  ...prev,
+                  isExecuting: false,
+                  plan: prev.plan ? { ...prev.plan, status: 'completed' as PlanStatus } : null,
+                }));
+                execAddLog({ timestamp: Date.now(), agentId: 'ceo', type: 'info', message: 'Plan execution completed' });
+                break;
+              }
+              case 'plan_error': {
+                const message = event.message as string;
+                setPlanState(prev => ({
+                  ...prev,
+                  isExecuting: false,
+                  plan: prev.plan ? { ...prev.plan, status: 'failed' as PlanStatus } : null,
+                }));
+                execAddLog({ timestamp: Date.now(), agentId: 'ceo', type: 'error', message });
+                break;
+              }
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setPlanState(prev => ({
+        ...prev,
+        isExecuting: false,
+        plan: prev.plan ? { ...prev.plan, status: 'failed' as PlanStatus } : null,
+      }));
+      execAddLog({ timestamp: Date.now(), agentId: 'ceo', type: 'error', message: msg });
+    } finally {
+      planAbortRef.current = null;
+    }
+  }, [execAddLog]);
+
+  /** Reject plan */
+  const handleRejectPlan = useCallback(async (planId: string, feedback: string) => {
+    try {
+      await fetch(`/api/agent/plan/${planId}/reject`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback }),
+      });
+      setPlanState(prev => ({
+        ...prev,
+        plan: prev.plan ? { ...prev.plan, status: 'rejected' as PlanStatus, feedback } : null,
+      }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to reject plan';
+      execAddLog({ timestamp: Date.now(), agentId: 'ceo', type: 'error', message: msg });
+    }
+  }, [execAddLog]);
+
+  /** Modify plan (not yet implemented in detail, just resets to pending) */
+  const handleModifyPlan = useCallback(async (planId: string, steps: PlanStepData[], feedback: string) => {
+    try {
+      const res = await fetch(`/api/agent/plan/${planId}/modify`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ steps, feedback }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { data: ExecutionPlanData };
+        setPlanState(prev => ({ ...prev, plan: data.data }));
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to modify plan';
+      execAddLog({ timestamp: Date.now(), agentId: 'ceo', type: 'error', message: msg });
+    }
+  }, [execAddLog]);
+
+  /** Reset plan state */
+  const handlePlanReset = useCallback(() => {
+    if (planAbortRef.current) { planAbortRef.current.abort(); planAbortRef.current = null; }
+    setPlanState(prev => ({ ...prev, isGenerating: false, isExecuting: false, plan: null, stepProgress: {} }));
+    setExecState(INITIAL_EXEC);
+  }, []);
+
   // ===== Chat mode send (legacy) =====
 
   const sendMessage = useCallback(async (messageText: string) => {
@@ -1069,8 +1378,65 @@ export default function TeamStudioPage() {
       {/* ===== Execute Mode Tab ===== */}
       {activeTab === 'execute' && (
         <div className="flex flex-1 flex-col min-h-0 overflow-hidden" style={{ background: '#030305' }}>
-          {/* Execution area */}
-          {execState.prompt || execState.tasks.length > 0 ? (
+
+          {/* ===== Plan Review Mode ===== */}
+          {planState.enabled && (planState.plan || planState.isGenerating) ? (
+            <>
+              {/* Plan header */}
+              <div className="shrink-0 px-5 py-3 flex items-center justify-between"
+                style={{ background: 'rgba(19,19,27,0.75)', backdropFilter: 'blur(20px) saturate(1.2)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                    style={{ background: 'rgba(96,165,250,0.08)', color: '#60a5fa' }}
+                  >
+                    <ListChecks className="w-3 h-3" />PLAN
+                  </span>
+                  <span className="text-[15px] font-semibold text-white truncate max-w-[400px]">{execState.prompt}</span>
+                </div>
+                <button onClick={handlePlanReset}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all hover:brightness-125"
+                  style={{ color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                ><RotateCcw className="w-3 h-3" />重置</button>
+              </div>
+
+              {/* Plan content */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {planState.isGenerating ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#60a5fa' }} />
+                    <p className="text-[14px]" style={{ color: 'rgba(255,255,255,0.5)' }}>CEO Agent 正在分析需求，生成执行计划...</p>
+                  </div>
+                ) : planState.plan ? (
+                  <PlanReview
+                    plan={planState.plan}
+                    stepProgress={planState.stepProgress}
+                    onApprove={handleApprovePlan}
+                    onReject={handleRejectPlan}
+                    onModify={handleModifyPlan}
+                    isApproving={planState.isExecuting}
+                  />
+                ) : null}
+              </div>
+
+              {/* Plan rejected — allow retry or switch to direct */}
+              {planState.plan?.status === 'rejected' && (
+                <div className="shrink-0 px-4 py-3 flex items-center gap-3"
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(10,10,15,0.9)' }}
+                >
+                  <button onClick={handlePlanReset}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-medium transition-all hover:brightness-110"
+                    style={{ color: '#a78bfa', background: 'rgba(167,139,250,0.10)', border: '1px solid rgba(167,139,250,0.20)' }}
+                  ><RotateCcw className="w-3.5 h-3.5" />重新输入</button>
+                  <button onClick={() => { handlePlanReset(); setPlanState(prev => ({ ...prev, enabled: false })); }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-medium transition-all hover:brightness-110"
+                    style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.10)', border: '1px solid rgba(251,191,36,0.20)' }}
+                  ><Zap className="w-3.5 h-3.5" />直接执行模式</button>
+                </div>
+              )}
+            </>
+          ) : (execState.prompt || execState.tasks.length > 0) ? (
+          /* ===== Direct Execute Mode (original) ===== */
             <>
               {/* Task header */}
               <div className="shrink-0 px-5 py-3 flex flex-col gap-2"
@@ -1199,34 +1565,80 @@ export default function TeamStudioPage() {
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-3">
                 <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto"
-                  style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.15)' }}
+                  style={{ background: planState.enabled ? 'rgba(96,165,250,0.08)' : 'rgba(167,139,250,0.08)', border: `1px solid ${planState.enabled ? 'rgba(96,165,250,0.15)' : 'rgba(167,139,250,0.15)'}` }}
                 >
-                  <span className="text-2xl" style={{ color: '#a78bfa', fontFamily: 'var(--font-geist-mono)' }}>$</span>
+                  {planState.enabled
+                    ? <ListChecks className="w-7 h-7" style={{ color: '#60a5fa' }} />
+                    : <span className="text-2xl" style={{ color: '#a78bfa', fontFamily: 'var(--font-geist-mono)' }}>$</span>
+                  }
                 </div>
-                <p className="text-[14px] text-[rgba(255,255,255,0.4)]">输入指令，开始 Agent 执行</p>
-                <p className="text-[12px] text-[rgba(255,255,255,0.2)]">CEO 将自动拆解任务并调度子 Agent 协同工作</p>
+                <p className="text-[14px] text-[rgba(255,255,255,0.4)]">
+                  {planState.enabled ? '输入指令，CEO 将生成执行计划供您审批' : '输入指令，开始 Agent 执行'}
+                </p>
+                <p className="text-[12px] text-[rgba(255,255,255,0.2)]">
+                  {planState.enabled
+                    ? 'Plan-Execute 模式: 先审批计划，再按计划执行'
+                    : 'CEO 将自动拆解任务并调度子 Agent 协同工作'
+                  }
+                </p>
               </div>
             </div>
           )}
 
-          {/* Execute command input */}
+          {/* Execute command input with Plan toggle */}
           <div className="shrink-0 flex items-center gap-3 px-4 py-3"
             style={{ background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(255,255,255,0.08)' }}
           >
-            <span className="text-[14px] font-bold shrink-0" style={{ color: '#a78bfa', fontFamily: 'var(--font-geist-mono)' }}>$</span>
+            {/* Plan/Direct mode toggle */}
+            <button
+              onClick={() => setPlanState(prev => ({ ...prev, enabled: !prev.enabled }))}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all shrink-0"
+              style={{
+                background: planState.enabled ? 'rgba(96,165,250,0.10)' : 'rgba(251,191,36,0.10)',
+                color: planState.enabled ? '#60a5fa' : '#fbbf24',
+                border: `1px solid ${planState.enabled ? 'rgba(96,165,250,0.20)' : 'rgba(251,191,36,0.20)'}`,
+              }}
+              title={planState.enabled ? '当前: Plan-Execute 模式（点击切换）' : '当前: 直接执行模式（点击切换）'}
+            >
+              {planState.enabled ? <ListChecks className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
+              {planState.enabled ? 'Plan' : 'Fast'}
+            </button>
+
+            <span className="text-[14px] font-bold shrink-0" style={{ color: planState.enabled ? '#60a5fa' : '#a78bfa', fontFamily: 'var(--font-geist-mono)' }}>$</span>
             <input type="text" value={execInput}
               onChange={e => setExecInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && execInput.trim() && !execState.isRunning) { e.preventDefault(); handleExecute(execInput.trim()); setExecInput(''); } }}
-              placeholder="输入需求，如「帮我做一期 AI 工具播客」..."
-              disabled={execState.isRunning}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey && execInput.trim() && !execState.isRunning && !planState.isGenerating) {
+                  e.preventDefault();
+                  const prompt = execInput.trim();
+                  setExecInput('');
+                  if (planState.enabled) {
+                    handleGeneratePlan(prompt);
+                  } else {
+                    handleExecute(prompt);
+                  }
+                }
+              }}
+              placeholder={planState.enabled ? '输入需求，生成执行计划...' : '输入需求，如「帮我做一期 AI 工具播客」...'}
+              disabled={execState.isRunning || planState.isGenerating}
               className="flex-1 bg-transparent text-[14px] text-white placeholder:text-[rgba(255,255,255,0.25)] outline-none disabled:opacity-50"
               style={{ fontFamily: 'var(--font-geist-mono)' }}
             />
             <button
-              onClick={() => { if (execInput.trim() && !execState.isRunning) { handleExecute(execInput.trim()); setExecInput(''); } }}
-              disabled={!execInput.trim() || execState.isRunning}
+              onClick={() => {
+                if (execInput.trim() && !execState.isRunning && !planState.isGenerating) {
+                  const prompt = execInput.trim();
+                  setExecInput('');
+                  if (planState.enabled) {
+                    handleGeneratePlan(prompt);
+                  } else {
+                    handleExecute(prompt);
+                  }
+                }
+              }}
+              disabled={!execInput.trim() || execState.isRunning || planState.isGenerating}
               className="flex items-center justify-center w-8 h-8 rounded-lg transition-all disabled:opacity-30"
-              style={{ background: execInput.trim() && !execState.isRunning ? 'rgba(167,139,250,0.15)' : 'transparent', color: '#a78bfa' }}
+              style={{ background: execInput.trim() && !execState.isRunning && !planState.isGenerating ? (planState.enabled ? 'rgba(96,165,250,0.15)' : 'rgba(167,139,250,0.15)') : 'transparent', color: planState.enabled ? '#60a5fa' : '#a78bfa' }}
             ><Send className="w-4 h-4" /></button>
           </div>
         </div>

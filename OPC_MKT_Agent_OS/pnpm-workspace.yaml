@@ -2,6 +2,7 @@ packages:
   - "web"
   - "engine"
   - "agent-chat"
+  - "desktop"
 
 ignoredBuiltDependencies:
   - sharp

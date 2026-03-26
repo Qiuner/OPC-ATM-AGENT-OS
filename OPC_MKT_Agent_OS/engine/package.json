@@ -38,7 +38,8 @@
     "./agents/types": "./agents/types.ts",
     "./agents/team-session": "./agents/team-session.ts",
     "./agents/team-engine": "./team/team-engine.ts",
-    "./agents/claude-bridge": "./team/claude-bridge.ts"
+    "./agents/claude-bridge": "./team/claude-bridge.ts",
+    "./types/plan": "./types/plan.ts"
   },
   "engines": {
     "node": ">=20.0.0"

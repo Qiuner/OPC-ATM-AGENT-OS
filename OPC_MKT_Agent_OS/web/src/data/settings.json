@@ -1,6 +1,6 @@
 {
   "approval": {
-    "mode": "manual",
+    "mode": "auto",
     "autoThreshold": 7
   }
 }
