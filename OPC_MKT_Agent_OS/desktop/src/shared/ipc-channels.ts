@@ -39,6 +39,7 @@ export const IPC = {
   CONTEXT_CREATE: 'store:context:create',
   CONTEXT_UPDATE: 'store:context:update',
   CONTEXT_DELETE: 'store:context:delete',
+  CONTEXT_CLASSIFY: 'store:context:classify',
 
   // ── Store: Metrics ──
   METRICS_LIST: 'store:metrics:list',

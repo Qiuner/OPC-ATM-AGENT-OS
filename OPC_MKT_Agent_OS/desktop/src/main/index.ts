@@ -5,6 +5,7 @@ import { registerIpcHandlers } from './ipc-handlers'
 import { initDataFromSeed } from './store'
 import { getWindowState, saveWindowState, getAppSettings, getWidgetState, saveWidgetState } from './app-store'
 import { getDockGeometry } from './dock-geometry'
+import { loadProjectEnv } from './env'
 
 // ── Module-level window refs ──
 let _mainWindow: BrowserWindow | undefined
@@ -236,6 +237,8 @@ export function getChatPopoverWindow(): BrowserWindow | undefined {
 export { toggleDockPet }
 
 app.whenReady().then(() => {
+  loadProjectEnv()
+
   // Initialize data store
   const seedDir = is.dev
     ? join(__dirname, '../../..', 'web', 'src', 'data')

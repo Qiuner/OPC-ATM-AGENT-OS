@@ -6,6 +6,7 @@
  */
 
 import type { Task, Content, ContextAsset, MetricRecord, AgentRun, Campaign } from '@/types'
+import type { ContextAutoClassifyResponse } from '../../shared/ipc-types'
 
 // ── window.api 类型声明 ──
 
@@ -40,6 +41,7 @@ interface WindowApi {
     create(data: Record<string, unknown>): Promise<IpcResponse<ContextAsset>>
     update(id: string, data: Record<string, unknown>): Promise<IpcResponse<ContextAsset>>
     delete(id: string): Promise<IpcResponse>
+    classify(content: string): Promise<IpcResponse<ContextAutoClassifyResponse>>
   }
   metrics: {
     list(filter?: Record<string, string>): Promise<IpcResponse<MetricRecord[]>>

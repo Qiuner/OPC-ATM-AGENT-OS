@@ -12,6 +12,7 @@ import {
   DEFAULT_EXPERT_ROLE_ID,
   normalizeContextOwnership,
 } from '../shared/context-ownership'
+import { classifyContextContent } from './context-auto-classifier'
 import {
   readCollection,
   writeCollection,
@@ -46,6 +47,8 @@ import type {
   ContentFilter,
   ApprovalFilter,
   ContextFilter,
+  ContextAutoClassifyRequest,
+  ContextAutoClassifyResponse,
   MetricFilter,
   SettingsData,
   ConfigData,
@@ -332,6 +335,16 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     if (filtered.length === items.length) return { success: false, error: `Context asset not found: ${id}` }
     writeNormalizedContextAssets(filtered)
     return { success: true }
+  })
+
+  handle(IPC.CONTEXT_CLASSIFY, async (data: ContextAutoClassifyRequest): Promise<IpcResponse<ContextAutoClassifyResponse>> => {
+    const content = data.content?.trim()
+    if (!content) {
+      return { success: false, error: 'Missing required field: content' }
+    }
+
+    const result = await classifyContextContent(content)
+    return { success: true, data: result }
   })
 
   // ── Metrics ──

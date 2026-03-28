@@ -53,6 +53,8 @@ const api = {
       ipcRenderer.invoke(IPC.CONTEXT_UPDATE, id, data),
     delete: (id: string): Promise<IpcResponse> =>
       ipcRenderer.invoke(IPC.CONTEXT_DELETE, id),
+    classify: (content: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.CONTEXT_CLASSIFY, { content }),
   },
 
   metrics: {

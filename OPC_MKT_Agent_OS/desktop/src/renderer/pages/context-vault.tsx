@@ -165,6 +165,8 @@ export function ContextVaultPage(): React.JSX.Element {
   const [selectedAsset, setSelectedAsset] =
     useState<ContextAssetWithVersions | null>(null);
   const [saving, setSaving] = useState(false);
+  const [classifying, setClassifying] = useState(false);
+  const [classifyHint, setClassifyHint] = useState<string | null>(null);
   const [images, setImages] = useState<string[]>([]);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [notification, setNotification] = useState<string | null>(null);
@@ -179,6 +181,10 @@ export function ContextVaultPage(): React.JSX.Element {
     "product-url" | "skills" | "email"
   >("product-url");
   const [productCards, setProductCards] = useState<ProductCard[]>([]);
+  const [sheetTypeValue, setSheetTypeValue] =
+    useState<ContextAssetType>("product");
+  const [sheetExpertRoleValue, setSheetExpertRoleValue] =
+    useState<ExpertRoleId>(EXPERT_ROLE_DEFINITIONS[0].id);
 
   // Email Config state
   const [emailAddress, setEmailAddress] = useState("");
@@ -378,9 +384,12 @@ export function ContextVaultPage(): React.JSX.Element {
   const handleOpenSheet = (asset: ContextAssetWithVersions | null) => {
     setSelectedAsset(asset);
     setFormErrors({});
+    setClassifyHint(null);
     if (asset) {
       typeRef.current = asset.type;
       expertRoleRef.current = asset.expert_role_id;
+      setSheetTypeValue(asset.type);
+      setSheetExpertRoleValue(asset.expert_role_id);
       const savedImages = Array.isArray(asset.metadata?.images)
         ? (asset.metadata.images as string[])
         : [];
@@ -388,6 +397,8 @@ export function ContextVaultPage(): React.JSX.Element {
     } else {
       typeRef.current = activeTab;
       expertRoleRef.current = activeExpertRoleId;
+      setSheetTypeValue(activeTab);
+      setSheetExpertRoleValue(activeExpertRoleId);
       setImages([]);
     }
     setSheetOpen(true);
@@ -493,6 +504,58 @@ export function ContextVaultPage(): React.JSX.Element {
     }
   };
 
+  const handleAutoClassify = useCallback(async () => {
+    const content = contentRef.current?.value?.trim() ?? "";
+
+    if (!content) {
+      setFormErrors((prev) => ({
+        ...prev,
+        content: "请先填写内容，再使用 AI 自动归类",
+      }));
+      return;
+    }
+
+    setClassifying(true);
+    setClassifyHint("AI 正在处理中...");
+    showNotification("AI 正在处理中");
+
+    try {
+      const api = getApi();
+      if (!api) return;
+
+      const res = await api.context.classify(content);
+      if (!res.success || !res.data) {
+        throw new Error(res.error ?? "AI 自动归类失败");
+      }
+
+      const result = res.data;
+      typeRef.current = result.type;
+      expertRoleRef.current = result.expert_role_id;
+      setSheetTypeValue(result.type);
+      setSheetExpertRoleValue(result.expert_role_id);
+
+      if (titleRef.current) {
+        titleRef.current.value = result.title;
+      }
+
+      setFormErrors((prev) => ({
+        ...prev,
+        title: undefined,
+        content: undefined,
+        expert_role_id: undefined,
+      }));
+      setClassifyHint("AI 已完成自动归类并回填表单");
+      showNotification("AI 自动归类成功");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "AI 自动归类失败";
+      setClassifyHint(null);
+      showNotification(message);
+    } finally {
+      setClassifying(false);
+    }
+  }, [showNotification]);
+
   // ---------- JSON Import ----------
   const handleJsonImport = async (file: File) => {
     setImporting(true);
@@ -515,8 +578,10 @@ export function ContextVaultPage(): React.JSX.Element {
       for (const item of items) {
         if (!item.type || !item.title || !item.content) continue;
         const itemType = isContextAssetType(item.type) ? item.type : activeTab;
-        const expertRoleId = isExpertRoleId(item.expert_role_id ?? "")
-          ? item.expert_role_id
+        const expertRoleId: ExpertRoleId = isExpertRoleId(
+          item.expert_role_id ?? ""
+        )
+          ? (item.expert_role_id as ExpertRoleId)
           : activeExpertRoleId;
         try {
           const res = await api.context.create({
@@ -1324,16 +1389,17 @@ export function ContextVaultPage(): React.JSX.Element {
                 专家角色 <span className="text-red-500">*</span>
               </label>
               <Select
-                defaultValue={selectedAsset?.expert_role_id ?? activeExpertRoleId}
+                value={sheetExpertRoleValue}
                 onValueChange={(v) => {
-                  expertRoleRef.current = v as ExpertRoleId;
+                  const nextValue = v as ExpertRoleId;
+                  expertRoleRef.current = nextValue;
+                  setSheetExpertRoleValue(nextValue);
                   if (formErrors.expert_role_id)
                     setFormErrors((prev) => ({
                       ...prev,
                       expert_role_id: undefined,
                     }));
                 }}
-                key={`${sheetFormKey}-expert-role`}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="选择专家角色" />
@@ -1387,11 +1453,12 @@ export function ContextVaultPage(): React.JSX.Element {
                 类型 <span className="text-red-500">*</span>
               </label>
               <Select
-                defaultValue={selectedAsset?.type ?? activeTab}
+                value={sheetTypeValue}
                 onValueChange={(v) => {
-                  typeRef.current = v as ContextAssetType;
+                  const nextValue = v as ContextAssetType;
+                  typeRef.current = nextValue;
+                  setSheetTypeValue(nextValue);
                 }}
-                key={`${sheetFormKey}-type`}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="选择类型" />
@@ -1406,12 +1473,28 @@ export function ContextVaultPage(): React.JSX.Element {
             </div>
 
             <div className="space-y-1.5">
-              <label
-                className="text-sm font-medium"
-                style={{ color: "var(--muted-foreground)" }}
-              >
-                内容 <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between gap-3">
+                <label
+                  className="text-sm font-medium"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  内容 <span className="text-red-500">*</span>
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAutoClassify}
+                  disabled={classifying}
+                  className="border-white/[0.08] bg-transparent hover:bg-white/5"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  {classifying ? (
+                    <Loader2Icon className="size-4 mr-1.5 animate-spin" />
+                  ) : null}
+                  {classifying ? "AI 正在处理中" : "AI 自动归类"}
+                </Button>
+              </div>
               <Textarea
                 ref={contentRef}
                 placeholder="输入资产详细内容..."
@@ -1429,6 +1512,14 @@ export function ContextVaultPage(): React.JSX.Element {
               {formErrors.content && (
                 <p className="text-xs text-red-500">
                   {formErrors.content}
+                </p>
+              )}
+              {classifyHint && !formErrors.content && (
+                <p
+                  className="text-xs"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  {classifyHint}
                 </p>
               )}
             </div>
