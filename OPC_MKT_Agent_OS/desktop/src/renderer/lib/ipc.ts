@@ -108,6 +108,33 @@ interface WindowApi {
       node: { available: boolean; version?: string }
     }>>
   }
+  orchestrator: {
+    execute(data: { prompt: string; context?: Record<string, unknown> }): Promise<IpcResponse>
+    abort(): Promise<IpcResponse>
+    status(): Promise<IpcResponse<{
+      isRunning: boolean
+      ceoStatus: string
+      subAgents: Array<{
+        agentId: string
+        name: string
+        status: string
+        task?: string
+        output?: string
+      }>
+      plan?: string
+      finalResult?: string
+      error?: string
+    }>>
+    onPlan(callback: (data: { plan: string }) => void): () => void
+    onSubStart(callback: (data: { agentId: string; name: string; task: string }) => void): () => void
+    onSubStream(callback: (data: { agentId: string; text: string }) => void): () => void
+    onSubDone(callback: (data: { agentId: string; result: string }) => void): () => void
+    onSubError(callback: (data: { agentId: string; error: string }) => void): () => void
+    onProgress(callback: (data: { done: number; total: number; running: string[] }) => void): () => void
+    onResult(callback: (data: { result: string }) => void): () => void
+    onError(callback: (data: { message: string }) => void): () => void
+    onStatusChange(callback: (data: { status: string }) => void): () => void
+  }
 }
 
 declare global {

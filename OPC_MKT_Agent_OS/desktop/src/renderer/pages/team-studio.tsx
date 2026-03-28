@@ -153,6 +153,7 @@ const TOOL_LABELS: Record<string, string> = {
 
 type ChannelId = "all" | string;
 type TabId = "execute" | "chat" | "monitor";
+type ExecMode = "single" | "orchestrator";
 
 // ==========================================
 // Execute mode types
@@ -197,6 +198,37 @@ const INITIAL_EXEC: ExecState = {
   tasks: [],
   logs: [],
   result: "",
+};
+
+// ==========================================
+// Orchestrator mode types
+// ==========================================
+
+interface SubAgentState {
+  agentId: string;
+  name: string;
+  status: "idle" | "running" | "done" | "error";
+  task?: string;
+  output?: string;
+  startTime?: number;
+  endTime?: number;
+}
+
+interface OrchestratorState {
+  isRunning: boolean;
+  ceoStatus: "idle" | "planning" | "executing" | "reviewing" | "done" | "error";
+  plan?: string;
+  subAgents: SubAgentState[];
+  progress: { done: number; total: number; running: string[] };
+  finalResult?: string;
+  error?: string;
+}
+
+const INITIAL_ORCHESTRATOR: OrchestratorState = {
+  isRunning: false,
+  ceoStatus: "idle",
+  subAgents: [],
+  progress: { done: 0, total: 0, running: [] },
 };
 
 // ==========================================
@@ -622,6 +654,11 @@ export function TeamStudioPage(): React.JSX.Element {
   const [hasSession, setHasSession] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
+  // Orchestrator (CEO Multi-Agent) state
+  const [execMode, setExecMode] = useState<ExecMode>("single");
+  const [orch, setOrch] = useState<OrchestratorState>(INITIAL_ORCHESTRATOR);
+  const [orchInput, setOrchInput] = useState("");
+
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
@@ -639,7 +676,7 @@ export function TeamStudioPage(): React.JSX.Element {
     const api = getApi();
     if (api?.agent?.getSession) {
       api.agent.getSession(execAgentId).then((res) => {
-        setHasSession(!!res.data?.sessionId);
+        setHasSession(!!(res.data as { sessionId?: string } | null)?.sessionId);
       }).catch(() => setHasSession(false));
     }
   }, [execAgentId]);
@@ -861,6 +898,97 @@ export function TeamStudioPage(): React.JSX.Element {
     return () => {
       unsub();
       remoteCleanup?.();
+    };
+  }, []);
+
+  // Listen for orchestrator events (CEO Multi-Agent)
+  useEffect(() => {
+    const api = getApi();
+    if (!api?.orchestrator) return;
+
+    const unsubPlan = api.orchestrator.onPlan((data) => {
+      setOrch((prev) => ({ ...prev, plan: data.plan, ceoStatus: "planning" }));
+    });
+
+    const unsubSubStart = api.orchestrator.onSubStart((data) => {
+      setOrch((prev) => ({
+        ...prev,
+        ceoStatus: "executing",
+        subAgents: [
+          ...prev.subAgents,
+          {
+            agentId: data.agentId,
+            name: data.name,
+            status: "running",
+            task: data.task,
+            startTime: Date.now(),
+          },
+        ],
+      }));
+    });
+
+    const unsubSubDone = api.orchestrator.onSubDone((data) => {
+      setOrch((prev) => ({
+        ...prev,
+        subAgents: prev.subAgents.map((sa) =>
+          sa.agentId === data.agentId
+            ? { ...sa, status: "done", output: data.result, endTime: Date.now() }
+            : sa
+        ),
+      }));
+    });
+
+    const unsubSubError = api.orchestrator.onSubError((data) => {
+      setOrch((prev) => ({
+        ...prev,
+        subAgents: prev.subAgents.map((sa) =>
+          sa.agentId === data.agentId ? { ...sa, status: "error" } : sa
+        ),
+        error: data.error,
+      }));
+    });
+
+    const unsubProgress = api.orchestrator.onProgress((data) => {
+      setOrch((prev) => ({
+        ...prev,
+        progress: { done: data.done, total: data.total, running: data.running },
+      }));
+    });
+
+    const unsubResult = api.orchestrator.onResult((data) => {
+      setOrch((prev) => ({
+        ...prev,
+        isRunning: false,
+        ceoStatus: "done",
+        finalResult: data.result,
+      }));
+    });
+
+    const unsubError = api.orchestrator.onError((data) => {
+      setOrch((prev) => ({
+        ...prev,
+        isRunning: false,
+        ceoStatus: "error",
+        error: data.message,
+      }));
+    });
+
+    const unsubStatus = api.orchestrator.onStatusChange((data) => {
+      setOrch((prev) => ({
+        ...prev,
+        ceoStatus: data.status as OrchestratorState["ceoStatus"],
+      }));
+    });
+
+    return () => {
+      unsubPlan();
+      unsubSubStart();
+      unsubSubDone();
+      unsubSubError();
+      unsubProgress();
+      unsubResult();
+      unsubError();
+      unsubStatus();
     };
   }, []);
 
@@ -1318,6 +1446,60 @@ export function TeamStudioPage(): React.JSX.Element {
     setExec((prev) => ({ ...prev, isRunning: false }));
   };
 
+  // ---------- Orchestrator (CEO Multi-Agent) handlers ----------
+  const handleOrchestratorExecute = useCallback(async () => {
+    if (!orchInput.trim() || orch.isRunning) return;
+
+    const prompt = orchInput.trim();
+    setOrchInput("");
+
+    // Reset orchestrator state
+    setOrch({
+      isRunning: true,
+      ceoStatus: "planning",
+      subAgents: [],
+      progress: { done: 0, total: 0, running: [] },
+    });
+
+    const api = getApi();
+    if (!api?.orchestrator) {
+      setOrch((prev) => ({
+        ...prev,
+        isRunning: false,
+        ceoStatus: "error",
+        error: "Orchestrator API not available",
+      }));
+      return;
+    }
+
+    try {
+      const res = await api.orchestrator.execute({ prompt });
+      if (!res.success) {
+        setOrch((prev) => ({
+          ...prev,
+          isRunning: false,
+          ceoStatus: "error",
+          error: res.error || "Execution failed",
+        }));
+      }
+    } catch (err) {
+      setOrch((prev) => ({
+        ...prev,
+        isRunning: false,
+        ceoStatus: "error",
+        error: err instanceof Error ? err.message : "Unknown error",
+      }));
+    }
+  }, [orchInput, orch.isRunning]);
+
+  const handleStopOrchestrator = () => {
+    const api = getApi();
+    if (api?.orchestrator) {
+      api.orchestrator.abort();
+    }
+    setOrch((prev) => ({ ...prev, isRunning: false, ceoStatus: "idle" }));
+  };
+
   return (
     <div
       className="flex h-full -m-6"
@@ -1431,23 +1613,55 @@ export function TeamStudioPage(): React.JSX.Element {
         {/* Execute Mode */}
         {activeTab === "execute" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Task/Logs area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {exec.tasks.length === 0 && !exec.result && (
-                <div className="flex flex-col items-center justify-center h-full gap-3">
-                  <Zap
-                    className="h-12 w-12"
-                    style={{ color: "var(--muted-foreground)" }}
-                  />
-                  <p
-                    className="text-sm text-center"
-                    style={{ color: "var(--muted-foreground)" }}
-                  >
-                    选择 Agent 并输入任务 — 通过 IPC
-                    执行，支持 MCP 工具（搜索、分析、发布）
-                  </p>
-                </div>
-              )}
+            {/* Mode Switch */}
+            <div className="px-4 py-2 border-b border-[var(--border)]">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[var(--muted-foreground)]">执行模式:</span>
+                <button
+                  onClick={() => setExecMode("single")}
+                  className={cn(
+                    "px-2 py-1 rounded text-xs transition-colors",
+                    execMode === "single"
+                      ? "bg-primary/20 text-primary font-medium"
+                      : "hover:bg-[var(--muted)] text-[var(--muted-foreground)]"
+                  )}
+                >
+                  单 Agent
+                </button>
+                <button
+                  onClick={() => setExecMode("orchestrator")}
+                  className={cn(
+                    "px-2 py-1 rounded text-xs transition-colors",
+                    execMode === "orchestrator"
+                      ? "bg-primary/20 text-primary font-medium"
+                      : "hover:bg-[var(--muted)] text-[var(--muted-foreground)]"
+                  )}
+                >
+                  CEO 编排
+                </button>
+              </div>
+            </div>
+
+            {/* Single Agent Mode */}
+            {execMode === "single" && (
+              <>
+                {/* Task/Logs area */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {exec.tasks.length === 0 && !exec.result && (
+                    <div className="flex flex-col items-center justify-center h-full gap-3">
+                      <Zap
+                        className="h-12 w-12"
+                        style={{ color: "var(--muted-foreground)" }}
+                      />
+                      <p
+                        className="text-sm text-center"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        选择 Agent 并输入任务 — 通过 IPC
+                        执行，支持 MCP 工具（搜索、分析、发布）
+                      </p>
+                    </div>
+                  )}
 
               {/* Task Cards */}
               {exec.tasks.map((task) => {
@@ -1693,10 +1907,186 @@ export function TeamStudioPage(): React.JSX.Element {
                 </button>
               </div>
             </div>
-          </div>
+          </>
         )}
 
-        {/* Chat Mode */}
+        {/* Orchestrator Mode */}
+        {execMode === "orchestrator" && (
+          <>
+            {/* Orchestrator Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {!orch.isRunning && orch.subAgents.length === 0 && !orch.finalResult && (
+                <div className="flex flex-col items-center justify-center h-full gap-3">
+                  <Users className="h-12 w-12" style={{ color: "var(--muted-foreground)" }} />
+                  <p className="text-sm text-center" style={{ color: "var(--muted-foreground)" }}>
+                    CEO 自动编排模式 — 输入任务，CEO 将自动调度多个 Agent 协作完成
+                  </p>
+                </div>
+              )}
+
+              {/* CEO Status */}
+              {orch.isRunning && (
+                <div className="rounded-xl p-4" style={{ background: "var(--muted)", border: "1px solid var(--border)" }}>
+                  <div className="flex items-center gap-3">
+                    <AgentAvatar agentId="ceo" online />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold" style={{ color: AGENT_COLORS.ceo.color }}>
+                          CEO 营销总监
+                        </span>
+                        <Loader2 className="h-4 w-4 animate-spin text-[#a78bfa]" />
+                      </div>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        {orch.ceoStatus === "planning" && "正在分析需求并制定执行计划..."}
+                        {orch.ceoStatus === "executing" && "正在调度子 Agent 执行任务..."}
+                        {orch.ceoStatus === "reviewing" && "正在审核子 Agent 产出..."}
+                        {orch.ceoStatus === "done" && "任务完成"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Execution Plan */}
+              {orch.plan && (
+                <div className="rounded-xl p-4" style={{ background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.2)" }}>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#a78bfa" }}>
+                    执行计划
+                  </h4>
+                  <pre className="text-xs whitespace-pre-wrap" style={{ color: "var(--foreground)" }}>
+                    {orch.plan}
+                  </pre>
+                </div>
+              )}
+
+              {/* Sub Agents */}
+              {orch.subAgents.map((sa) => {
+                const ac = AGENT_COLORS[sa.agentId] ?? { color: "#888", avatar: "?", name: sa.name };
+                return (
+                  <div
+                    key={sa.agentId}
+                    className="rounded-xl p-4 space-y-3"
+                    style={{ background: "var(--muted)", border: "1px solid var(--border)" }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <AgentAvatar agentId={sa.agentId} online={sa.status === "running"} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold" style={{ color: ac.color }}>
+                            {ac.name}
+                          </span>
+                          {sa.status === "running" && <Loader2 className="h-4 w-4 animate-spin text-[#a78bfa]" />}
+                          {sa.status === "done" && <CheckCircle className="h-4 w-4 text-[#22d3ee]" />}
+                          {sa.status === "error" && <AlertCircle className="h-4 w-4 text-red-400" />}
+                        </div>
+                        <p className="text-xs text-[var(--muted-foreground)] truncate">{sa.task}</p>
+                      </div>
+                    </div>
+                    {sa.output && (
+                      <div
+                        className="rounded-lg p-3 text-sm leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto"
+                        style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--foreground)" }}
+                      >
+                        {sa.output}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Progress */}
+              {orch.progress.total > 0 && (
+                <div className="rounded-xl p-4" style={{ background: "var(--muted)", border: "1px solid var(--border)" }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-[var(--muted-foreground)]">执行进度</span>
+                    <span className="text-xs font-medium">
+                      {orch.progress.done} / {orch.progress.total}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-[var(--border)] overflow-hidden">
+                    <div
+                      className="h-full bg-[#a78bfa] transition-all duration-300"
+                      style={{ width: `${(orch.progress.done / orch.progress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Final Result */}
+              {orch.finalResult && (
+                <div className="rounded-xl p-4" style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.2)" }}>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#22d3ee" }}>
+                    最终交付
+                  </h4>
+                  <pre className="text-sm whitespace-pre-wrap" style={{ color: "var(--foreground)" }}>
+                    {orch.finalResult}
+                  </pre>
+                </div>
+              )}
+
+              {/* Error */}
+              {orch.error && (
+                <div className="rounded-xl p-4" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)" }}>
+                  <div className="flex items-center gap-2 text-red-400">
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="text-sm">{orch.error}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Orchestrator Input */}
+            <div className="px-4 py-3 shrink-0" style={{ borderTop: "1px solid var(--border)", background: "var(--muted)" }}>
+              <div className="flex gap-2">
+                <textarea
+                  value={orchInput}
+                  onChange={(e) => setOrchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleOrchestratorExecute();
+                    }
+                  }}
+                  placeholder="输入任务，CEO 将自动安排多个 Agent 协作完成..."
+                  rows={1}
+                  className="flex-1 rounded-lg px-3 py-2 text-sm resize-none outline-none"
+                  style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--foreground)" }}
+                  disabled={orch.isRunning}
+                />
+                {orch.isRunning ? (
+                  <button
+                    onClick={handleStopOrchestrator}
+                    className="flex items-center justify-center size-9 rounded-lg shrink-0 bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                    style={{ border: "1px solid rgba(239,68,68,0.3)" }}
+                  >
+                    <Square className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleOrchestratorExecute}
+                    disabled={!orchInput.trim()}
+                    className="flex items-center justify-center size-9 rounded-lg shrink-0 transition-colors disabled:opacity-30"
+                    style={{ background: "linear-gradient(135deg, #a78bfa, #7c3aed)" }}
+                  >
+                    <Send className="h-4 w-4 text-white" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setOrch(INITIAL_ORCHESTRATOR)}
+                  className="flex items-center justify-center size-9 rounded-lg shrink-0 hover:bg-white/5 transition-colors"
+                  style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+                  title="重置"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      )}
+
+      {/* Chat Mode */}
         {activeTab === "chat" && (
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Messages */}

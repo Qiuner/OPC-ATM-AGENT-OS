@@ -24,6 +24,14 @@ import {
   clearAgentSession,
   type AgentExecuteRequest,
 } from './agent-engine'
+import {
+  executeOrchestrator,
+  abortOrchestrator,
+  getOrchestratorState,
+  getSubAgentStatuses,
+  broadcastToAll,
+  type OrchestratorEvent,
+} from './orchestrator-engine'
 import { toggleDockPet, getMainWindow, getDockPetWindow, getChatPopoverWindow } from './index'
 import { getDockGeometry } from './dock-geometry'
 import type {
@@ -85,7 +93,7 @@ let serverConfig: {
 // Register all IPC handlers
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
+export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
   // ── Tasks ──
 
   handle(IPC.TASKS_LIST, (filter?: TaskFilter): IpcResponse<Task[]> => {
@@ -648,6 +656,97 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
     }
 
     return { success: true }
+  })
+
+  // ── Orchestrator (CEO Multi-Agent) ──
+
+  handle(IPC.ORCHESTRATOR_EXECUTE, async (data: {
+    prompt: string
+    context?: Record<string, unknown>
+  }): Promise<IpcResponse> => {
+    if (!data.prompt) {
+      return { success: false, error: 'prompt is required' }
+    }
+
+    // Execute orchestrator with event callbacks
+    const result = await executeOrchestrator(
+      {
+        prompt: data.prompt,
+        context: data.context,
+        timeoutMs: 600_000, // 10 minutes
+      },
+      (event: OrchestratorEvent) => {
+        // Broadcast events to all renderer windows
+        switch (event.type) {
+          case 'plan':
+            broadcastToAll(IPC.ORCHESTRATOR_PLAN, { plan: event.plan })
+            break
+          case 'sub-start':
+            broadcastToAll(IPC.ORCHESTRATOR_SUB_START, {
+              agentId: event.agentId,
+              name: event.name,
+              task: event.task,
+            })
+            break
+          case 'sub-stream':
+            broadcastToAll(IPC.ORCHESTRATOR_SUB_STREAM, {
+              agentId: event.agentId,
+              text: event.text,
+            })
+            break
+          case 'sub-done':
+            broadcastToAll(IPC.ORCHESTRATOR_SUB_DONE, {
+              agentId: event.agentId,
+              result: event.result,
+            })
+            break
+          case 'sub-error':
+            broadcastToAll(IPC.ORCHESTRATOR_SUB_ERROR, {
+              agentId: event.agentId,
+              error: event.error,
+            })
+            break
+          case 'progress':
+            broadcastToAll(IPC.ORCHESTRATOR_PROGRESS, {
+              done: event.done,
+              total: event.total,
+              running: event.running,
+            })
+            break
+          case 'result':
+            broadcastToAll(IPC.ORCHESTRATOR_RESULT, { result: event.result })
+            break
+          case 'error':
+            broadcastToAll(IPC.ORCHESTRATOR_ERROR, { message: event.message })
+            break
+          case 'status':
+            broadcastToAll(IPC.ORCHESTRATOR_STATUS_CHANGE, { status: event.status })
+            break
+        }
+      }
+    )
+
+    return result
+  })
+
+  handle(IPC.ORCHESTRATOR_ABORT, (): IpcResponse => {
+    abortOrchestrator()
+    return { success: true }
+  })
+
+  handle(IPC.ORCHESTRATOR_STATUS, (): IpcResponse => {
+    const state = getOrchestratorState()
+    return {
+      success: true,
+      data: {
+        isRunning: state.isRunning,
+        ceoStatus: state.ceoStatus,
+        subAgents: getSubAgentStatuses(),
+        plan: state.plan,
+        finalResult: state.finalResult,
+        error: state.error,
+      },
+    }
   })
 
   // ── Onboarding ──

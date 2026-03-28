@@ -160,6 +160,62 @@ const api = {
     },
   },
 
+  /** Orchestrator (CEO Multi-Agent) */
+  orchestrator: {
+    execute: (data: { prompt: string; context?: Record<string, unknown> }): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.ORCHESTRATOR_EXECUTE, data),
+    abort: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.ORCHESTRATOR_ABORT),
+    status: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.ORCHESTRATOR_STATUS),
+    // Orchestrator events (main → renderer push)
+    onPlan: (callback: (data: { plan: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { plan: string }): void => callback(data)
+      ipcRenderer.on(IPC.ORCHESTRATOR_PLAN, handler)
+      return () => { ipcRenderer.removeListener(IPC.ORCHESTRATOR_PLAN, handler) }
+    },
+    onSubStart: (callback: (data: { agentId: string; name: string; task: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { agentId: string; name: string; task: string }): void => callback(data)
+      ipcRenderer.on(IPC.ORCHESTRATOR_SUB_START, handler)
+      return () => { ipcRenderer.removeListener(IPC.ORCHESTRATOR_SUB_START, handler) }
+    },
+    onSubStream: (callback: (data: { agentId: string; text: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { agentId: string; text: string }): void => callback(data)
+      ipcRenderer.on(IPC.ORCHESTRATOR_SUB_STREAM, handler)
+      return () => { ipcRenderer.removeListener(IPC.ORCHESTRATOR_SUB_STREAM, handler) }
+    },
+    onSubDone: (callback: (data: { agentId: string; result: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { agentId: string; result: string }): void => callback(data)
+      ipcRenderer.on(IPC.ORCHESTRATOR_SUB_DONE, handler)
+      return () => { ipcRenderer.removeListener(IPC.ORCHESTRATOR_SUB_DONE, handler) }
+    },
+    onSubError: (callback: (data: { agentId: string; error: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { agentId: string; error: string }): void => callback(data)
+      ipcRenderer.on(IPC.ORCHESTRATOR_SUB_ERROR, handler)
+      return () => { ipcRenderer.removeListener(IPC.ORCHESTRATOR_SUB_ERROR, handler) }
+    },
+    onProgress: (callback: (data: { done: number; total: number; running: string[] }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { done: number; total: number; running: string[] }): void => callback(data)
+      ipcRenderer.on(IPC.ORCHESTRATOR_PROGRESS, handler)
+      return () => { ipcRenderer.removeListener(IPC.ORCHESTRATOR_PROGRESS, handler) }
+    },
+    onResult: (callback: (data: { result: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { result: string }): void => callback(data)
+      ipcRenderer.on(IPC.ORCHESTRATOR_RESULT, handler)
+      return () => { ipcRenderer.removeListener(IPC.ORCHESTRATOR_RESULT, handler) }
+    },
+    onError: (callback: (data: { message: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { message: string }): void => callback(data)
+      ipcRenderer.on(IPC.ORCHESTRATOR_ERROR, handler)
+      return () => { ipcRenderer.removeListener(IPC.ORCHESTRATOR_ERROR, handler) }
+    },
+    onStatusChange: (callback: (data: { status: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { status: string }): void => callback(data)
+      ipcRenderer.on(IPC.ORCHESTRATOR_STATUS_CHANGE, handler)
+      return () => { ipcRenderer.removeListener(IPC.ORCHESTRATOR_STATUS_CHANGE, handler) }
+    },
+  },
+
   /** Chat sync — cross-window message relay */
   chatSync: {
     send: (msg: { agentId: string; role: string; content: string; mode?: string }): Promise<IpcResponse> =>

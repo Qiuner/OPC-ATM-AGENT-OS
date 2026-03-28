@@ -112,6 +112,22 @@ export const IPC = {
   DOCK_PET_HIDE_POPOVER: 'dock-pet:hide-popover',
   DOCK_PET_MOUSE_FORWARD: 'dock-pet:mouse-forward',
   DOCK_PET_POPOVER_AGENT: 'dock-pet:popover-agent',
+
+  // ── Orchestrator (CEO Multi-Agent) ──
+  ORCHESTRATOR_EXECUTE: 'orchestrator:execute',
+  ORCHESTRATOR_ABORT: 'orchestrator:abort',
+  ORCHESTRATOR_STATUS: 'orchestrator:status',
+
+  // ── Orchestrator Events (main → renderer push) ──
+  ORCHESTRATOR_PLAN: 'orchestrator:plan',
+  ORCHESTRATOR_SUB_START: 'orchestrator:sub-start',
+  ORCHESTRATOR_SUB_STREAM: 'orchestrator:sub-stream',
+  ORCHESTRATOR_SUB_DONE: 'orchestrator:sub-done',
+  ORCHESTRATOR_SUB_ERROR: 'orchestrator:sub-error',
+  ORCHESTRATOR_PROGRESS: 'orchestrator:progress',
+  ORCHESTRATOR_RESULT: 'orchestrator:result',
+  ORCHESTRATOR_ERROR: 'orchestrator:error',
+  ORCHESTRATOR_STATUS_CHANGE: 'orchestrator:status-change',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
