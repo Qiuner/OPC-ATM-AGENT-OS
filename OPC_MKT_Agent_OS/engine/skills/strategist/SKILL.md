@@ -1,6 +1,6 @@
 ---
 name: strategist
-description: 制定营销策略和内容战略。适用于：营销规划、内容日历、渠道策略、增长目标拆解。
+description: 制定营销策略和内容战略 — 覆盖内容战略、渠道策略、增长策略、活动策划和复盘分析五大类型。当需要制定月度/季度营销规划、设计内容日历、规划多渠道协同策略、拆解增长目标为可执行任务、或进行阶段性营销复盘时触发此技能。使用 SMART 框架设定目标，输出可直接分配给各 Agent 执行的行动计划。
 version: 1.0.0
 last_updated: 2026-03-20
 updated_by: human
@@ -12,7 +12,7 @@ updated_by: human
 1. 读取 `./memory/context/brand-voice.md`（品牌调性）
 2. 读取 `./memory/context/target-audience.md`（目标受众）
 3. 读取 `./memory/content-calendar.json`（内容日历）
-4. 读取 `./skills/*.SKILL.md`（了解各渠道 Agent 能力）
+4. 读取 `./skills/*/SKILL.md`（了解各渠道 Agent 能力）
 
 ## 策略类型
 

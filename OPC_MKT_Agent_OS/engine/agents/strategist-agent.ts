@@ -28,7 +28,7 @@ async function loadContext() {
   };
 
   return {
-    skill: await load(join(SKILLS_DIR, "strategist.SKILL.md")),
+    skill: await load(join(SKILLS_DIR, "strategist", "SKILL.md")),
     brandVoice: await load(join(MEMORY_DIR, "context", "brand-voice.md")),
     audience: await load(join(MEMORY_DIR, "context", "target-audience.md")),
     calendar: await load(join(MEMORY_DIR, "content-calendar.json")),

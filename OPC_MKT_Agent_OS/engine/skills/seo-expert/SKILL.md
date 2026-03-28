@@ -1,6 +1,6 @@
 ---
 name: seo-expert
-description: Technical & content SEO expert for global markets. Keyword research, on-page optimization, content strategy, link building, and international SEO for multi-market expansion.
+description: Technical and content SEO expert for global markets — keyword research, on-page optimization, content strategy, link building, and international SEO. Use when conducting keyword research, writing SEO content briefs, auditing technical SEO (crawlability, Core Web Vitals, indexation), building topic clusters, implementing hreflang for multi-market sites, or planning link building campaigns. Covers the full SEO lifecycle from research to reporting.
 version: 1.0.0
 last_updated: 2026-03-24
 updated_by: human

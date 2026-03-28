@@ -234,7 +234,7 @@ function testPodcastAgentRegistration() {
   console.assert(podcast?.tools.includes("Read"), "TC-034 FAIL: tools 应包含 Read");
   console.assert(podcast?.tools.includes("Write"), "TC-034 FAIL: tools 应包含 Write");
   console.assert(podcast?.maxTurns === 8, `TC-034 FAIL: maxTurns 应为8: ${podcast?.maxTurns}`);
-  console.assert(podcast?.skillFile === "podcast.SKILL.md", `TC-034 FAIL: skillFile 不匹配: ${podcast?.skillFile}`);
+  console.assert(podcast?.skillFile === "podcast/SKILL.md", `TC-034 FAIL: skillFile 不匹配: ${podcast?.skillFile}`);
 
   console.log("TC-034 PASS: Podcast Agent 注册验证正确");
 }

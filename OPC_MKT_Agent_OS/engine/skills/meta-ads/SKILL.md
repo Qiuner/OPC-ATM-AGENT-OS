@@ -1,6 +1,6 @@
 ---
-name: meta-ads-manager
-description: Autonomous Meta (Facebook/Instagram) advertising management. Creates campaigns, manages budgets, optimizes targeting, and analyzes ROAS.
+name: meta-ads
+description: Autonomous Meta (Facebook/Instagram) advertising management — campaign creation, audience targeting, budget allocation, creative optimization, and ROAS analysis. Use this skill when setting up Facebook or Instagram ad campaigns, optimizing ad spend, creating audience segments, writing ad copy, analyzing ad performance, or managing retargeting funnels. Covers the full ads lifecycle from campaign structure to daily optimization rules.
 version: 1.0.0
 last_updated: 2026-03-24
 updated_by: human

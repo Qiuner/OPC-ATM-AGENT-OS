@@ -87,7 +87,7 @@ const ANALYST_SYSTEM_PROMPT = `
 export async function runAnalystAgent() {
   console.log("[Analyst] 开始飞轮分析...\n");
 
-  const xhsSkill = await readFile(join(SKILLS_DIR, "xhs.SKILL.md"), "utf-8").catch(() => "");
+  const xhsSkill = await readFile(join(SKILLS_DIR, "xhs", "SKILL.md"), "utf-8").catch(() => "");
   const xhsPatterns = await readFile(join(MEMORY_DIR, "winning-patterns", "xhs-patterns.md"), "utf-8").catch(() => "");
 
   const prompt = `

@@ -1,6 +1,6 @@
 ---
 name: email-marketing
-description: Email marketing automation — campaign creation, sequence design, A/B testing, deliverability optimization, and conversion analysis.
+description: Email marketing automation — campaign creation, sequence design, A/B testing, deliverability optimization, and conversion analysis. Use when designing welcome series, abandoned cart sequences, post-purchase flows, newsletters, product launch emails, or promotional campaigns. Also triggers for email copywriting, subject line A/B testing, deliverability audits, and email performance reporting.
 version: 1.0.0
 last_updated: 2026-03-24
 updated_by: human

@@ -1,6 +1,6 @@
 ---
 name: geo-expert
-description: Generative Engine Optimization (GEO) expert. Optimize content to appear in AI-powered search engines — ChatGPT, Perplexity, Google AI Overview, Copilot, Claude. The new frontier of search visibility.
+description: Generative Engine Optimization (GEO) expert — optimize content to get cited by AI search engines including ChatGPT, Perplexity, Google AI Overview, Copilot, and Claude. Use when improving AI citation-worthiness, adding structured data for AI retrieval, auditing entity signals, creating citation-optimized content, or tracking brand mentions across AI platforms. The next frontier beyond traditional SEO.
 version: 1.0.0
 last_updated: 2026-03-24
 updated_by: human

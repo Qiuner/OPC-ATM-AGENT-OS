@@ -17,7 +17,7 @@ extraResources:
   - from: ../engine/skills/
     to: skills/
     filter:
-      - "**/*.SKILL.md"
+      - "**/*.md"
   - from: ../engine/memory/
     to: memory/
     filter:

@@ -30,12 +30,12 @@ const AGENT_MAP: Record<string, {
   },
   "xhs-agent": {
     description: "小红书营销专家，生成高互动率笔记",
-    skillFile: "xhs.SKILL.md",
+    skillFile: "xhs/SKILL.md",
     model: "claude-sonnet-4-20250514",
   },
   "analyst-agent": {
     description: "数据分析师，驱动飞轮优化",
-    skillFile: "analyst.SKILL.md",
+    skillFile: "analyst/SKILL.md",
     model: "claude-sonnet-4-20250514",
   },
 };

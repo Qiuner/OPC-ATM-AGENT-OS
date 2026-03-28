@@ -85,7 +85,7 @@ Dispatch tasks to the right agent based on content type and channel.
 
 async function loadSkill(name: string): Promise<string> {
   try {
-    return await readFile(join(SKILLS_DIR, `${name}.SKILL.md`), "utf-8");
+    return await readFile(join(SKILLS_DIR, name, "SKILL.md"), "utf-8");
   } catch {
     return `（${name} 的 SKILL.md 尚未创建）`;
   }

@@ -1,6 +1,6 @@
 ---
 name: analyst
-description: 数据分析 Agent SOP。分析内容表现，提取胜出模式，更新 SKILL 文件，驱动数据飞轮。
+description: 数据分析 Agent — 分析内容表现、提取胜出模式、更新 SKILL 文件、驱动数据飞轮。当需要评估已发布内容的表现数据、生成周报、提取 Top 20% 胜出规律、更新 winning-patterns、或进行跨渠道数据复盘时触发此技能。覆盖小红书/抖音/X 三大渠道的评分公式。
 version: 1.0.0
 last_updated: 2026-03-15
 updated_by: system
@@ -10,7 +10,7 @@ updated_by: system
 
 ## 启动前必读
 1. 读取 ./memory/winning-patterns/*.md（当前胜出模式）
-2. 读取 ./skills/*.SKILL.md（当前各渠道 SOP）
+2. 读取 ./skills/*/SKILL.md（当前各渠道 SOP）
 3. 获取内容表现数据（从 CreatorFlow API 或数据库）
 
 ## 分析流程

@@ -7,6 +7,7 @@
 
 import { ipcMain, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import { is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/ipc-channels'
 import {
   DEFAULT_EXPERT_ROLE_ID,
@@ -1381,14 +1382,27 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
   // ── Skills ──
 
   handle(IPC.SKILLS_LIST, async (): Promise<IpcResponse> => {
-    const { readdir, readFile } = await import('node:fs/promises')
-    const skillsDir = join(__dirname, '../../..', 'engine', 'skills')
-    const files = await readdir(skillsDir)
-    const skillFiles = files.filter((f) => f.endsWith('.SKILL.md'))
+    const { readdir, readFile, stat } = await import('node:fs/promises')
+    const skillsDir = is.dev
+      ? join(__dirname, '../../..', 'engine', 'skills')
+      : join(process.resourcesPath, 'skills')
+    const entries = await readdir(skillsDir)
+
+    // Each skill is a folder containing SKILL.md
+    const skillDirs: string[] = []
+    for (const entry of entries) {
+      const entryPath = join(skillsDir, entry)
+      const s = await stat(entryPath).catch(() => null)
+      if (s?.isDirectory()) {
+        const skillFile = join(entryPath, 'SKILL.md')
+        const sf = await stat(skillFile).catch(() => null)
+        if (sf?.isFile()) skillDirs.push(entry)
+      }
+    }
 
     const skills = await Promise.all(
-      skillFiles.map(async (file) => {
-        const content = await readFile(join(skillsDir, file), 'utf-8')
+      skillDirs.map(async (dir) => {
+        const content = await readFile(join(skillsDir, dir, 'SKILL.md'), 'utf-8')
         const frontmatterMatch = content.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---/)
         const meta: Record<string, string> = {}
         if (frontmatterMatch) {
@@ -1398,12 +1412,12 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
           }
         }
         return {
-          id: file.replace('.SKILL.md', ''),
-          name: meta['name'] || file.replace('.SKILL.md', ''),
+          id: dir,
+          name: meta['name'] || dir,
           description: meta['description'] || '',
           version: meta['version'] || '1.0.0',
           source: 'built-in' as const,
-          filePath: `engine/skills/${file}`,
+          filePath: `engine/skills/${dir}`,
           enabled: true,
           lastUpdated: meta['last_updated'] || '',
           updatedBy: meta['updated_by'] || '',
@@ -1414,10 +1428,13 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     return { success: true, data: skills }
   })
 
-  handle(IPC.SKILLS_OPEN_FOLDER, async (): Promise<IpcResponse> => {
+  handle(IPC.SKILLS_OPEN_FOLDER, async (data?: { skillId?: string }): Promise<IpcResponse> => {
     const { shell } = await import('electron')
-    const skillsDir = join(__dirname, '../../..', 'engine', 'skills')
-    await shell.openPath(skillsDir)
+    const skillsDir = is.dev
+      ? join(__dirname, '../../..', 'engine', 'skills')
+      : join(process.resourcesPath, 'skills')
+    const targetDir = data?.skillId ? join(skillsDir, data.skillId) : skillsDir
+    await shell.openPath(targetDir)
     return { success: true }
   })
 }

@@ -70,25 +70,25 @@ const DEFAULT_MARKETING_TEAM: TeamMemberDef[] = [
     name: "xhs-agent",
     role: "小红书营销专家",
     description: "创作高互动率的小红书笔记，遵循 SOP 标准",
-    skillFile: "xhs.SKILL.md",
+    skillFile: "xhs/SKILL.md",
   },
   {
     name: "brand-reviewer",
     role: "品牌风控审查专家",
     description: "品牌一致性、敏感词、平台合规性审查",
-    skillFile: "brand-reviewer.SKILL.md",
+    skillFile: "brand-reviewer/SKILL.md",
   },
   {
     name: "growth-agent",
     role: "增长策略师",
     description: "增长策略制定、渠道分析、A/B 测试方案设计",
-    skillFile: "growth.SKILL.md",
+    skillFile: "growth/SKILL.md",
   },
   {
     name: "analyst-agent",
     role: "数据分析师",
     description: "数据分析、趋势洞察、内容表现评估",
-    skillFile: "analyst.SKILL.md",
+    skillFile: "analyst/SKILL.md",
   },
 ];
 

@@ -1,6 +1,6 @@
 ---
-name: global-content-creator
-description: Generate high-engagement English marketing content for global platforms (Meta, X, TikTok, LinkedIn, Email, Blog). Adapted for Chinese brands going global.
+name: global-content
+description: Generate high-engagement English marketing content for global platforms — Meta, X/Twitter, TikTok, LinkedIn, Email, and Blog. Adapted for Chinese brands going global. Use this skill when creating English-language social posts, ad copy, email campaigns, blog articles, or cross-platform content adaptations for international audiences. Also triggers when localizing Chinese brand messaging for Western markets.
 version: 1.0.0
 last_updated: 2026-03-24
 updated_by: human

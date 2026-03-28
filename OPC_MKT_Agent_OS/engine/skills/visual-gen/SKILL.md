@@ -1,6 +1,6 @@
 ---
 name: visual-gen
-description: AI 视觉内容生成专家。10 种风格预设 + 8 种版式 + 两步确认 + 结构化 Prompt 组装。支持 OpenAI/Google/DashScope/Replicate 四大 AI 图片生成服务。
+description: AI 视觉内容生成专家 — 10 种风格预设 + 8 种版式 + 两步确认流程 + 5 层结构化 Prompt 组装。当需要生成小红书封面图、系列配图、信息图、社交媒体视觉内容、或任何 AI 图片生成任务时触发。支持 OpenAI/Google/DashScope/Replicate 四大服务商，通过 referenceImages 保持系列图风格一致性。
 version: 3.0.0
 last_updated: 2026-03-28
 updated_by: human
@@ -30,16 +30,16 @@ updated_by: human
 
 | 风格 ID | 名称 | 一句话描述 | 参考文件 |
 |---------|------|-----------|----------|
-| cute | 甜美可爱 | 粉色系、贴纸、圆角 | `./skills/references/xhs-styles/cute.md` |
-| fresh | 清新自然 | 绿蓝白、植物、留白 | `./skills/references/xhs-styles/fresh.md` |
-| warm | 温暖亲切 | 琥珀/赭石、柔光纹理 | `./skills/references/xhs-styles/warm.md` |
-| bold | 粗犷有力 | 高饱和、大字号、强对比 | `./skills/references/xhs-styles/bold.md` |
-| minimal | 极简高级 | 黑白+单色、最大留白 | `./skills/references/xhs-styles/minimal.md` |
-| retro | 复古怀旧 | 网点/胶片、暗调暖色 | `./skills/references/xhs-styles/retro.md` |
-| pop | 波普活力 | 饱和原色、粗描边、动感 | `./skills/references/xhs-styles/pop.md` |
-| notion | 知性手绘 | 线条涂鸦、图标、结构化 | `./skills/references/xhs-styles/notion.md` |
-| chalkboard | 黑板粉笔 | 深底+彩色粉笔、手绘 | `./skills/references/xhs-styles/chalkboard.md` |
-| study-notes | 学习笔记 | 纸张底+手写+荧光笔 | `./skills/references/xhs-styles/study-notes.md` |
+| cute | 甜美可爱 | 粉色系、贴纸、圆角 | `./skills/visual-gen/references/xhs-styles/cute.md` |
+| fresh | 清新自然 | 绿蓝白、植物、留白 | `./skills/visual-gen/references/xhs-styles/fresh.md` |
+| warm | 温暖亲切 | 琥珀/赭石、柔光纹理 | `./skills/visual-gen/references/xhs-styles/warm.md` |
+| bold | 粗犷有力 | 高饱和、大字号、强对比 | `./skills/visual-gen/references/xhs-styles/bold.md` |
+| minimal | 极简高级 | 黑白+单色、最大留白 | `./skills/visual-gen/references/xhs-styles/minimal.md` |
+| retro | 复古怀旧 | 网点/胶片、暗调暖色 | `./skills/visual-gen/references/xhs-styles/retro.md` |
+| pop | 波普活力 | 饱和原色、粗描边、动感 | `./skills/visual-gen/references/xhs-styles/pop.md` |
+| notion | 知性手绘 | 线条涂鸦、图标、结构化 | `./skills/visual-gen/references/xhs-styles/notion.md` |
+| chalkboard | 黑板粉笔 | 深底+彩色粉笔、手绘 | `./skills/visual-gen/references/xhs-styles/chalkboard.md` |
+| study-notes | 学习笔记 | 纸张底+手写+荧光笔 | `./skills/visual-gen/references/xhs-styles/study-notes.md` |
 
 ## 8 种版式
 
@@ -54,8 +54,8 @@ updated_by: human
 | mindmap | 脑图型 | 50-65% | 知识体系、概念图 |
 | quadrant | 四象限型 | 55-65% | 矩阵、分类 |
 
-详细定义: `./skills/references/xhs-layouts/layouts.md`
-画布规范: `./skills/references/xhs-layouts/canvas.md`
+详细定义: `./skills/visual-gen/references/xhs-layouts/layouts.md`
+画布规范: `./skills/visual-gen/references/xhs-layouts/canvas.md`
 
 ---
 
@@ -65,8 +65,8 @@ updated_by: human
 
 1. 读取 `./memory/context/brand-voice.md`（品牌调性）
 2. 读取 `./memory/context/target-audience.md`（目标受众）
-3. 读取 `./skills/references/xhs-layouts/canvas.md`（画布规范 + 安全区域）
-4. 读取 `./skills/references/xhs-layouts/layouts.md`（8 种版式定义）
+3. 读取 `./skills/visual-gen/references/xhs-layouts/canvas.md`（画布规范 + 安全区域）
+4. 读取 `./skills/visual-gen/references/xhs-layouts/layouts.md`（8 种版式定义）
 5. 风格列表已在上方"10 种风格预设"中列出，按需读取具体风格文件
 
 ---
@@ -191,7 +191,7 @@ updated_by: human
 
 根据用户选择的风格 ID，读取对应的预设文件：
 ```
-Read ./skills/references/xhs-styles/[style-id].md
+Read ./skills/visual-gen/references/xhs-styles/[style-id].md
 ```
 提取：配色方案、视觉元素、排版风格、Prompt 关键词。
 

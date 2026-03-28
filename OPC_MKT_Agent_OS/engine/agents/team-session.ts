@@ -198,14 +198,14 @@ if (process.argv[1]?.endsWith("team-session.ts")) {
       id: "xhs-agent",
       name: "小红书创作专家",
       description: "按 SOP 产出高质量小红书种草笔记",
-      skillFile: "xhs.SKILL.md",
+      skillFile: "xhs/SKILL.md",
       tools: ["Read", "Write", "Glob"],
     },
     {
       id: "podcast-agent",
       name: "播客制作专家",
       description: "生成播客脚本、对话式音频内容",
-      skillFile: "podcast.SKILL.md",
+      skillFile: "podcast/SKILL.md",
       tools: ["Read", "Write", "Glob"],
     },
   ];

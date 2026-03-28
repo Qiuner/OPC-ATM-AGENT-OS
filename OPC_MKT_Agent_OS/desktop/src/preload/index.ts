@@ -305,8 +305,8 @@ const api = {
   skills: {
     list: (): Promise<IpcResponse> =>
       ipcRenderer.invoke(IPC.SKILLS_LIST),
-    openFolder: (): Promise<IpcResponse> =>
-      ipcRenderer.invoke(IPC.SKILLS_OPEN_FOLDER),
+    openFolder: (skillId?: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.SKILLS_OPEN_FOLDER, skillId ? { skillId } : undefined),
   },
 }
 

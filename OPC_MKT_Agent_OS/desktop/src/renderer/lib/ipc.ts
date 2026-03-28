@@ -166,7 +166,7 @@ interface WindowApi {
   }
   skills: {
     list(): Promise<IpcResponse>
-    openFolder(): Promise<IpcResponse>
+    openFolder(skillId?: string): Promise<IpcResponse>
   }
 }
 

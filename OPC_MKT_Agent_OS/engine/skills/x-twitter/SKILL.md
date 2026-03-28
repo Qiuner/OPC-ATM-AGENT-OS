@@ -1,6 +1,6 @@
 ---
 name: x-twitter
-description: 生成 X/Twitter 推文和 Thread，优化互动率和传播力。适用于：品牌推广、产品发布、行业观点、热点评论。
+description: 生成 X/Twitter 推文和 Thread，优化互动率和传播力。当需要撰写推文、创建 Thread、回应行业热点、发布产品公告、输出行业观点、或进行品牌推广时触发。支持单条推文/Thread/引用推文三种类型，中英双语输出，包含发布时间和互动策略建议。
 version: 1.0.0
 last_updated: 2026-03-20
 updated_by: human
