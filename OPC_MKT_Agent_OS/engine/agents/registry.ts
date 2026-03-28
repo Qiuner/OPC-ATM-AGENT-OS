@@ -10,7 +10,7 @@
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentDefinition, SubAgentDef } from "./types.js";
+import type { AgentDefinition, MCPServerConfig, SubAgentDef } from "./types.js";
 
 // 兼容 Turbopack：import.meta.dirname 可能 undefined
 const __current_dir = typeof import.meta.dirname === "string"
@@ -74,10 +74,10 @@ export class AgentRegistry {
       id: "xhs-agent",
       name: "小红书创作专家",
       nameEn: "XHS",
-      description: "按 SOP 产出高质量小红书种草笔记",
+      description: "端到端小红书营销：搜索竞品→分析爆款→内容创作→审查→发布。支持真实数据抓取和自动发布。",
       skillFile: "xhs.SKILL.md",
       model: "claude-sonnet-4-20250514",
-      tools: ["Read", "Write", "Glob"],
+      tools: ["Read", "Write", "Glob", "WebSearch"],
       mcpServers: {
         "xhs-data": {
           command: "npx",
@@ -87,8 +87,12 @@ export class AgentRegistry {
           command: "npx",
           args: ["tsx", join(MCPS_DIR, "creatorflow", "index.ts")],
         },
+        "image-gen": {
+          command: "npx",
+          args: ["tsx", join(MCPS_DIR, "image-gen", "index.ts")],
+        },
       },
-      maxTurns: 5,
+      maxTurns: 15,
       level: "specialist",
       color: "#ff2442",
       avatar: "XHS",
@@ -260,11 +264,17 @@ export class AgentRegistry {
       id: "visual-gen-agent",
       name: "视觉内容生成专家",
       nameEn: "Visual",
-      description: "生成营销视觉内容：封面图、海报、配图 Prompt、短视频脚本",
+      description: "AI 图片生成 + 营销视觉创作。支持 OpenAI/Google/DashScope/Replicate 生图，封面/海报/配图/短视频脚本。",
       skillFile: "visual-gen.SKILL.md",
       model: "claude-sonnet-4-20250514",
       tools: ["Read", "Write", "Glob"],
-      maxTurns: 5,
+      mcpServers: {
+        "image-gen": {
+          command: "npx",
+          args: ["tsx", join(MCPS_DIR, "image-gen", "index.ts")],
+        },
+      },
+      maxTurns: 10,
       level: "specialist",
       color: "#fd79a8",
       avatar: "VIS",
@@ -459,7 +469,7 @@ ${calendar}
 ${context && Object.keys(context).length > 0 ? `## 上下文\n${JSON.stringify(context, null, 2)}\n\n` : ""}User: ${userMessage}`;
 
     // 聚合 CEO 自身 + 所有子 Agent 的 MCP Servers
-    const allMcpServers: Record<string, { command: string; args: string[]; env?: Record<string, string> }> = {
+    const allMcpServers: Record<string, MCPServerConfig> = {
       ...(ceo.mcpServers ?? {}),
     };
     for (const agent of subAgentDefs) {

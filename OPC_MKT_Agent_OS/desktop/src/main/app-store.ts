@@ -49,6 +49,17 @@ interface AppSettings {
     targetMarket: string
     tone: string
   }
+  /** 桌面悬浮窗位置 */
+  widgetBounds?: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+  /** 桌面悬浮窗是否可见 */
+  widgetVisible?: boolean
+  /** Dock Pet 活跃团队 agent 列表 */
+  teamAgentIds?: string[]
 }
 
 const defaults: AppSettings = {
@@ -61,6 +72,7 @@ const defaults: AppSettings = {
   },
   theme: 'dark',
   onboardingCompleted: false,
+  teamAgentIds: ['ceo', 'xhs-agent', 'growth-agent', 'brand-reviewer'],
 }
 
 const store = new Store<AppSettings>({
@@ -80,6 +92,7 @@ export function getAppSettings(): AppSettings {
     theme: store.get('theme'),
     onboardingCompleted: store.get('onboardingCompleted'),
     brand: store.get('brand'),
+    teamAgentIds: store.get('teamAgentIds'),
   }
 }
 
@@ -111,5 +124,24 @@ export function getWindowState(): { bounds?: { x: number; y: number; width: numb
   return {
     bounds: store.get('windowBounds'),
     isMaximized: store.get('isMaximized'),
+  }
+}
+
+/** 读取悬浮窗状态 */
+export function getWidgetState(): { bounds?: { x: number; y: number; width: number; height: number }; visible?: boolean } {
+  return {
+    bounds: store.get('widgetBounds'),
+    visible: store.get('widgetVisible') ?? true,
+  }
+}
+
+/** 保存悬浮窗状态 */
+export function saveWidgetState(partial: { x?: number; y?: number; width?: number; height?: number; visible?: boolean }): void {
+  if (partial.x !== undefined || partial.y !== undefined || partial.width !== undefined || partial.height !== undefined) {
+    const current = store.get('widgetBounds') ?? { x: 0, y: 0, width: 320, height: 200 }
+    store.set('widgetBounds', { ...current, ...partial })
+  }
+  if (partial.visible !== undefined) {
+    store.set('widgetVisible', partial.visible)
   }
 }

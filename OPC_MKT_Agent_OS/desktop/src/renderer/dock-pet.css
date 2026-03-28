@@ -1,0 +1,15 @@
+html, body, #dock-pet-root, #popover-root {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  background-color: transparent !important;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  -webkit-font-smoothing: antialiased;
+  color: #fff;
+}

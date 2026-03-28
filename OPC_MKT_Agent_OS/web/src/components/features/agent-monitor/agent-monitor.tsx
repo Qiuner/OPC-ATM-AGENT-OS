@@ -70,6 +70,10 @@ function getStatusText(agent: MonitorAgent): string {
   if (tool.includes('Grep') || tool.includes('grep') || tool.includes('Search') || tool.includes('search')) return '搜索资料';
   if (tool.includes('Edit') || tool.includes('edit')) return '编辑文件';
   if (tool.includes('WebFetch') || tool.includes('WebSearch')) return '搜索网络';
+  if (tool.includes('xhs_search')) return '搜索小红书';
+  if (tool.includes('xhs_get_post')) return '分析爆款笔记';
+  if (tool.includes('xhs_publish')) return '发布笔记';
+  if (tool.includes('xhs_check_login') || tool.includes('xhs_login')) return '检查登录';
   return `使用 ${tool}`;
 }
 
@@ -84,6 +88,10 @@ function getStatusEmoji(agent: MonitorAgent): string {
   if (tool.includes('Bash') || tool.includes('bash')) return '⚡';
   if (tool.includes('Agent') || tool.includes('SendMessage')) return '📢';
   if (tool.includes('Grep') || tool.includes('Search') || tool.includes('search')) return '🔍';
+  if (tool.includes('xhs_search')) return '🔍';
+  if (tool.includes('xhs_get_post')) return '📊';
+  if (tool.includes('xhs_publish')) return '📤';
+  if (tool.includes('xhs_check_login') || tool.includes('xhs_login')) return '🔐';
   if (tool.includes('approval')) return '🙋';
   return '💻';
 }

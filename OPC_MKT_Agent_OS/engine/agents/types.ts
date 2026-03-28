@@ -143,12 +143,11 @@ export interface AgentDefinition {
   avatar: string;
 }
 
-/** MCP Server 配置 */
-export interface MCPServerConfig {
-  command: string;
-  args: string[];
-  env?: Record<string, string>;
-}
+/** MCP Server 配置（兼容 SDK 的 stdio / http / sse 三种 transport） */
+export type MCPServerConfig =
+  | { type?: "stdio"; command: string; args: string[]; env?: Record<string, string> }
+  | { type: "http"; url: string; headers?: Record<string, string> }
+  | { type: "sse"; url: string; headers?: Record<string, string> };
 
 /** Agent 执行流事件（用于 SSE 推送） */
 export type AgentStreamEvent =

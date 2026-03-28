@@ -30,6 +30,29 @@ npx tsx agents/analyst-agent.ts                  # 手动触发飞轮分析
 npx tsx scheduler.ts                             # 启动定时调度器
 ```
 
+## 小红书真实发布（内置 Playwright）
+
+xhs-data MCP Server 内置 Playwright 浏览器自动化，无需外部依赖即可发布笔记。
+
+### 首次使用
+```bash
+# 安装 Chromium（仅首次，约 200MB）
+npx playwright install chromium
+
+# 通过 Agent 触发扫码登录（会弹出浏览器窗口）
+npx tsx agents/xhs-agent.ts "登录小红书"
+# 或直接调用 MCP 工具 xhs_login
+```
+
+### 发布工具
+| 工具 | 说明 |
+|------|------|
+| `xhs_check_login` | 检查登录状态 |
+| `xhs_login` | QR 码扫码登录（弹窗） |
+| `xhs_publish_note` | 发布笔记（标题+正文+标签+图片） |
+
+Cookie 自动保存到 `~/.xhs-mcp/storage-state.json`，后续发布无需再次登录。
+
 ## Claude Agent SDK 用法
 ```typescript
 import { query } from "@anthropic-ai/claude-agent-sdk";

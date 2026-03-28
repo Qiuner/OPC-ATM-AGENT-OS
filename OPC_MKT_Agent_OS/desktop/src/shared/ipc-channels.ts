@@ -90,6 +90,20 @@ export const IPC = {
   SKILLS_LIST: 'fs:skills:list',
   SKILLS_CREATE: 'fs:skills:create',
   SKILLS_DELETE: 'fs:skills:delete',
+
+  // ── Team ──
+  TEAM_GET_AGENTS: 'team:agents:get',
+  TEAM_SET_AGENTS: 'team:agents:set',
+  TEAM_AGENTS_CHANGED: 'team:agents:changed',
+
+  // ── Dock Pet ──
+  DOCK_PET_TOGGLE: 'dock-pet:toggle',
+  DOCK_PET_OPEN_MAIN: 'dock-pet:open-main',
+  DOCK_PET_GEOMETRY: 'dock-pet:geometry',
+  DOCK_PET_SHOW_POPOVER: 'dock-pet:show-popover',
+  DOCK_PET_HIDE_POPOVER: 'dock-pet:hide-popover',
+  DOCK_PET_MOUSE_FORWARD: 'dock-pet:mouse-forward',
+  DOCK_PET_POPOVER_AGENT: 'dock-pet:popover-agent',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

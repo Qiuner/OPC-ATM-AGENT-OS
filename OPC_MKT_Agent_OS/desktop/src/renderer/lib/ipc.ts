@@ -80,6 +80,20 @@ interface WindowApi {
     set(theme: string): Promise<IpcResponse>
     onChanged(callback: (data: { theme: string; isDark: boolean }) => void): () => void
   }
+  team: {
+    getAgents(): Promise<IpcResponse<string[]>>
+    setAgents(ids: string[]): Promise<IpcResponse<string[]>>
+    onAgentsChanged(callback: (ids: string[]) => void): () => void
+  }
+  dockPet: {
+    toggle(): Promise<IpcResponse<{ visible: boolean }>>
+    openMain(): Promise<IpcResponse>
+    getGeometry(): Promise<IpcResponse<{ x: number; y: number; width: number; height: number; position: string; dockSize: number }>>
+    showPopover(data: { agentId: string; x: number; y: number }): Promise<IpcResponse>
+    hidePopover(): Promise<IpcResponse>
+    setMouseForward(ignore: boolean): Promise<IpcResponse>
+    onPopoverAgent(callback: (data: { agentId: string }) => void): () => void
+  }
   onboarding: {
     status(): Promise<IpcResponse<{ completed: boolean; hasApiKey: boolean }>>
     complete(data: Record<string, unknown>): Promise<IpcResponse>

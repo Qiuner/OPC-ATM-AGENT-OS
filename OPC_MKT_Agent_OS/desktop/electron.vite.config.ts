@@ -16,6 +16,15 @@ export default defineConfig({
         '@': resolve('src/renderer')
       }
     },
-    plugins: [react(), tailwindcss()]
+    plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        input: {
+          main: resolve('src/renderer/index.html'),
+          'dock-pet': resolve('src/renderer/dock-pet.html'),
+          'dock-pet-popover': resolve('src/renderer/dock-pet-popover.html'),
+        }
+      }
+    }
   }
 })

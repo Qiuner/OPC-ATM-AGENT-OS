@@ -136,6 +136,21 @@ const AGENT_COLORS: Record<
   "brand-reviewer": { color: "#a855f7", avatar: "BR", name: "Reviewer" },
 };
 
+const TOOL_LABELS: Record<string, string> = {
+  xhs_check_login: "🔐 检查登录",
+  xhs_login: "🔐 扫码登录",
+  xhs_search_top_posts: "🔍 搜索竞品笔记",
+  xhs_get_post_detail: "📊 分析笔记详情",
+  xhs_publish_note: "📤 发布笔记",
+  xhs_get_note_metrics: "📈 获取笔记数据",
+  xhs_search_notes: "🔍 搜索笔记",
+  Read: "📖 读取文件",
+  Write: "✏️ 写入文件",
+  WebSearch: "🌐 搜索网络",
+  Glob: "📂 查找文件",
+  generate_image: "🎨 AI 生成图片",
+};
+
 type ChannelId = "all" | string;
 type TabId = "execute" | "chat" | "monitor";
 
@@ -599,6 +614,8 @@ export function TeamStudioPage(): React.JSX.Element {
   const [exec, setExec] = useState<ExecState>(INITIAL_EXEC);
   const [execInput, setExecInput] = useState("");
   const execAbortRef = useRef<AbortController | null>(null);
+  const execCleanupRef = useRef<(() => void) | null>(null);
+  const [execAgentId, setExecAgentId] = useState<string>("xhs-agent");
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -732,6 +749,11 @@ export function TeamStudioPage(): React.JSX.Element {
 
     const prompt = execInput.trim();
     setExecInput("");
+
+    const targetAgentId = execAgentId;
+    const agent = AGENT_MAP.get(targetAgentId);
+    const agentLabel = agent?.labelCn || targetAgentId;
+
     setExec({
       isRunning: true,
       startedAt: Date.now(),
@@ -739,8 +761,8 @@ export function TeamStudioPage(): React.JSX.Element {
       tasks: [
         {
           id: createId(),
-          agentId: "ceo",
-          description: "CEO 分析需求，拆解任务...",
+          agentId: targetAgentId,
+          description: `${agentLabel} 执行中...`,
           status: "running",
           progress: 0,
           toolCallCount: 0,
@@ -751,7 +773,7 @@ export function TeamStudioPage(): React.JSX.Element {
         {
           id: createId(),
           timestamp: Date.now(),
-          agentId: "ceo",
+          agentId: targetAgentId,
           type: "info",
           message: `开始执行: ${prompt}`,
         },
@@ -759,66 +781,142 @@ export function TeamStudioPage(): React.JSX.Element {
       result: "",
     });
 
-    // Execute via agent chat endpoint
-    try {
-      const ceo = AGENT_MAP.get("ceo");
-      if (!ceo) return;
+    const api = getApi();
 
+    if (api) {
+      // ── IPC path — spawn claude CLI with full MCP tool support ──
       let resultContent = "";
+      let toolCount = 0;
 
-      await streamAgentMessage(
-        "ceo",
-        ceo.systemPrompt,
-        "",
-        prompt,
-        (text) => {
-          resultContent += text;
-          setExec((prev) => ({
-            ...prev,
-            tasks: prev.tasks.map((t) =>
-              t.agentId === "ceo"
-                ? { ...t, content: resultContent, progress: 50 }
-                : t
-            ),
-          }));
-        },
-        () => {
+      const unsubChunk = api.agent.onStreamChunk(
+        (raw: unknown) => {
+          const event = (raw ?? {}) as Record<string, unknown>;
+          if (event.type === "text" && event.content) {
+            resultContent += event.content as string;
+            setExec((prev) => ({
+              ...prev,
+              tasks: prev.tasks.map((t) =>
+                t.agentId === targetAgentId
+                  ? {
+                      ...t,
+                      content: resultContent,
+                      progress: Math.min(90, t.progress + 2),
+                    }
+                  : t
+              ),
+            }));
+          }
+          if (event.type === "tool_use") {
+            toolCount++;
+            const toolName = (event.tool as string) || "";
+            setExec((prev) => ({
+              ...prev,
+              tasks: prev.tasks.map((t) =>
+                t.agentId === targetAgentId
+                  ? {
+                      ...t,
+                      currentTool: toolName,
+                      toolCallCount: toolCount,
+                    }
+                  : t
+              ),
+              logs: [
+                ...prev.logs,
+                {
+                  id: createId(),
+                  timestamp: Date.now(),
+                  agentId: targetAgentId,
+                  type: "tool" as const,
+                  message: `${TOOL_LABELS[toolName] || toolName}${event.toolInput ? ` → ${(event.toolInput as string).slice(0, 120)}` : ""}`,
+                },
+              ],
+            }));
+          }
+          if (event.type === "tool_result") {
+            setExec((prev) => ({
+              ...prev,
+              logs: [
+                ...prev.logs,
+                {
+                  id: createId(),
+                  timestamp: Date.now(),
+                  agentId: targetAgentId,
+                  type: "result" as const,
+                  message: `✅ ${((event.content as string) || "").slice(0, 200)}`,
+                },
+              ],
+            }));
+          }
+          if (event.type === "error") {
+            setExec((prev) => ({
+              ...prev,
+              logs: [
+                ...prev.logs,
+                {
+                  id: createId(),
+                  timestamp: Date.now(),
+                  agentId: targetAgentId,
+                  type: "error" as const,
+                  message:
+                    (event.message as string) || "Unknown error",
+                },
+              ],
+            }));
+          }
+        }
+      );
+
+      const cleanup = () => {
+        unsubChunk();
+        unsubEnd();
+        unsubError();
+        execCleanupRef.current = null;
+      };
+
+      const unsubEnd = api.agent.onStreamEnd(() => {
+        cleanup();
+        setExec((prev) => ({
+          ...prev,
+          isRunning: false,
+          result: resultContent,
+          tasks: prev.tasks.map((t) =>
+            t.agentId === targetAgentId
+              ? {
+                  ...t,
+                  status: "done" as TaskStatus,
+                  progress: 100,
+                  currentTool: undefined,
+                  finishedAt: Date.now(),
+                }
+              : t
+          ),
+          logs: [
+            ...prev.logs,
+            {
+              id: createId(),
+              timestamp: Date.now(),
+              agentId: targetAgentId,
+              type: "result" as const,
+              message: `执行完成 (${toolCount} 次工具调用)`,
+            },
+          ],
+        }));
+      });
+
+      const unsubError = api.agent.onStreamError(
+        (rawErr: unknown) => {
+          const err = (rawErr ?? {}) as Record<string, unknown>;
+          cleanup();
           setExec((prev) => ({
             ...prev,
             isRunning: false,
             tasks: prev.tasks.map((t) =>
-              t.agentId === "ceo"
-                ? {
-                    ...t,
-                    status: "done" as TaskStatus,
-                    progress: 100,
-                    finishedAt: Date.now(),
-                  }
-                : t
-            ),
-            result: resultContent,
-            logs: [
-              ...prev.logs,
-              {
-                id: createId(),
-                timestamp: Date.now(),
-                agentId: "ceo",
-                type: "result" as const,
-                message: "执行完成",
-              },
-            ],
-          }));
-        },
-        (error) => {
-          setExec((prev) => ({
-            ...prev,
-            isRunning: false,
-            tasks: prev.tasks.map((t) =>
-              t.agentId === "ceo"
+              t.agentId === targetAgentId
                 ? {
                     ...t,
                     status: "error" as TaskStatus,
-                    error,
+                    error:
+                      (err.message as string) || "Stream error",
                     finishedAt: Date.now(),
                   }
                 : t
@@ -828,29 +926,140 @@ export function TeamStudioPage(): React.JSX.Element {
               {
                 id: createId(),
                 timestamp: Date.now(),
-                agentId: "ceo",
+                agentId: targetAgentId,
                 type: "error" as const,
-                message: error,
+                message:
+                  (err.message as string) || "Stream error",
               },
             ],
           }));
         }
       );
-    } catch {
-      setExec((prev) => ({
-        ...prev,
-        isRunning: false,
-        tasks: prev.tasks.map((t) => ({
-          ...t,
-          status: "error" as TaskStatus,
-          error: "Agent 服务不可用",
-        })),
-      }));
+
+      execCleanupRef.current = cleanup;
+
+      try {
+        const res = await api.agent.execute({
+          agentId: targetAgentId,
+          message: prompt,
+          mode: "direct",
+        });
+        if (!res.success) {
+          cleanup();
+          setExec((prev) => ({
+            ...prev,
+            isRunning: false,
+            tasks: prev.tasks.map((t) => ({
+              ...t,
+              status: "error" as TaskStatus,
+              error: res.error || "Execution failed",
+            })),
+          }));
+        }
+      } catch {
+        // Error handled by stream error listener
+      }
+    } else {
+      // ── HTTP fallback (when running outside Electron) ──
+      try {
+        const fallbackAgent =
+          AGENT_MAP.get(targetAgentId) || AGENT_MAP.get("ceo");
+        if (!fallbackAgent) return;
+
+        let resultContent = "";
+
+        await streamAgentMessage(
+          targetAgentId,
+          fallbackAgent.systemPrompt,
+          "",
+          prompt,
+          (text) => {
+            resultContent += text;
+            setExec((prev) => ({
+              ...prev,
+              tasks: prev.tasks.map((t) =>
+                t.agentId === targetAgentId
+                  ? { ...t, content: resultContent, progress: 50 }
+                  : t
+              ),
+            }));
+          },
+          () => {
+            setExec((prev) => ({
+              ...prev,
+              isRunning: false,
+              tasks: prev.tasks.map((t) =>
+                t.agentId === targetAgentId
+                  ? {
+                      ...t,
+                      status: "done" as TaskStatus,
+                      progress: 100,
+                      finishedAt: Date.now(),
+                    }
+                  : t
+              ),
+              result: resultContent,
+              logs: [
+                ...prev.logs,
+                {
+                  id: createId(),
+                  timestamp: Date.now(),
+                  agentId: targetAgentId,
+                  type: "result" as const,
+                  message: "执行完成",
+                },
+              ],
+            }));
+          },
+          (error) => {
+            setExec((prev) => ({
+              ...prev,
+              isRunning: false,
+              tasks: prev.tasks.map((t) =>
+                t.agentId === targetAgentId
+                  ? {
+                      ...t,
+                      status: "error" as TaskStatus,
+                      error,
+                      finishedAt: Date.now(),
+                    }
+                  : t
+              ),
+              logs: [
+                ...prev.logs,
+                {
+                  id: createId(),
+                  timestamp: Date.now(),
+                  agentId: targetAgentId,
+                  type: "error" as const,
+                  message: error,
+                },
+              ],
+            }));
+          }
+        );
+      } catch {
+        setExec((prev) => ({
+          ...prev,
+          isRunning: false,
+          tasks: prev.tasks.map((t) => ({
+            ...t,
+            status: "error" as TaskStatus,
+            error: "Agent 服务不可用",
+          })),
+        }));
+      }
     }
-  }, [execInput, exec.isRunning]);
+  }, [execInput, exec.isRunning, execAgentId]);
 
   const handleStopExec = () => {
+    const api = getApi();
+    if (api) {
+      api.agent.abort();
+    }
     execAbortRef.current?.abort();
+    execCleanupRef.current?.();
+    execCleanupRef.current = null;
     setExec((prev) => ({ ...prev, isRunning: false }));
   };
 
@@ -930,7 +1139,15 @@ export function TeamStudioPage(): React.JSX.Element {
 
           <div className="ml-auto flex items-center gap-2">
             <button
-              onClick={() => setTeamLaunched(!teamLaunched)}
+              onClick={() => {
+                const next = !teamLaunched
+                setTeamLaunched(next)
+                // Sync active agents to dock pet
+                if (window.api?.team) {
+                  const ids = next ? AGENTS.map(a => a.id) : []
+                  window.api.team.setAgents(ids)
+                }
+              }}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
                 teamLaunched
@@ -968,11 +1185,11 @@ export function TeamStudioPage(): React.JSX.Element {
                     style={{ color: "var(--muted-foreground)" }}
                   />
                   <p
-                    className="text-sm"
+                    className="text-sm text-center"
                     style={{ color: "var(--muted-foreground)" }}
                   >
-                    输入任务描述，CEO Agent
-                    将自动拆解并调度团队执行
+                    选择 Agent 并输入任务 — 通过 IPC
+                    执行，支持 MCP 工具（搜索、分析、发布）
                   </p>
                 </div>
               )}
@@ -1015,9 +1232,34 @@ export function TeamStudioPage(): React.JSX.Element {
                         </p>
                       </div>
                       {task.status === "running" && (
-                        <span className="text-xs tabular-nums text-[#a78bfa]">
-                          {task.progress}%
-                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {task.currentTool && (
+                            <span
+                              className="text-xs"
+                              style={{
+                                color: "var(--muted-foreground)",
+                              }}
+                            >
+                              {TOOL_LABELS[task.currentTool] ||
+                                task.currentTool}
+                            </span>
+                          )}
+                          <span className="text-xs tabular-nums text-[#a78bfa]">
+                            {task.progress}%
+                          </span>
+                          {task.toolCallCount > 0 && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded"
+                              style={{
+                                background:
+                                  "rgba(167,139,250,0.1)",
+                                color: "#a78bfa",
+                              }}
+                            >
+                              {task.toolCallCount} tools
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -1123,6 +1365,24 @@ export function TeamStudioPage(): React.JSX.Element {
               }}
             >
               <div className="flex gap-2">
+                <select
+                  value={execAgentId}
+                  onChange={(e) => setExecAgentId(e.target.value)}
+                  disabled={exec.isRunning}
+                  className="rounded-lg px-2 py-2 text-sm outline-none shrink-0 cursor-pointer"
+                  style={{
+                    background: "var(--muted)",
+                    border: "1px solid var(--border)",
+                    color: "var(--foreground)",
+                    minWidth: "120px",
+                  }}
+                >
+                  {AGENTS.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.labelCn}
+                    </option>
+                  ))}
+                </select>
                 <textarea
                   value={execInput}
                   onChange={(e) => setExecInput(e.target.value)}
@@ -1132,7 +1392,7 @@ export function TeamStudioPage(): React.JSX.Element {
                       handleExecute();
                     }
                   }}
-                  placeholder="描述你的营销任务，CEO Agent 将自动拆解执行..."
+                  placeholder={`向 ${AGENT_MAP.get(execAgentId)?.labelCn || execAgentId} 下达任务...`}
                   rows={1}
                   className="flex-1 rounded-lg px-3 py-2 text-sm resize-none outline-none"
                   style={{

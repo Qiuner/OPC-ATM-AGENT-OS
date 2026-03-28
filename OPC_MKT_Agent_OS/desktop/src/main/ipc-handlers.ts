@@ -13,7 +13,7 @@ import {
   generateId,
   nowISO,
 } from './store'
-import { getAppSettings, setAppSettings } from './app-store'
+import { getAppSettings, setAppSettings, getSettingValue, setSettingValue } from './app-store'
 import { getApiKeyStatus, setApiKey, deleteApiKey, clearAllApiKeys } from './safe-storage'
 import {
   executeAgent,
@@ -22,6 +22,8 @@ import {
   getAgentStatuses,
   type AgentExecuteRequest,
 } from './agent-engine'
+import { toggleDockPet, getMainWindow, getDockPetWindow, getChatPopoverWindow } from './index'
+import { getDockGeometry } from './dock-geometry'
 import type {
   IpcResponse,
   TaskFilter,
@@ -449,17 +451,10 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
     context?: Record<string, unknown>; model?: string;
     maxBudgetUsd?: number; timeoutMs?: number;
   }): Promise<IpcResponse> => {
+    console.log('[IPC] AGENT_EXECUTE received:', { agentId: data.agentId, message: data.message?.slice(0, 80) })
     if (!data.agentId || !data.message) {
       return { success: false, error: 'agentId and message are required' }
     }
-    // Get the current main window at execution time (handles window recreation on macOS)
-    const win = mainWindow && !mainWindow.isDestroyed()
-      ? mainWindow
-      : BrowserWindow.getAllWindows()[0]
-    if (!win) {
-      return { success: false, error: 'Main window not available' }
-    }
-
     runningAgentId = data.agentId
 
     const request: AgentExecuteRequest = {
@@ -472,7 +467,7 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
       timeoutMs: data.timeoutMs,
     }
 
-    const result = await executeAgent(request, win)
+    const result = await executeAgent(request)
     runningAgentId = undefined
 
     if (result.success && result.result) {
@@ -504,13 +499,14 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
       writeCollection('tasks', tasks)
 
       const contents = readCollection<Content>('contents')
+      const platform = data.agentId === 'xhs-agent' ? 'xiaohongshu' : 'general'
       const content: Content = {
         id: generateId('cnt'),
         task_id: task.id,
         campaign_id: 'default',
         title,
         body: result.result,
-        platform: 'general',
+        platform,
         status: 'review',
         media_urls: [],
         metadata: { mode: saveData.mode, agentId: data.agentId, prompt: data.message },
@@ -612,7 +608,7 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
     return { success: true, data: { theme: settings.theme } }
   })
 
-  handle(IPC.THEME_SET, (_e: unknown, data: { theme: 'dark' | 'light' | 'system' }): IpcResponse => {
+  handle(IPC.THEME_SET, (data: { theme: 'dark' | 'light' | 'system' }): IpcResponse => {
     setAppSettings({ theme: data.theme })
 
     // Resolve effective theme for nativeTheme and backgroundColor
@@ -623,12 +619,16 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
       nativeTheme.themeSource = data.theme
     }
 
-    // Notify renderer of resolved dark/light
+    // Notify all renderers of resolved dark/light
     const isDark = data.theme === 'system' ? nativeTheme.shouldUseDarkColors : data.theme === 'dark'
-    const win = mainWindow ?? BrowserWindow.getAllWindows()[0]
-    if (win && !win.isDestroyed()) {
-      win.webContents.send(IPC.THEME_CHANGED, { theme: data.theme, isDark })
-      win.setBackgroundColor(isDark ? '#030305' : '#fafafa')
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send(IPC.THEME_CHANGED, { theme: data.theme, isDark })
+        // Only set background color on non-transparent windows
+        if (!win.isAlwaysOnTop()) {
+          win.setBackgroundColor(isDark ? '#030305' : '#fafafa')
+        }
+      }
     }
 
     return { success: true }
@@ -664,6 +664,82 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
     setAppSettings({ onboardingCompleted: true })
     return { success: true }
   })
+
+  // ── Team Agents ──
+
+  handle(IPC.TEAM_GET_AGENTS, (): IpcResponse<string[]> => {
+    const ids = getSettingValue('teamAgentIds') ?? ['ceo', 'xhs-agent', 'growth-agent', 'brand-reviewer']
+    return { success: true, data: ids }
+  })
+
+  handle(IPC.TEAM_SET_AGENTS, (ids: string[]): IpcResponse<string[]> => {
+    setSettingValue('teamAgentIds', ids)
+    // Notify dock pet window about the change
+    const dockPet = getDockPetWindow()
+    if (dockPet && !dockPet.isDestroyed()) {
+      dockPet.webContents.send(IPC.TEAM_AGENTS_CHANGED, ids)
+    }
+    return { success: true, data: ids }
+  })
+
+  // ── Dock Pet Control ──
+
+  handle(IPC.DOCK_PET_TOGGLE, (): IpcResponse<{ visible: boolean }> => {
+    toggleDockPet()
+    const win = getDockPetWindow()
+    const visible = win ? win.isVisible() : false
+    return { success: true, data: { visible } }
+  })
+
+  handle(IPC.DOCK_PET_OPEN_MAIN, (): IpcResponse => {
+    const main = getMainWindow()
+    if (main) {
+      if (main.isMinimized()) main.restore()
+      main.focus()
+    }
+    return { success: true }
+  })
+
+  handle(IPC.DOCK_PET_GEOMETRY, (): IpcResponse => {
+    const geo = getDockGeometry()
+    return { success: true, data: geo }
+  })
+
+  handle(IPC.DOCK_PET_SHOW_POPOVER, (data: { agentId: string; x: number; y: number }): IpcResponse => {
+    const popover = getChatPopoverWindow()
+    if (!popover || popover.isDestroyed()) return { success: false, error: 'No popover window' }
+    const dockPet = getDockPetWindow()
+    if (!dockPet || dockPet.isDestroyed()) return { success: false, error: 'No dock-pet window' }
+
+    // Position popover above the character (convert renderer coords to screen coords)
+    const petBounds = dockPet.getBounds()
+    const screenX = petBounds.x + data.x - 210
+    const screenY = petBounds.y - 360
+
+    popover.setBounds({ x: Math.max(0, screenX), y: Math.max(0, screenY), width: 420, height: 350 })
+    popover.webContents.send(IPC.DOCK_PET_POPOVER_AGENT, { agentId: data.agentId })
+    popover.show()
+    return { success: true }
+  })
+
+  handle(IPC.DOCK_PET_HIDE_POPOVER, (): IpcResponse => {
+    const popover = getChatPopoverWindow()
+    if (popover && !popover.isDestroyed()) popover.hide()
+    return { success: true }
+  })
+
+  handle(IPC.DOCK_PET_MOUSE_FORWARD, (ignore: boolean): IpcResponse => {
+    const win = getDockPetWindow()
+    if (!win || win.isDestroyed()) return { success: false }
+    if (ignore) {
+      win.setIgnoreMouseEvents(true, { forward: true })
+    } else {
+      win.setIgnoreMouseEvents(false)
+    }
+    return { success: true }
+  })
+
+  // ── Onboarding ──
 
   handle(IPC.ONBOARDING_ENV_CHECK, async (): Promise<IpcResponse<{
     claude: { available: boolean; version?: string }

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Content } from "@/types";
 import { getApi } from "@/lib/ipc";
+import { PlatformPreviewModal } from "@/components/features/platform-preview";
+import { formatX } from "@/components/features/platform-preview/types";
 
 // --------------- Types ---------------
 
@@ -104,59 +106,6 @@ function itemToMarkdown(item: PublishItem): string {
   return lines.join("\n");
 }
 
-// Platform preview formatters
-function formatX(item: PublishItem): string {
-  const full = `${item.title}\n\n${item.body ?? ""}`;
-  const tags = (item.tags ?? []).map((t) => `#${t}`).join(" ");
-  const tweet = full.slice(0, 260) + (tags ? `\n\n${tags}` : "");
-  return tweet.slice(0, 280);
-}
-
-function formatLinkedIn(item: PublishItem): string {
-  return `${item.title}\n\n${item.body ?? ""}\n\n${(item.tags ?? []).map((t) => `#${t}`).join(" ")}\n\n---\nWhat are your thoughts? Drop a comment below.`;
-}
-
-function formatTikTok(item: PublishItem): string {
-  const body = item.body ?? "";
-  const hook = body.slice(0, 50) + (body.length > 50 ? "..." : "");
-  return `[Hook - 3s] ${hook}\n\n[Main Content - 15-45s]\n${body}\n\n[CTA - 3s] Follow for more! Like & Share!`;
-}
-
-function formatMeta(item: PublishItem): string {
-  return `${item.title}\n\n${item.body ?? ""}\n\n${(item.tags ?? []).map((t) => `#${t}`).join(" ")}`;
-}
-
-function formatEmail(item: PublishItem): string {
-  const body = item.body ?? "";
-  return `Subject: ${item.title}\nPreheader: ${body.slice(0, 80)}\n\n---\n\nHi [First Name],\n\n${body}\n\nBest regards,\n[Brand Name]\n\n---\nUnsubscribe | View in browser`;
-}
-
-function formatBlog(item: PublishItem): string {
-  const body = item.body ?? "";
-  const tags = (item.tags ?? []).map((t) => t).join(", ");
-  return `# ${item.title}\n\nMeta Description: ${body.slice(0, 155)}\nKeywords: ${tags}\n\n---\n\n${body}\n\n---\n\n## Key Takeaways\n\n- [Takeaway 1]\n- [Takeaway 2]\n- [Takeaway 3]`;
-}
-
-type PlatformKey = "X" | "LinkedIn" | "TikTok" | "Meta" | "Email" | "Blog";
-
-const PLATFORM_FORMATTERS: Record<PlatformKey, (item: PublishItem) => string> = {
-  X: formatX,
-  LinkedIn: formatLinkedIn,
-  TikTok: formatTikTok,
-  Meta: formatMeta,
-  Email: formatEmail,
-  Blog: formatBlog,
-};
-
-const PLATFORM_LABELS: Record<PlatformKey, string> = {
-  X: "X · 推文 (280 chars)",
-  LinkedIn: "LinkedIn · 专业文章",
-  TikTok: "TikTok · 短视频脚本",
-  Meta: "Meta · FB/IG 帖子",
-  Email: "Email · 营销邮件",
-  Blog: "Blog · SEO 长文",
-};
-
 // --------------- Toast Component ---------------
 
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
@@ -173,103 +122,6 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
       >
         {message}
       </div>
-    </div>
-  );
-}
-
-// --------------- Platform Preview Modal ---------------
-
-function PlatformPreviewModal({
-  item,
-  onClose,
-}: {
-  item: PublishItem;
-  onClose: () => void;
-}) {
-  const [activePlatform, setActivePlatform] = useState<PlatformKey>("X");
-  const [toast, setToast] = useState("");
-  const backdropRef = useRef<HTMLDivElement>(null);
-
-  const allPlatforms: PlatformKey[] = ["X", "LinkedIn", "TikTok", "Meta", "Email", "Blog"];
-  const formatted = PLATFORM_FORMATTERS[activePlatform](item);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(formatted);
-      setToast("已复制到剪贴板");
-    } catch {
-      setToast("复制失败");
-    }
-  };
-
-  return (
-    <div
-      ref={backdropRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
-    >
-      <div
-        className="w-full max-w-2xl rounded-xl p-6 shadow-xl mx-4"
-        style={{ background: "var(--card)", border: "1px solid var(--border)" }}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-foreground">
-            平台预览 — {item.title}
-          </h3>
-          <button onClick={onClose} className="rounded-md p-1 transition-colors" style={{ color: "var(--muted-foreground)" }}>
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="flex flex-wrap gap-1 mb-4 pb-2" style={{ borderBottom: "1px solid var(--border)" }}>
-          {allPlatforms.map((p) => (
-            <button
-              key={p}
-              onClick={() => setActivePlatform(p)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                activePlatform === p ? "bg-[#a78bfa] text-white" : "hover:bg-white/5"
-              }`}
-              style={activePlatform !== p ? { color: "var(--muted-foreground)" } : undefined}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-
-        <p className="text-xs mb-2" style={{ color: "var(--muted-foreground)" }}>
-          {PLATFORM_LABELS[activePlatform]}
-        </p>
-
-        <div
-          className="rounded-lg p-4 min-h-[160px] max-h-[300px] overflow-y-auto"
-          style={{ background: "var(--background)", border: "1px solid var(--border)" }}
-        >
-          <pre className="whitespace-pre-wrap text-sm font-sans" style={{ color: "var(--muted-foreground)" }}>
-            {formatted}
-          </pre>
-        </div>
-
-        <div className="flex justify-end gap-2 mt-4">
-          <button
-            onClick={handleCopy}
-            className="h-8 rounded-lg px-3 text-sm font-medium transition-colors"
-            style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)", background: "transparent" }}
-          >
-            复制文案
-          </button>
-          <button
-            onClick={onClose}
-            className="h-8 rounded-lg px-3 text-sm font-medium text-white transition-colors"
-            style={{ background: "linear-gradient(135deg, #a78bfa, #7c3aed)" }}
-          >
-            关闭
-          </button>
-        </div>
-      </div>
-
-      {toast && <Toast message={toast} onClose={() => setToast("")} />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { PixelAgentSVG } from '@/components/features/agent-monitor/pixel-agents';
+import { RPGScene } from '@/components/features/agent-monitor/rpg-scene';
+import { PixelAgentSVG, type MarketingAgentId } from '@/components/features/agent-monitor/pixel-agents';
 import { getApi } from '@/lib/ipc';
 
 // ==========================================
@@ -70,10 +71,6 @@ interface ExecTask {
 }
 
 // ==========================================
-// Empty initial data — populated from EventBus/API at runtime
-// ==========================================
-
-// ==========================================
 // Helpers
 // ==========================================
 
@@ -108,255 +105,19 @@ function getLogType(log: LogEntry): 'dispatch' | 'complete' | 'error' | 'tool' |
 }
 
 // ==========================================
-// Pixel Avatar — SVG for supported agents, letter fallback for others
+// All known pixel agent IDs
 // ==========================================
 
-const PIXEL_AGENT_IDS = new Set(['ceo', 'xhs-agent', 'growth-agent', 'brand-reviewer']);
-
-function PixelAvatar({ agentId, initial, color, status, size = 64 }: { agentId: string; initial: string; color: string; status: AgentStatus; size?: number }) {
-  const isOffline = status === 'offline';
-  const hasPixelArt = PIXEL_AGENT_IDS.has(agentId);
-  return (
-    <div
-      className={cn(
-        'rounded-xl flex items-center justify-center shrink-0 relative overflow-hidden transition-all duration-300',
-        status === 'busy' && 'scale-105',
-      )}
-      style={{
-        width: size,
-        height: size,
-        background: `${color}10`,
-        border: `1px solid ${color}25`,
-        opacity: isOffline ? 0.4 : 1,
-      }}
-    >
-      {hasPixelArt ? (
-        <PixelAgentSVG
-          agentId={agentId as 'ceo' | 'xhs-agent' | 'growth-agent' | 'brand-reviewer'}
-          status={status}
-          className="w-12 h-12"
-        />
-      ) : (
-        /* Pixel-style letter block fallback */
-        <svg viewBox="0 0 20 26" className="w-12 h-12" style={{ imageRendering: 'pixelated' as const }}>
-          {/* Pixel head */}
-          <rect x="5" y="2" width="10" height="7" fill={isOffline ? '#666' : '#f4c49e'} />
-          {/* Eyes */}
-          <rect x="7" y="5" width="2" height="2" fill="#1a1a1a" />
-          <rect x="11" y="5" width="2" height="2" fill="#1a1a1a" />
-          <rect x="8" y="5" width="1" height="1" fill="#fff" />
-          <rect x="12" y="5" width="1" height="1" fill="#fff" />
-          {/* Body in agent color */}
-          <rect x="5" y="11" width="10" height="9" fill={isOffline ? '#444' : color} />
-          <rect x="5" y="11" width="3" height="9" fill={isOffline ? '#333' : `${color}cc`} />
-          {/* Neck */}
-          <rect x="8" y="9" width="4" height="2" fill={isOffline ? '#666' : '#f4c49e'} />
-          {/* Arms */}
-          <rect x="3" y="12" width="2" height="6" fill={isOffline ? '#444' : color} />
-          <rect x="15" y="12" width="2" height="6" fill={isOffline ? '#444' : color} />
-          {/* Legs */}
-          <rect x="6" y="20" width="3" height="4" fill={isOffline ? '#333' : '#2c3e50'} />
-          <rect x="11" y="20" width="3" height="4" fill={isOffline ? '#333' : '#2c3e50'} />
-          {/* Shoes */}
-          <rect x="5" y="24" width="4" height="2" fill={isOffline ? '#222' : '#1a1a2e'} />
-          <rect x="11" y="24" width="4" height="2" fill={isOffline ? '#222' : '#1a1a2e'} />
-          {/* Initial letter on body */}
-          <text
-            x="10" y="18"
-            textAnchor="middle"
-            fontSize="6"
-            fontWeight="bold"
-            fontFamily="monospace"
-            fill="#fff"
-          >
-            {initial.slice(0, 2)}
-          </text>
-        </svg>
-      )}
-      {/* Status dot */}
-      <span
-        className={cn(
-          'absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2',
-          status === 'busy' && 'animate-pulse',
-        )}
-        style={{
-          background: getStatusColor(status).color,
-          borderColor: T.cardBg,
-          boxShadow: `0 0 8px ${getStatusColor(status).color}60`,
-        }}
-      />
-    </div>
-  );
-}
+const ALL_PIXEL_AGENT_IDS = new Set<string>([
+  'ceo', 'xhs-agent', 'growth-agent', 'brand-reviewer',
+  'analyst-agent', 'podcast-agent', 'visual-agent', 'strategist-agent',
+  'email-agent', 'seo-expert-agent', 'geo-expert-agent', 'x-twitter-agent',
+  'meta-ads-agent', 'global-content-agent',
+]);
 
 
 // ==========================================
-// 2. Agent State Card — with CEO dispatch tags + selected state
-// ==========================================
-
-function AgentStateCard({
-  agent,
-  logs,
-  execTask,
-  allExecTasks,
-  allAgents,
-  selected,
-  highlighted,
-  onSelect,
-  cardRef,
-}: {
-  agent: MonitorAgent;
-  logs: LogEntry[];
-  execTask?: ExecTask;
-  allExecTasks: ExecTask[];
-  allAgents: MonitorAgent[];
-  selected: boolean;
-  highlighted: boolean;
-  onSelect: () => void;
-  cardRef: (el: HTMLDivElement | null) => void;
-}) {
-  const isOffline = agent.status === 'offline';
-  const isBusy = agent.status === 'busy';
-  const statusText = getStatusText(agent);
-  const statusStyle = getStatusColor(agent.status);
-  const statusColor = statusStyle.color;
-  const hasContent = !!(execTask?.content);
-
-  // Latest activity from logs
-  const latestActivity = (() => {
-    if (isOffline) return '';
-    const agentLogs = logs.filter(l =>
-      l.source.includes(agent.id) || l.source.startsWith('send:') || l.source.startsWith('tool:')
-    );
-    if (agentLogs.length > 0) return agentLogs[agentLogs.length - 1].message;
-    if (logs.length > 0) return logs[logs.length - 1].message;
-    return '';
-  })();
-
-  // CEO dispatch tags — show dispatched sub-agents
-  const dispatchedAgents = agent.id === 'ceo'
-    ? allExecTasks.filter(t => t.agentId !== 'ceo' && (t.status === 'running' || t.status === 'done' || t.status === 'waiting'))
-    : [];
-
-  return (
-    <div
-      ref={cardRef}
-      className={cn(
-        'rounded-2xl transition-all duration-300 flex flex-col min-w-0 relative overflow-hidden',
-        isOffline && 'opacity-40',
-        hasContent && 'cursor-pointer',
-        highlighted && 'animate-highlight-flash',
-      )}
-      style={{
-        background: T.cardBg,
-        border: `1px solid ${selected ? `${statusColor}60` : isBusy ? `${statusColor}40` : highlighted ? `${statusColor}60` : T.border}`,
-        borderTop: `3px solid ${statusColor}`,
-        borderBottom: selected ? `3px solid ${statusColor}` : undefined,
-        boxShadow: selected ? `0 0 20px ${statusColor}25, inset 0 0 30px ${statusColor}08`
-          : isBusy ? `0 0 20px ${statusColor}15, inset 0 0 30px ${statusColor}05`
-          : highlighted ? `0 0 16px ${statusColor}40` : 'none',
-        ['--flash-color' as string]: statusColor,
-      }}
-      onClick={hasContent ? onSelect : undefined}
-    >
-      {/* Busy glow overlay */}
-      {isBusy && (
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: `radial-gradient(ellipse at 50% 0%, ${statusColor}12, transparent 70%)` }}
-        />
-      )}
-
-      {/* Selected indicator overlay */}
-      {selected && (
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: `${statusColor}06` }}
-        />
-      )}
-
-      {/* Card content */}
-      <div className="p-5 flex flex-col gap-3">
-        {/* Avatar + Status */}
-        <div className="flex items-center justify-between relative z-10">
-          <div className="flex items-center gap-4">
-            <PixelAvatar agentId={agent.id} initial={agent.avatar} color={agent.color} status={agent.status} />
-            <div className="min-w-0">
-              <div className="text-lg font-bold truncate" style={{ fontFamily: font.heading, color: '#ffffff' }}>
-                {agent.nameEn}
-              </div>
-              <div className="text-sm truncate" style={{ fontFamily: font.body, color: T.textMuted }}>
-                {agent.name}
-              </div>
-            </div>
-          </div>
-          <span
-            className="px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap shrink-0"
-            style={{ color: statusStyle.color, background: statusStyle.bg }}
-          >
-            {statusText}
-          </span>
-        </div>
-
-        {/* Progress bar — status color */}
-        {isBusy && (
-          <div className="relative z-10 h-1 rounded-full overflow-hidden" style={{ background: `${statusColor}15` }}>
-            <div
-              className="h-full rounded-full"
-              style={{
-                background: `linear-gradient(90deg, ${statusColor}60, ${statusColor}, ${statusColor}60)`,
-                animation: 'monitor-progress 2s ease-in-out infinite',
-                width: '40%',
-              }}
-            />
-          </div>
-        )}
-
-        {/* CEO Dispatch Tags — neutral colors with mini avatar */}
-        {dispatchedAgents.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap relative z-10">
-            <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.25)' }}>调度:</span>
-            {dispatchedAgents.map(task => {
-              const targetAgent = allAgents.find(a => a.id === task.agentId);
-              if (!targetAgent) return null;
-              const isDone = task.status === 'done';
-              const isError = task.status === 'error';
-              return (
-                <span
-                  key={task.agentId}
-                  className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium transition-all duration-200"
-                  style={
-                    isDone ? { color: T.green, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)' }
-                    : isError ? { color: T.red, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }
-                    : { color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }
-                  }
-                >
-                  <span
-                    className="w-3 h-3 rounded text-[6px] font-bold flex items-center justify-center shrink-0"
-                    style={{ background: `${targetAgent.color}20`, color: targetAgent.color }}
-                  >
-                    {targetAgent.avatar.slice(0, 1)}
-                  </span>
-                  {isDone ? '✓' : isError ? '✗' : ''} {targetAgent.nameEn}
-                </span>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Latest activity */}
-        {latestActivity && (
-          <div className="relative z-10 text-sm truncate leading-relaxed" style={{ fontFamily: font.body, color: T.textMuted }}>
-            {latestActivity}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ==========================================
-// 3. Detail Panel — slide-down between grid and command input
+// Detail Panel — slide-down between scene and command input
 // ==========================================
 
 function DetailPanel({
@@ -371,6 +132,7 @@ function DetailPanel({
   const statusStyle = getStatusColor(agent.status);
   const statusColor = statusStyle.color;
   const isRunning = execTask?.status === 'running';
+  const hasPixelArt = ALL_PIXEL_AGENT_IDS.has(agent.id);
 
   return (
     <div
@@ -390,7 +152,27 @@ function DetailPanel({
           style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
         >
           <div className="flex items-center gap-3">
-            <PixelAvatar agentId={agent.id} initial={agent.avatar} color={agent.color} status={agent.status} size={40} />
+            <div
+              className="rounded-xl flex items-center justify-center shrink-0 relative overflow-hidden"
+              style={{
+                width: 40,
+                height: 40,
+                background: `${agent.color}10`,
+                border: `1px solid ${agent.color}25`,
+              }}
+            >
+              {hasPixelArt ? (
+                <PixelAgentSVG
+                  agentId={agent.id as MarketingAgentId}
+                  status={agent.status}
+                  className="w-8 h-8"
+                />
+              ) : (
+                <span className="text-xs font-bold" style={{ color: agent.color }}>
+                  {agent.avatar.slice(0, 2)}
+                </span>
+              )}
+            </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-base font-bold" style={{ fontFamily: font.heading, color: '#ffffff' }}>
@@ -424,9 +206,7 @@ function DetailPanel({
         </div>
 
         {/* Panel content — scrollable */}
-        <div
-          className="flex-1 overflow-y-auto px-4 py-3"
-        >
+        <div className="flex-1 overflow-y-auto px-4 py-3">
           {execTask?.content ? (
             <div
               className="text-sm leading-relaxed"
@@ -456,7 +236,7 @@ function DetailPanel({
 }
 
 // ==========================================
-// 4. Terminal Log Stream — with classification
+// Terminal Log Stream — with classification
 // ==========================================
 
 function TerminalLogStream({
@@ -639,7 +419,6 @@ function CommandInputBar({ onSend }: { onSend: (msg: string) => void }) {
 // Right Sidebar
 // ==========================================
 
-
 function RightSidebar({ tasks, agents, prompt }: { tasks: ExecTask[]; agents: MonitorAgent[]; prompt: string }) {
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.status === 'done').length;
@@ -752,21 +531,18 @@ function RightSidebar({ tasks, agents, prompt }: { tasks: ExecTask[]; agents: Mo
 }
 
 // ==========================================
-// Main Page — Version C: Enhanced Monitor
+// Main Page — RPG Agent Town Monitor
 // ==========================================
 
 export default function TeamStudioV3() {
   const [agents, setAgents] = useState<MonitorAgent[]>([]);
-  const [execTasks, setExecTasks] = useState<ExecTask[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [execTasks] = useState<ExecTask[]>([]);
+  const [logs] = useState<LogEntry[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const [highlightAgent, setHighlightAgent] = useState<string | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [taskStartTime] = useState(() => new Date(Date.now() - 65000));
-  const [taskPrompt, setTaskPrompt] = useState('');
-
-  const agentRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [taskPrompt] = useState('');
 
   // Agent visual registry — maps IPC agent IDs to display info
   const AGENT_DISPLAY: Record<string, { nameEn: string; role: string; color: string; avatar: string }> = {
@@ -827,9 +603,7 @@ export default function TeamStudioV3() {
   }, []);
 
   const scrollToAgent = useCallback((agentId: string) => {
-    agentRefs.current[agentId]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    setHighlightAgent(agentId);
-    setTimeout(() => setHighlightAgent(null), 800);
+    setSelectedAgent(agentId);
   }, []);
 
   const execTimeStr = (() => {
@@ -845,6 +619,17 @@ export default function TeamStudioV3() {
     // Mock — no-op
   }, []);
 
+  // Prepare agents for RPG scene (add statusText)
+  const sceneAgents = agents.map(a => ({
+    id: a.id,
+    nameEn: a.nameEn,
+    name: a.name,
+    color: a.color,
+    status: a.status,
+    currentTool: a.currentTool,
+    statusText: getStatusText(a),
+  }));
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden rounded-xl" style={{ background: 'var(--card)', color: 'var(--foreground)', fontFamily: font.body, border: '1px solid var(--border)' }}>
       {/* Inject keyframes */}
@@ -853,13 +638,6 @@ export default function TeamStudioV3() {
           0% { transform: translateX(-100%); }
           50% { transform: translateX(150%); }
           100% { transform: translateX(-100%); }
-        }
-        @keyframes highlight-flash {
-          0%, 100% { box-shadow: none; }
-          50% { box-shadow: 0 0 0 2px var(--flash-color, #a78bfa), 0 0 16px color-mix(in srgb, var(--flash-color, #a78bfa) 25%, transparent); }
-        }
-        .animate-highlight-flash {
-          animation: highlight-flash 0.4s ease-in-out 2;
         }
         @keyframes detail-panel-slide {
           from { height: 0; opacity: 0; }
@@ -898,49 +676,26 @@ export default function TeamStudioV3() {
       <div className="relative z-10 flex-1 flex overflow-hidden">
         {/* Left: main content area */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {/* Agent State Cards — hide offline, sort by status (busy > online > offline) */}
-          {(() => {
-            if (agents.length === 0) {
-              return (
-                <div className="shrink-0 p-8 flex items-center justify-center" style={{ borderBottom: `1px solid ${T.border}` }}>
-                  <div className="text-center">
-                    <p className="text-sm font-medium" style={{ color: T.textMuted }}>No agents active</p>
-                    <p className="text-xs mt-1" style={{ color: T.textDim }}>Execute a task to see agents working here</p>
-                  </div>
-                </div>
-              );
-            }
-            const dispatchedIds = new Set(execTasks.map(t => t.agentId));
-            const statusOrder: Record<AgentStatus, number> = { busy: 0, online: 1, offline: 2 };
-            const visibleAgents = agents
-              .filter(a => a.status !== 'offline' || dispatchedIds.has(a.id))
-              .sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
-            return (
-              <div className="shrink-0 p-4 pb-2 overflow-y-auto" style={{ borderBottom: selectedAgent ? 'none' : `1px solid ${T.border}`, maxHeight: '45%' }}>
-                <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                  {visibleAgents.map(agent => {
-                    const execTask = execTasks.find(t => t.agentId === agent.id);
-                    return (
-                      <AgentStateCard
-                        key={agent.id}
-                        agent={agent}
-                        logs={logs.filter(l => l.source.includes(agent.id))}
-                        execTask={execTask}
-                        allExecTasks={execTasks}
-                        allAgents={agents}
-                        selected={selectedAgent === agent.id}
-                        highlighted={highlightAgent === agent.id}
-                        onSelect={() => toggleSelect(agent.id)}
-                        cardRef={(el) => { agentRefs.current[agent.id] = el; }}
-                      />
-                    );
-                  })}
-                </div>
+          {/* RPG Agent Town Scene — replaces card grid */}
+          {agents.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center" style={{ borderBottom: `1px solid ${T.border}` }}>
+              <div className="text-center">
+                <div className="text-3xl opacity-10 mb-4">🏘️</div>
+                <p className="text-sm font-medium" style={{ color: T.textMuted }}>Agent Town is empty</p>
+                <p className="text-xs mt-1" style={{ color: T.textDim }}>Execute a task to see agents working here</p>
               </div>
-            );
-          })()}
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0" style={{ borderBottom: selectedAgent ? 'none' : `1px solid ${T.border}` }}>
+              <RPGScene
+                agents={sceneAgents}
+                selectedAgent={selectedAgent}
+                onSelectAgent={toggleSelect}
+              />
+            </div>
+          )}
 
-          {/* Detail Panel — between grid and command input */}
+          {/* Detail Panel — between scene and command input */}
           {selectedAgent && (() => {
             const agent = agents.find(a => a.id === selectedAgent);
             if (!agent) return null;

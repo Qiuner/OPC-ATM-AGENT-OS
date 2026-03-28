@@ -143,6 +143,40 @@ const api = {
     },
   },
 
+  /** Team agents */
+  team: {
+    getAgents: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.TEAM_GET_AGENTS),
+    setAgents: (ids: string[]): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.TEAM_SET_AGENTS, ids),
+    onAgentsChanged: (callback: (ids: string[]) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, ids: string[]): void => callback(ids)
+      ipcRenderer.on(IPC.TEAM_AGENTS_CHANGED, handler)
+      return () => { ipcRenderer.removeListener(IPC.TEAM_AGENTS_CHANGED, handler) }
+    },
+  },
+
+  /** Dock Pet control */
+  dockPet: {
+    toggle: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.DOCK_PET_TOGGLE),
+    openMain: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.DOCK_PET_OPEN_MAIN),
+    getGeometry: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.DOCK_PET_GEOMETRY),
+    showPopover: (data: { agentId: string; x: number; y: number }): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.DOCK_PET_SHOW_POPOVER, data),
+    hidePopover: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.DOCK_PET_HIDE_POPOVER),
+    setMouseForward: (ignore: boolean): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.DOCK_PET_MOUSE_FORWARD, ignore),
+    onPopoverAgent: (callback: (data: { agentId: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { agentId: string }): void => callback(data)
+      ipcRenderer.on(IPC.DOCK_PET_POPOVER_AGENT, handler)
+      return () => { ipcRenderer.removeListener(IPC.DOCK_PET_POPOVER_AGENT, handler) }
+    },
+  },
+
   /** Onboarding */
   onboarding: {
     status: (): Promise<IpcResponse> =>

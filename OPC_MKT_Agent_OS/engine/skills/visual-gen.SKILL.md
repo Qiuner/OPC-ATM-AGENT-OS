@@ -1,12 +1,28 @@
 ---
 name: visual-gen
-description: 生成营销视觉内容（封面图、海报、配图、短视频脚本）。适用于：社交媒体配图、产品海报、品牌视觉、视频脚本。
-version: 1.0.0
-last_updated: 2026-03-20
-updated_by: human
+description: AI 图片生成 + 营销视觉内容创作。内置 generate_image MCP 工具，支持 OpenAI/Google/DashScope/Replicate 四大 AI 图片生成服务。
+version: 2.0.0
+last_updated: 2026-03-28
+updated_by: agent
 ---
 
 # 视觉内容生成 Agent SOP
+
+## MCP 工具
+
+| 工具 | 说明 | 必填参数 | 可选参数 |
+|------|------|----------|----------|
+| `generate_image` | AI 生成图片 | `prompt`, `outputPath` | `provider`, `model`, `quality`, `aspectRatio`, `referenceImages` |
+
+### Provider 说明
+| 服务商 | 模型 | 特点 | API Key 环境变量 |
+|--------|------|------|------------------|
+| Google | gemini-3-pro-image-preview | 高质量，支持参考图 | `GOOGLE_API_KEY` |
+| OpenAI | gpt-image-1.5 | 稳定质量 | `OPENAI_API_KEY` |
+| DashScope | z-image-turbo | 中文内容优化 | `DASHSCOPE_API_KEY` |
+| Replicate | google/nano-banana-pro | 社区模型 | `REPLICATE_API_TOKEN` |
+
+不指定 provider 时自动检测可用 API key。
 
 ## 启动前必读
 1. 读取 `./memory/context/brand-voice.md`（品牌调性）
@@ -28,7 +44,10 @@ updated_by: human
 - 使用英文撰写图片生成 Prompt（AI 模型对英文理解更好）
 - 结构：[主体描述] + [风格] + [色调] + [构图] + [细节]
 - 明确指定不要出现的元素（negative prompt）
-- 每个 Prompt 同时给出简短版（DALL-E）和详细版（Midjourney/SD）
+- 撰写完 Prompt 后，直接调用 `generate_image` 工具生成图片：
+  ```
+  generate_image(prompt="...", outputPath="./output/cover.png", quality="2k", aspectRatio="3:4")
+  ```
 
 ### 品牌视觉规范
 - 色调：与品牌主色调一致（参考 brand-voice.md）

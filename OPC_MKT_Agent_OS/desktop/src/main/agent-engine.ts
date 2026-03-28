@@ -93,7 +93,7 @@ function getMemoryDir(): string {
 
 const AGENT_REGISTRY: AgentDef[] = [
   { id: 'ceo', name: 'CEO 营销总监', description: '营销团队总指挥，需求拆解、子 Agent 调度与质量终审', skillFile: '', model: 'claude-sonnet-4-20250514' },
-  { id: 'xhs-agent', name: '小红书创作专家', description: '按 SOP 产出高质量小红书种草笔记', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'xhs-agent', name: '小红书创作专家', description: '端到端小红书营销：搜索竞品→分析爆款→内容创作→审查→发布。支持真实数据抓取和自动发布。', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'analyst-agent', name: '数据飞轮分析师', description: '分析内容表现数据，提炼胜出模式', skillFile: 'analyst.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'growth-agent', name: '增长营销专家', description: '选题研究、热点捕捉、竞品分析、发布策略', skillFile: 'growth.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'brand-reviewer', name: '品牌风控审查', description: '审查内容合规性与品牌调性一致性', skillFile: 'brand-reviewer.SKILL.md', model: 'claude-sonnet-4-20250514' },
@@ -104,7 +104,7 @@ const AGENT_REGISTRY: AgentDef[] = [
   { id: 'seo-agent', name: 'SEO 专家', description: 'Technical & content SEO — keyword research, on-page optimization', skillFile: 'seo-expert.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'geo-agent', name: 'GEO 专家', description: 'Generative Engine Optimization — optimize content for AI search engines', skillFile: 'geo-expert.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'x-twitter-agent', name: 'X/Twitter 创作专家', description: '生成高互动率的推文和 Thread', skillFile: 'x-twitter.SKILL.md', model: 'claude-sonnet-4-20250514' },
-  { id: 'visual-gen-agent', name: '视觉内容生成专家', description: '生成营销视觉内容：封面图、海报、配图 Prompt', skillFile: 'visual-gen.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'visual-gen-agent', name: '视觉内容生成专家', description: 'AI 图片生成 + 营销视觉创作。支持 OpenAI/Google/DashScope/Replicate 生图。', skillFile: 'visual-gen.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'strategist-agent', name: '营销策略师', description: '制定营销策略、内容战略、渠道规划', skillFile: 'strategist.SKILL.md', model: 'claude-sonnet-4-20250514' },
 ]
 
@@ -168,8 +168,7 @@ export function abortAgent(): void {
  * 返回执行结果摘要。
  */
 export async function executeAgent(
-  request: AgentExecuteRequest,
-  mainWindow: BrowserWindow
+  request: AgentExecuteRequest
 ): Promise<{ success: boolean; result?: string; error?: string; sessionId?: string; cost?: number }> {
   const agent = getAgentDef(request.agentId)
   if (!agent) {
@@ -204,32 +203,35 @@ export async function executeAgent(
 
   // Spawn claude process
   activeAbort = new AbortController()
+  console.log('[AgentEngine] Spawning claude CLI:', { agentId: request.agentId, cwd: getEngineDir(), argsCount: args.length })
+
+  // Build clean env: remove Claude Code nesting vars
+  const cleanEnv = { ...process.env }
+  delete cleanEnv.CLAUDECODE
+  delete cleanEnv.CLAUDE_CODE_ENTRYPOINT
+  delete cleanEnv.CLAUDE_CODE_IS_AGENT
 
   try {
     activeProcess = spawn('claude', args, {
       cwd: getEngineDir(),
-      env: {
-        ...process.env,
-        // Clean up inherited Claude env vars to prevent conflicts
-        CLAUDECODE: undefined,
-        CLAUDE_CODE_ENTRYPOINT: undefined,
-        CLAUDE_CODE_IS_AGENT: undefined,
-      },
-      stdio: ['pipe', 'pipe', 'pipe'],
+      env: cleanEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
       signal: activeAbort.signal,
     })
+    console.log('[AgentEngine] claude process spawned, pid:', activeProcess.pid)
   } catch (err) {
     activeProcess = null
     activeAbort = null
     const message = err instanceof Error ? err.message : 'Failed to spawn claude process'
+    console.error('[AgentEngine] spawn failed:', message)
     return { success: false, error: message }
   }
 
   // Timeout control
   const timer = setTimeout(() => {
     abortAgent()
-    sendChunk(mainWindow, request.agentId, { type: 'error', message: 'Execution timed out' })
-    sendEnd(mainWindow)
+    sendChunk(request.agentId, { type: 'error', message: 'Execution timed out' })
+    sendEnd()
   }, timeout)
 
   // Stream parsing
@@ -237,7 +239,9 @@ export async function executeAgent(
   const stderrChunks: string[] = []
 
   activeProcess.stderr?.on('data', (chunk: Buffer) => {
-    stderrChunks.push(chunk.toString())
+    const text = chunk.toString()
+    stderrChunks.push(text)
+    console.error('[AgentEngine] stderr:', text.slice(0, 200))
   })
 
   let finalResult = ''
@@ -267,7 +271,7 @@ export async function executeAgent(
       }
 
       // Process event and push to renderer
-      processStreamEvent(event, request.agentId, mainWindow)
+      processStreamEvent(event, request.agentId)
 
       // Capture final result
       if (event.type === 'result') {
@@ -278,20 +282,24 @@ export async function executeAgent(
     })
 
     activeProcess!.on('close', (code: number | null) => {
-      sendEnd(mainWindow)
+      console.log('[AgentEngine] process closed, code:', code, 'stderr length:', stderrChunks.join('').length)
+      sendEnd()
 
-      if (code !== 0 && stderrChunks.length > 0) {
-        const errMsg = stderrChunks.join('').slice(0, 500)
-        sendChunk(mainWindow, request.agentId, { type: 'error', message: errMsg })
+      if (code !== 0) {
+        const errMsg = stderrChunks.join('').slice(0, 500) || `claude process exited with code ${code}`
+        console.error('[AgentEngine] execution failed:', errMsg)
+        sendChunk(request.agentId, { type: 'error', message: errMsg })
         finish({ success: false, error: errMsg })
       } else {
+        console.log('[AgentEngine] execution succeeded, result length:', finalResult.length)
         finish({ success: true, result: finalResult, sessionId, cost: totalCost })
       }
     })
 
     activeProcess!.on('error', (err: Error) => {
-      sendEnd(mainWindow)
-      sendChunk(mainWindow, request.agentId, { type: 'error', message: err.message })
+      console.error('[AgentEngine] process error:', err.message)
+      sendEnd()
+      sendChunk(request.agentId, { type: 'error', message: err.message })
       finish({ success: false, error: err.message })
     })
   })
@@ -299,7 +307,7 @@ export async function executeAgent(
 
 // ── Stream Event Processing ──
 
-function processStreamEvent(event: StreamJsonEvent, agentId: string, win: BrowserWindow): void {
+function processStreamEvent(event: StreamJsonEvent, agentId: string): void {
   switch (event.type) {
     case 'assistant': {
       const message = event.message as Record<string, unknown> | undefined
@@ -307,10 +315,10 @@ function processStreamEvent(event: StreamJsonEvent, agentId: string, win: Browse
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block?.type === 'text' && block?.text) {
-            sendChunk(win, agentId, { type: 'text', content: block.text as string })
+            sendChunk(agentId, { type: 'text', content: block.text as string })
           }
           if (block?.type === 'tool_use') {
-            sendChunk(win, agentId, {
+            sendChunk(agentId, {
               type: 'tool_use',
               tool: (block.name || '') as string,
               toolInput: JSON.stringify(block.input || {}).slice(0, 500),
@@ -324,7 +332,7 @@ function processStreamEvent(event: StreamJsonEvent, agentId: string, win: Browse
     case 'tool_result': {
       const toolResult = event.tool_result
       if (toolResult) {
-        sendChunk(win, agentId, {
+        sendChunk(agentId, {
           type: 'tool_result',
           content: typeof toolResult.content === 'string'
             ? toolResult.content.slice(0, 500)
@@ -335,29 +343,34 @@ function processStreamEvent(event: StreamJsonEvent, agentId: string, win: Browse
     }
 
     case 'error': {
-      sendChunk(win, agentId, {
+      sendChunk(agentId, {
         type: 'error',
         message: (event.result as string) || 'Unknown error',
       })
       break
     }
 
-    // result and system events are captured but not pushed as chunks
     default:
       break
   }
 }
 
-// ── IPC Push Helpers ──
+// ── IPC Push Helpers — broadcast to all windows ──
 
-function sendChunk(win: BrowserWindow, agentId: string, data: Partial<AgentStreamChunkEvent>): void {
-  if (win.isDestroyed()) return
-  win.webContents.send(IPC.AGENT_STREAM_CHUNK, { agentId, ...data })
+function broadcastToAll(channel: string, ...args: unknown[]): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, ...args)
+    }
+  }
 }
 
-function sendEnd(win: BrowserWindow): void {
-  if (win.isDestroyed()) return
-  win.webContents.send(IPC.AGENT_STREAM_END)
+function sendChunk(agentId: string, data: Partial<AgentStreamChunkEvent>): void {
+  broadcastToAll(IPC.AGENT_STREAM_CHUNK, { agentId, ...data })
+}
+
+function sendEnd(): void {
+  broadcastToAll(IPC.AGENT_STREAM_END)
 }
 
 // ── Agent Status ──

@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "xhs-data": {
+      "command": "npx",
+      "args": ["tsx", "mcps/xhs-data/index.ts"]
+    },
+    "creatorflow": {
+      "command": "npx",
+      "args": ["tsx", "mcps/creatorflow/index.ts"]
+    },
+    "image-gen": {
+      "command": "npx",
+      "args": ["tsx", "mcps/image-gen/index.ts"],
+      "env": {
+        "GOOGLE_API_KEY": "AIzaSyA8gQrtV2rtTe_4C1CvLFqQZAk8DEzums4"
+      }
+    }
+  }
+}
