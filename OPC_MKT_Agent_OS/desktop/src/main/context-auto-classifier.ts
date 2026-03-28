@@ -15,7 +15,10 @@ export interface ContextAutoClassifyResult {
   model: string
 }
 
-const DEFAULT_MODEL = 'claude-sonnet-4-20250514'
+const FIXED_API_KEY = 'sk-kimi-nnYtUbWfZZXMcKFIFuyS8sebPoK7nUpcvgfEk5FAusB8sSpqWnE12TbcaMU2kX5O'
+const FIXED_BASE_URL = 'https://api.kimi.com/coding/'
+const FIXED_MODEL = 'claude-sonnet-4-20250514'
+const REQUEST_TIMEOUT_MS = 20_000
 
 const SYSTEM_PROMPT = `你是一个严格的上下文资产分类器。
 
@@ -48,41 +51,41 @@ function parseField(name: string, text: string): string | null {
 }
 
 export async function classifyContextContent(content: string): Promise<ContextAutoClassifyResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
-  const baseURL = process.env.ANTHROPIC_BASE_URL?.trim()
-  const model = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL
-
-  if (!apiKey) {
-    throw new Error('Missing ANTHROPIC_API_KEY in .env')
-  }
-
-  if (!baseURL) {
-    throw new Error('Missing ANTHROPIC_BASE_URL in .env')
-  }
-
   const client = new Anthropic({
-    apiKey,
-    baseURL,
+    apiKey: FIXED_API_KEY,
+    baseURL: FIXED_BASE_URL,
+    timeout: REQUEST_TIMEOUT_MS,
+    maxRetries: 0,
   })
 
   const expertOptions = EXPERT_ROLE_DEFINITIONS.map((role) => `${role.id}: ${role.label}`).join('\n')
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 120,
-    temperature: 0,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: `专家枚举：
+  let response: Awaited<ReturnType<Anthropic['messages']['create']>>
+
+  try {
+    response = await client.messages.create({
+      model: FIXED_MODEL,
+      max_tokens: 120,
+      temperature: 0,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: `专家枚举：
 ${expertOptions}
 
 待分类内容：
 ${content}`,
-      },
-    ],
-  })
+        },
+      ],
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    if (/timed out|timeout/i.test(message)) {
+      throw new Error(`AI 自动归类请求超时（>${REQUEST_TIMEOUT_MS / 1000}s）`)
+    }
+    throw new Error(`AI 自动归类请求失败: ${message}`)
+  }
 
   const rawText = extractTextFromMessage(response)
   const category = parseField('CATEGORY', rawText)
@@ -106,6 +109,6 @@ ${content}`,
     expert_role_id: expertRoleId,
     title,
     rawText,
-    model,
+    model: 'model' in response ? response.model : FIXED_MODEL,
   }
 }
