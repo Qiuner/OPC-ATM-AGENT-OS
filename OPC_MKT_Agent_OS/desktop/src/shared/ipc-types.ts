@@ -1,3 +1,5 @@
+import type { ContextAssetType, ExpertRoleId } from './context-ownership'
+
 /**
  * IPC 通信层类型定义
  *
@@ -29,6 +31,21 @@ export interface ApprovalFilter {
 
 export interface ContextFilter {
   type?: string
+  expert_role_id?: string
+  scope?: string
+  ownership_key?: string
+}
+
+export interface ContextAutoClassifyRequest {
+  content: string
+}
+
+export interface ContextAutoClassifyResponse {
+  type: ContextAssetType
+  expert_role_id: ExpertRoleId
+  title: string
+  rawText: string
+  model: string
 }
 
 export interface MetricFilter {

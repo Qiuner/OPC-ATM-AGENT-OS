@@ -3,9 +3,11 @@
 // 对应 PRD 中的 9 张核心数据表
 // ==========================================
 
-// --- Enums ---
+import type { ContextAssetType, ExpertRoleId } from '../../shared/context-ownership';
 
-export type ContextAssetType = 'product' | 'brand' | 'audience' | 'content';
+export type { ContextAssetType, ExpertRoleId } from '../../shared/context-ownership';
+
+// --- Enums ---
 
 export type TaskStatus =
   | 'backlog'
@@ -52,6 +54,9 @@ export interface ContextAsset {
   id: string;
   workspace_id: string;
   type: ContextAssetType;
+  scope: string;
+  expert_role_id: ExpertRoleId;
+  ownership_key: string;
   title: string;
   content: string;
   metadata: Record<string, unknown>;

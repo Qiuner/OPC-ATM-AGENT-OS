@@ -51,13 +51,24 @@ import {
   AlertCircleIcon,
 } from "lucide-react";
 import { getApi } from "@/lib/ipc";
-import type { ContextAsset, ContextAssetType } from "@/types";
+import type { ContextAsset, ContextAssetType, ExpertRoleId } from "@/types";
+import {
+  EXPERT_ROLE_DEFINITIONS,
+  getExpertRoleLabel,
+  getOwnershipKey,
+  getOwnershipScope,
+  isContextAssetType,
+  isExpertRoleId,
+} from "../../shared/context-ownership";
 
 // ---------- Version history type ----------
 interface ContextAssetVersion {
   title: string;
   content: string;
   type: ContextAssetType;
+  scope: string;
+  expert_role_id: ExpertRoleId;
+  ownership_key: string;
   metadata: Record<string, unknown>;
   saved_at: string;
 }
@@ -70,8 +81,7 @@ interface ContextAssetWithVersions extends ContextAsset {
 }
 
 // ---------- Constants ----------
-const tabs: { label: string; value: ContextAssetType | "all" }[] = [
-  { label: "全部", value: "all" },
+const tabs: { label: string; value: ContextAssetType }[] = [
   { label: "产品", value: "product" },
   { label: "品牌", value: "brand" },
   { label: "受众", value: "audience" },
@@ -136,6 +146,7 @@ interface ProductCard {
 interface FormErrors {
   title?: string;
   type?: string;
+  expert_role_id?: string;
   content?: string;
 }
 
@@ -145,13 +156,17 @@ const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const CONTENT_TRUNCATE_LENGTH = 80;
 
 export function ContextVaultPage(): React.JSX.Element {
-  const [activeTab, setActiveTab] = useState<ContextAssetType | "all">("all");
+  const [activeTab, setActiveTab] = useState<ContextAssetType>("product");
+  const [activeExpertRoleId, setActiveExpertRoleId] =
+    useState<ExpertRoleId>(EXPERT_ROLE_DEFINITIONS[0].id);
   const [assets, setAssets] = useState<ContextAssetWithVersions[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] =
     useState<ContextAssetWithVersions | null>(null);
   const [saving, setSaving] = useState(false);
+  const [classifying, setClassifying] = useState(false);
+  const [classifyHint, setClassifyHint] = useState<string | null>(null);
   const [images, setImages] = useState<string[]>([]);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [notification, setNotification] = useState<string | null>(null);
@@ -166,6 +181,10 @@ export function ContextVaultPage(): React.JSX.Element {
     "product-url" | "skills" | "email"
   >("product-url");
   const [productCards, setProductCards] = useState<ProductCard[]>([]);
+  const [sheetTypeValue, setSheetTypeValue] =
+    useState<ContextAssetType>("product");
+  const [sheetExpertRoleValue, setSheetExpertRoleValue] =
+    useState<ExpertRoleId>(EXPERT_ROLE_DEFINITIONS[0].id);
 
   // Email Config state
   const [emailAddress, setEmailAddress] = useState("");
@@ -175,6 +194,7 @@ export function ContextVaultPage(): React.JSX.Element {
 
   const titleRef = useRef<HTMLInputElement>(null);
   const typeRef = useRef<ContextAssetType>("product");
+  const expertRoleRef = useRef<ExpertRoleId>(EXPERT_ROLE_DEFINITIONS[0].id);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
@@ -342,10 +362,10 @@ export function ContextVaultPage(): React.JSX.Element {
     fetchAssets();
   }, [fetchAssets]);
 
-  const filteredAssets =
-    activeTab === "all"
-      ? assets
-      : assets.filter((a) => a.type === activeTab);
+  const filteredAssets = assets.filter(
+    (asset) =>
+      asset.type === activeTab && asset.expert_role_id === activeExpertRoleId
+  );
 
   // ---------- Expand / Collapse ----------
   const toggleExpand = (id: string) => {
@@ -364,14 +384,21 @@ export function ContextVaultPage(): React.JSX.Element {
   const handleOpenSheet = (asset: ContextAssetWithVersions | null) => {
     setSelectedAsset(asset);
     setFormErrors({});
+    setClassifyHint(null);
     if (asset) {
       typeRef.current = asset.type;
+      expertRoleRef.current = asset.expert_role_id;
+      setSheetTypeValue(asset.type);
+      setSheetExpertRoleValue(asset.expert_role_id);
       const savedImages = Array.isArray(asset.metadata?.images)
         ? (asset.metadata.images as string[])
         : [];
       setImages(savedImages);
     } else {
-      typeRef.current = "product";
+      typeRef.current = activeTab;
+      expertRoleRef.current = activeExpertRoleId;
+      setSheetTypeValue(activeTab);
+      setSheetExpertRoleValue(activeExpertRoleId);
       setImages([]);
     }
     setSheetOpen(true);
@@ -384,6 +411,7 @@ export function ContextVaultPage(): React.JSX.Element {
     const content = contentRef.current?.value?.trim();
 
     if (!title) errors.title = "名称不能为空";
+    if (!expertRoleRef.current) errors.expert_role_id = "请选择专家角色";
     if (!content) errors.content = "内容不能为空";
 
     return errors;
@@ -398,6 +426,9 @@ export function ContextVaultPage(): React.JSX.Element {
     const title = titleRef.current?.value?.trim() ?? "";
     const content = contentRef.current?.value?.trim() ?? "";
     const type = typeRef.current;
+    const expertRoleId = expertRoleRef.current;
+    const scope = getOwnershipScope(type, expertRoleId);
+    const ownershipKey = getOwnershipKey(type, expertRoleId);
 
     setSaving(true);
 
@@ -410,6 +441,9 @@ export function ContextVaultPage(): React.JSX.Element {
         title: selectedAsset.title,
         content: selectedAsset.content,
         type: selectedAsset.type,
+        scope: selectedAsset.scope,
+        expert_role_id: selectedAsset.expert_role_id,
+        ownership_key: selectedAsset.ownership_key,
         metadata: { ...selectedAsset.metadata, versions: undefined },
         saved_at: selectedAsset.updated_at,
       };
@@ -431,6 +465,9 @@ export function ContextVaultPage(): React.JSX.Element {
           title,
           content,
           type,
+          scope,
+          expert_role_id: expertRoleId,
+          ownership_key: ownershipKey,
           metadata,
         });
         if (res.success && res.data) {
@@ -447,6 +484,9 @@ export function ContextVaultPage(): React.JSX.Element {
           title,
           content,
           type,
+          scope,
+          expert_role_id: expertRoleId,
+          ownership_key: ownershipKey,
           metadata,
         });
         if (res.success && res.data) {
@@ -464,6 +504,58 @@ export function ContextVaultPage(): React.JSX.Element {
     }
   };
 
+  const handleAutoClassify = useCallback(async () => {
+    const content = contentRef.current?.value?.trim() ?? "";
+
+    if (!content) {
+      setFormErrors((prev) => ({
+        ...prev,
+        content: "请先填写内容，再使用 AI 自动归类",
+      }));
+      return;
+    }
+
+    setClassifying(true);
+    setClassifyHint("AI 正在处理中...");
+    showNotification("AI 正在处理中");
+
+    try {
+      const api = getApi();
+      if (!api) return;
+
+      const res = await api.context.classify(content);
+      if (!res.success || !res.data) {
+        throw new Error(res.error ?? "AI 自动归类失败");
+      }
+
+      const result = res.data;
+      typeRef.current = result.type;
+      expertRoleRef.current = result.expert_role_id;
+      setSheetTypeValue(result.type);
+      setSheetExpertRoleValue(result.expert_role_id);
+
+      if (titleRef.current) {
+        titleRef.current.value = result.title;
+      }
+
+      setFormErrors((prev) => ({
+        ...prev,
+        title: undefined,
+        content: undefined,
+        expert_role_id: undefined,
+      }));
+      setClassifyHint("AI 已完成自动归类并回填表单");
+      showNotification("AI 自动归类成功");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "AI 自动归类失败";
+      setClassifyHint(null);
+      showNotification(message);
+    } finally {
+      setClassifying(false);
+    }
+  }, [showNotification]);
+
   // ---------- JSON Import ----------
   const handleJsonImport = async (file: File) => {
     setImporting(true);
@@ -473,6 +565,7 @@ export function ContextVaultPage(): React.JSX.Element {
 
       const items: Array<{
         type?: string;
+        expert_role_id?: string;
         title?: string;
         content?: string;
         metadata?: Record<string, unknown>;
@@ -484,9 +577,18 @@ export function ContextVaultPage(): React.JSX.Element {
       let successCount = 0;
       for (const item of items) {
         if (!item.type || !item.title || !item.content) continue;
+        const itemType = isContextAssetType(item.type) ? item.type : activeTab;
+        const expertRoleId: ExpertRoleId = isExpertRoleId(
+          item.expert_role_id ?? ""
+        )
+          ? (item.expert_role_id as ExpertRoleId)
+          : activeExpertRoleId;
         try {
           const res = await api.context.create({
-            type: item.type,
+            type: itemType,
+            scope: getOwnershipScope(itemType, expertRoleId),
+            expert_role_id: expertRoleId,
+            ownership_key: getOwnershipKey(itemType, expertRoleId),
             title: item.title,
             content: item.content,
             metadata: item.metadata ?? {},
@@ -546,6 +648,10 @@ export function ContextVaultPage(): React.JSX.Element {
   const formatDate = (dateStr: string) => {
     return dateStr.split("T")[0];
   };
+
+  const activeExpertRoleLabel = getExpertRoleLabel(activeExpertRoleId);
+  const sheetFormKey =
+    selectedAsset?.id ?? `new-${activeTab}-${activeExpertRoleId}`;
 
   return (
     <div className="space-y-6">
@@ -936,28 +1042,70 @@ export function ContextVaultPage(): React.JSX.Element {
       </div>
 
       {/* Tab Filter */}
-      <div
-        className="flex gap-1 rounded-lg p-1"
-        style={{ background: "var(--muted)" }}
-      >
-        {tabs.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => setActiveTab(tab.value)}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-              activeTab === tab.value
-                ? "bg-white/10 text-white shadow-sm font-medium"
-                : "hover:text-white/80"
-            }`}
-            style={
-              activeTab !== tab.value
-                ? { color: "var(--muted-foreground)" }
-                : undefined
-            }
+      <div className="space-y-3">
+        <div>
+          <p
+            className="mb-2 text-xs font-medium uppercase tracking-[0.12em]"
+            style={{ color: "var(--muted-foreground)" }}
           >
-            {tab.label}
-          </button>
-        ))}
+            一级类目
+          </p>
+          <div
+            className="flex gap-1 rounded-lg p-1"
+            style={{ background: "var(--muted)" }}
+          >
+            {tabs.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  activeTab === tab.value
+                    ? "bg-white/10 text-white shadow-sm font-medium"
+                    : "hover:text-white/80"
+                }`}
+                style={
+                  activeTab !== tab.value
+                    ? { color: "var(--muted-foreground)" }
+                    : undefined
+                }
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p
+            className="mb-2 text-xs font-medium uppercase tracking-[0.12em]"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            专家角色
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {EXPERT_ROLE_DEFINITIONS.map((role) => (
+              <button
+                key={role.id}
+                onClick={() => setActiveExpertRoleId(role.id)}
+                className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                  activeExpertRoleId === role.id
+                    ? "border-[#a78bfa] bg-[#a78bfa]/15 text-white"
+                    : "hover:border-white/20 hover:text-white/80"
+                }`}
+                style={
+                  activeExpertRoleId !== role.id
+                    ? {
+                        borderColor: "var(--border)",
+                        color: "var(--muted-foreground)",
+                      }
+                    : undefined
+                }
+              >
+                {role.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Asset List */}
@@ -978,7 +1126,7 @@ export function ContextVaultPage(): React.JSX.Element {
               className="px-4 py-8 text-center text-sm"
               style={{ color: "var(--muted-foreground)" }}
             >
-              暂无数据
+              当前“{typeLabels[activeTab]} + {activeExpertRoleLabel}”下暂无数据
             </div>
           ) : (
             filteredAssets.map((asset, idx) => {
@@ -1081,6 +1229,12 @@ export function ContextVaultPage(): React.JSX.Element {
                         className={config.badgeClass}
                       >
                         {typeLabels[asset.type]}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="border-white/[0.12] bg-white/[0.04] text-white"
+                      >
+                        {getExpertRoleLabel(asset.expert_role_id)}
                       </Badge>
                       {imgs.length > 0 && (
                         <Badge
@@ -1192,6 +1346,12 @@ export function ContextVaultPage(): React.JSX.Element {
                   >
                     {typeLabels[ver.type]}
                   </Badge>
+                  <Badge
+                    variant="outline"
+                    className="ml-2 border-white/[0.12] bg-white/[0.04] text-white"
+                  >
+                    {getExpertRoleLabel(ver.expert_role_id)}
+                  </Badge>
                   <p
                     className="text-xs whitespace-pre-wrap mt-1"
                     style={{ color: "var(--muted-foreground)" }}
@@ -1226,13 +1386,51 @@ export function ContextVaultPage(): React.JSX.Element {
                 className="text-sm font-medium"
                 style={{ color: "var(--muted-foreground)" }}
               >
+                专家角色 <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={sheetExpertRoleValue}
+                onValueChange={(v) => {
+                  const nextValue = v as ExpertRoleId;
+                  expertRoleRef.current = nextValue;
+                  setSheetExpertRoleValue(nextValue);
+                  if (formErrors.expert_role_id)
+                    setFormErrors((prev) => ({
+                      ...prev,
+                      expert_role_id: undefined,
+                    }));
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="选择专家角色" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPERT_ROLE_DEFINITIONS.map((role) => (
+                    <SelectItem key={role.id} value={role.id}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formErrors.expert_role_id && (
+                <p className="text-xs text-red-500">
+                  {formErrors.expert_role_id}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label
+                className="text-sm font-medium"
+                style={{ color: "var(--muted-foreground)" }}
+              >
                 名称 <span className="text-red-500">*</span>
               </label>
               <Input
                 ref={titleRef}
                 placeholder="资产名称"
                 defaultValue={selectedAsset?.title ?? ""}
-                key={selectedAsset?.id ?? "new"}
+                key={`${sheetFormKey}-title`}
                 className={formErrors.title ? "border-red-500" : ""}
                 onChange={() => {
                   if (formErrors.title)
@@ -1255,11 +1453,12 @@ export function ContextVaultPage(): React.JSX.Element {
                 类型 <span className="text-red-500">*</span>
               </label>
               <Select
-                defaultValue={selectedAsset?.type ?? "product"}
+                value={sheetTypeValue}
                 onValueChange={(v) => {
-                  typeRef.current = v as ContextAssetType;
+                  const nextValue = v as ContextAssetType;
+                  typeRef.current = nextValue;
+                  setSheetTypeValue(nextValue);
                 }}
-                key={selectedAsset?.id ?? "new-select"}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="选择类型" />
@@ -1274,18 +1473,34 @@ export function ContextVaultPage(): React.JSX.Element {
             </div>
 
             <div className="space-y-1.5">
-              <label
-                className="text-sm font-medium"
-                style={{ color: "var(--muted-foreground)" }}
-              >
-                内容 <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between gap-3">
+                <label
+                  className="text-sm font-medium"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  内容 <span className="text-red-500">*</span>
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAutoClassify}
+                  disabled={classifying}
+                  className="border-white/[0.08] bg-transparent hover:bg-white/5"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  {classifying ? (
+                    <Loader2Icon className="size-4 mr-1.5 animate-spin" />
+                  ) : null}
+                  {classifying ? "AI 正在处理中" : "AI 自动归类"}
+                </Button>
+              </div>
               <Textarea
                 ref={contentRef}
                 placeholder="输入资产详细内容..."
                 className={`min-h-[200px] resize-y ${formErrors.content ? "border-red-500" : ""}`}
                 defaultValue={selectedAsset?.content ?? ""}
-                key={selectedAsset?.id ?? "new-content"}
+                key={`${sheetFormKey}-content`}
                 onChange={() => {
                   if (formErrors.content)
                     setFormErrors((prev) => ({
@@ -1297,6 +1512,14 @@ export function ContextVaultPage(): React.JSX.Element {
               {formErrors.content && (
                 <p className="text-xs text-red-500">
                   {formErrors.content}
+                </p>
+              )}
+              {classifyHint && !formErrors.content && (
+                <p
+                  className="text-xs"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  {classifyHint}
                 </p>
               )}
             </div>
@@ -1311,9 +1534,13 @@ export function ContextVaultPage(): React.JSX.Element {
               <Input
                 placeholder="用逗号分隔多个标签"
                 defaultValue={
-                  selectedAsset ? typeLabels[selectedAsset.type] : ""
+                  selectedAsset
+                    ? `${typeLabels[selectedAsset.type]}, ${getExpertRoleLabel(
+                        selectedAsset.expert_role_id
+                      )}`
+                    : `${typeLabels[activeTab]}, ${activeExpertRoleLabel}`
                 }
-                key={selectedAsset?.id ?? "new-tags"}
+                key={`${sheetFormKey}-tags`}
               />
             </div>
 

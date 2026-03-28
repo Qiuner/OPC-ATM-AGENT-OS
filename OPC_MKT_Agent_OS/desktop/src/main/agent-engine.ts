@@ -218,7 +218,7 @@ export function abortAgent(): void {
  */
 export async function executeAgent(
   request: AgentExecuteRequest
-): Promise<{ success: boolean; result?: string; error?: string; sessionId?: string; cost?: number }> {
+): Promise<{ success: boolean; result?: string; error?: string; sessionId?: string; cost?: number; imageUrls?: string[] }> {
   const agent = getAgentDef(request.agentId)
   if (!agent) {
     return { success: false, error: `Unknown agent: ${request.agentId}` }

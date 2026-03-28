@@ -3,7 +3,8 @@
  * 与 renderer/types/index.ts 保持一致
  */
 
-export type ContextAssetType = 'product' | 'brand' | 'audience' | 'content'
+import type { ContextAssetType, ExpertRoleId } from '../shared/context-ownership'
+
 export type TaskStatus = 'backlog' | 'draft' | 'review' | 'approved' | 'scheduled' | 'published'
 export type ContentStatus = 'draft' | 'review' | 'approved' | 'rejected' | 'published'
 export type AgentRunStatus = 'pending' | 'running' | 'success' | 'failed'
@@ -58,6 +59,9 @@ export interface ContextAsset {
   id: string
   workspace_id: string
   type: ContextAssetType
+  scope: string
+  expert_role_id: ExpertRoleId
+  ownership_key: string
   title: string
   content: string
   metadata: Record<string, unknown>
