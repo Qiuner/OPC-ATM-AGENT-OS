@@ -11,7 +11,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { getApi } from '@/lib/ipc'
 import {
-  ChevronRight, ChevronLeft, Check, Eye, EyeOff,
+  ChevronRight, ChevronLeft, Check,
   Loader2, RefreshCw, CheckCircle2, XCircle,
 } from 'lucide-react'
 
@@ -38,10 +38,13 @@ interface OnboardingProps {
 const TOTAL_STEPS = 5
 
 const PROVIDERS = [
-  { id: 'claude', name: 'Claude', desc: 'Anthropic', color: '#d97706' },
-  { id: 'openai', name: 'OpenAI', desc: 'GPT-4o', color: '#10b981' },
-  { id: 'gemini', name: 'Gemini', desc: 'Google', color: '#3b82f6' },
-  { id: 'deepseek', name: 'DeepSeek', desc: 'DeepSeek', color: '#8b5cf6' },
+  { id: 'anthropic', name: 'Anthropic', color: '#d97706' },
+  { id: 'openai', name: 'OpenAI', color: '#10b981' },
+  { id: 'gemini', name: 'Gemini', color: '#3b82f6' },
+  { id: 'deepseek', name: 'DeepSeek', color: '#8b5cf6' },
+  { id: 'meta', name: 'Meta', color: '#1877f2' },
+  { id: 'mistral', name: 'Mistral', color: '#f97316' },
+  { id: 'xai', name: 'xAI', color: '#a3a3a3' },
 ] as const
 
 const INDUSTRIES = [
@@ -354,35 +357,33 @@ function StepEnvCheck({ onNext, onBack }: {
 
 // ── Step 3: API Key (skippable) ──
 
-function StepApiKey({ onNext, onSkip, onBack }: {
+function StepApiKey({ onNext, onBack }: {
   onNext: (provider: string, key: string) => void
-  onSkip: () => void
   onBack: () => void
 }): React.JSX.Element {
-  const [selected, setSelected] = useState('claude')
+  const [selected, setSelected] = useState<string>('anthropic')
+  const [activeTab, setActiveTab] = useState<'invite' | 'apikey'>('invite')
+  const [inviteCode, setInviteCode] = useState('')
   const [apiKey, setApiKey] = useState('')
-  const [showKey, setShowKey] = useState(false)
   const [validating, setValidating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const selectedProvider = PROVIDERS.find((p) => p.id === selected)
+
   const handleNext = useCallback(async () => {
-    if (!apiKey.trim()) {
-      setError('Please enter your API key')
+    if (activeTab === 'invite') {
+      if (!inviteCode.trim()) { setError('请输入邀请码'); return }
+      onNext(selected, inviteCode.trim())
       return
     }
-
+    if (!apiKey.trim()) { setError('请输入 API Key'); return }
     setValidating(true)
     setError(null)
-
     try {
       const api = getApi()
       if (api) {
         const res = await api.keys.set(selected, apiKey.trim())
-        if (!res.success) {
-          setError(res.error ?? 'Failed to save API key')
-          setValidating(false)
-          return
-        }
+        if (!res.success) { setError(res.error ?? 'Failed to save API key'); setValidating(false); return }
       }
       await new Promise((r) => setTimeout(r, 500))
       onNext(selected, apiKey.trim())
@@ -391,91 +392,141 @@ function StepApiKey({ onNext, onSkip, onBack }: {
     } finally {
       setValidating(false)
     }
-  }, [selected, apiKey, onNext])
+  }, [selected, activeTab, inviteCode, apiKey, onNext])
 
   return (
     <div className="py-6" style={{ animation: 'onb-slide-in 300ms ease-out' }}>
-      <div className="text-center mb-6">
+      {/* Header */}
+      <div className="text-center mb-5">
         <p className="text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>
           Step 3 / {TOTAL_STEPS}
         </p>
-        <h2 className="text-lg font-semibold text-foreground">Configure AI Engine</h2>
+        <h2 className="text-xl font-semibold text-foreground">激活 AI 员工</h2>
         <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>
-          Select your AI provider and enter the API key
+          选择厂商并完成配置
         </p>
       </div>
 
-      {/* Provider selection */}
-      <div className="grid grid-cols-2 gap-2 mb-5">
-        {PROVIDERS.map((p) => (
+      {/* Tabs */}
+      <div className="flex w-full border-b mb-5" style={{ borderColor: 'var(--border)' }}>
+        {(['invite', 'apikey'] as const).map((tab) => (
           <button
-            key={p.id}
-            onClick={() => { setSelected(p.id); setError(null) }}
-            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all"
+            key={tab}
+            onClick={() => { setActiveTab(tab); setError(null) }}
+            className="flex-1 pb-2 text-sm font-medium text-center transition-colors relative"
             style={{
-              background: selected === p.id ? 'rgba(167,139,250,0.1)' : 'var(--muted)',
-              border: `1px solid ${selected === p.id ? 'rgba(167,139,250,0.3)' : 'var(--border)'}`,
+              color: activeTab === tab ? '#7C3AED' : 'var(--muted-foreground)',
+              background: 'none',
+              border: 'none',
             }}
           >
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-              style={{ background: `${p.color}20`, color: p.color }}
-            >
-              {p.name[0]}
-            </div>
-            <div>
-              <div className="text-sm font-medium text-white">{p.name}</div>
-              <div className="text-[10px]" style={{ color: 'var(--muted-foreground)' }}>{p.desc}</div>
-            </div>
+            {tab === 'invite' ? '使用邀请码' : '使用 API Key'}
+            {activeTab === tab && (
+              <span
+                className="absolute bottom-0 left-0 right-0 h-0.5"
+                style={{ background: '#7C3AED' }}
+              />
+            )}
           </button>
         ))}
       </div>
 
-      {/* API Key input */}
-      <div className="relative mb-2">
-        <input
-          type={showKey ? 'text' : 'password'}
-          value={apiKey}
-          onChange={(e) => { setApiKey(e.target.value); setError(null) }}
-          placeholder={`${PROVIDERS.find((p) => p.id === selected)?.name} API Key`}
-          className="w-full rounded-xl px-4 py-2.5 pr-10 text-sm text-white outline-none transition-colors"
-          style={{
-            background: 'var(--muted)',
-            border: `1px solid ${error ? 'rgba(239,68,68,0.5)' : 'var(--border)'}`,
-          }}
-          onFocus={(e) => {
-            if (!error) e.currentTarget.style.borderColor = 'rgba(167,139,250,0.5)'
-          }}
-          onBlur={(e) => {
-            if (!error) e.currentTarget.style.borderColor = 'var(--border)'
-          }}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleNext() }}
-        />
-        <button
-          onClick={() => setShowKey(!showKey)}
-          className="absolute right-3 top-1/2 -translate-y-1/2"
-          style={{ color: 'var(--muted-foreground)' }}
-        >
-          {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
-        </button>
-      </div>
-
-      {error && (
-        <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{error}</p>
+      {/* Provider grid — only shown in API Key tab */}
+      {activeTab === 'apikey' && (
+        <div className="grid grid-cols-4 gap-1.5 mb-4">
+        {PROVIDERS.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => { setSelected(p.id); setError(null) }}
+            className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg transition-all"
+            style={{
+              background: selected === p.id ? 'rgba(124,58,237,0.15)' : 'var(--muted)',
+              border: `2px solid ${selected === p.id ? '#7C3AED' : 'transparent'}`,
+            }}
+          >
+            <div
+              className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold"
+              style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)' }}
+            >
+              {p.name[0]}
+            </div>
+            <span className="text-[9px] font-medium" style={{ color: selected === p.id ? '#a78bfa' : 'var(--muted-foreground)' }}>
+              {p.name}
+            </span>
+          </button>
+        ))}
+        </div>
       )}
 
-      <p className="text-[10px] mb-1" style={{ color: 'var(--muted-foreground)' }}>
-        Your key is encrypted via OS Keychain and never leaves this device.
-      </p>
+      {/* Input area */}
+      {activeTab === 'invite' ? (
+        <div className="mb-4">
+          <p className="text-xs text-center mb-3" style={{ color: 'var(--muted-foreground)' }}>
+            请输入您的 {selectedProvider?.name} 专属邀请码以完成激活
+          </p>
+          <input
+            type="text"
+            value={inviteCode}
+            onChange={(e) => { setInviteCode(e.target.value); setError(null) }}
+            placeholder="XXXX-XXXX-XXXX"
+            className="w-full rounded-xl px-4 py-2.5 text-sm text-center text-white outline-none transition-colors"
+            style={{
+              background: 'var(--muted)',
+              border: `1px solid ${error ? 'rgba(239,68,68,0.5)' : 'transparent'}`,
+              letterSpacing: '0.1em',
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)' }}
+            onBlur={(e) => { if (!error) e.currentTarget.style.borderColor = 'transparent' }}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleNext() }}
+          />
+        </div>
+      ) : (
+        <div className="mb-4">
+          <p className="text-xs text-center mb-3" style={{ color: 'var(--muted-foreground)' }}>
+            请输入您的 {selectedProvider?.name} API Key 以完成配置
+          </p>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => { setApiKey(e.target.value); setError(null) }}
+            placeholder={`${selectedProvider?.name} API Key`}
+            className="w-full rounded-xl px-4 py-2.5 text-sm text-white outline-none transition-colors"
+            style={{
+              background: 'var(--muted)',
+              border: `1px solid ${error ? 'rgba(239,68,68,0.5)' : 'transparent'}`,
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)' }}
+            onBlur={(e) => { if (!error) e.currentTarget.style.borderColor = 'transparent' }}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleNext() }}
+          />
+        </div>
+      )}
 
-      <NavFooter
-        step={2}
-        onBack={onBack}
-        onSkip={onSkip}
-        onNext={handleNext}
-        nextLabel={validating ? 'Saving...' : 'Next'}
-        nextLoading={validating}
-      />
+      {error && <p className="text-xs mb-3 text-center" style={{ color: '#ef4444' }}>{error}</p>}
+
+      {/* Nav footer */}
+      <div className="flex items-center justify-between mt-4">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 text-sm transition-colors"
+          style={{ color: 'var(--muted-foreground)', background: 'none', border: 'none' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--foreground)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-foreground)' }}
+        >
+          <ChevronLeft size={14} /> Back
+        </button>
+        <button
+          onClick={handleNext}
+          disabled={validating}
+          className="flex items-center gap-1.5 rounded-xl px-5 py-2 text-sm font-medium text-white transition-colors"
+          style={{ background: validating ? 'rgba(124,58,237,0.5)' : '#7C3AED', border: 'none' }}
+          onMouseEnter={(e) => { if (!validating) e.currentTarget.style.background = '#6D28D9' }}
+          onMouseLeave={(e) => { if (!validating) e.currentTarget.style.background = '#7C3AED' }}
+        >
+          {validating ? <Loader2 size={14} className="animate-spin" /> : null}
+          确认激活 <ChevronRight size={14} />
+        </button>
+      </div>
     </div>
   )
 }
@@ -686,10 +737,6 @@ export function OnboardingPage({ onComplete }: OnboardingProps): React.JSX.Eleme
     setStep(3) // → Brand Setup
   }, [])
 
-  const handleApiKeySkip = useCallback(() => {
-    setStep(3) // → Brand Setup without saving key
-  }, [])
-
   const handleBrandNext = useCallback((b: BrandData) => {
     setBrand(b)
     setStep(4) // → Complete
@@ -742,7 +789,6 @@ export function OnboardingPage({ onComplete }: OnboardingProps): React.JSX.Eleme
         {step === 2 && (
           <StepApiKey
             onNext={handleApiKeyNext}
-            onSkip={handleApiKeySkip}
             onBack={() => setStep(1)}
           />
         )}
