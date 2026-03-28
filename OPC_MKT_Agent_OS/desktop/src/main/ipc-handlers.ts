@@ -26,6 +26,7 @@ import {
   clearAgentSession,
   type AgentExecuteRequest,
 } from './agent-engine'
+import { playSoundEffect, speak, playDirectSound, speakDirect, type SoundEvent } from './sound-notify'
 import {
   executeOrchestrator,
   abortOrchestrator,
@@ -949,6 +950,97 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     return { success: true }
   })
 
+  // ── File: Read Image ──
+
+  handle(IPC.FILE_READ_IMAGE, async (data: { path: string }): Promise<IpcResponse<{ dataUrl: string } | null>> => {
+    const { readFile } = await import('node:fs/promises')
+    const { existsSync } = await import('node:fs')
+    const { resolve, extname } = await import('node:path')
+
+    // Resolve relative paths — try multiple base directories
+    let filePath = data.path
+    if (!filePath.startsWith('/')) {
+      const { join: joinPath } = await import('node:path')
+      // Try engine dir first (where agents run), then project root
+      const candidates = [
+        resolve(__dirname, '../../..', 'engine', filePath),
+        resolve(__dirname, '../../../..', 'engine', filePath),
+        resolve(process.cwd(), filePath),
+        resolve(process.cwd(), 'engine', filePath),
+      ]
+      const found = candidates.find(c => existsSync(c))
+      if (found) {
+        filePath = found
+      } else {
+        console.warn('[FILE_READ_IMAGE] Not found, tried:', candidates)
+        return { success: false, error: `File not found: ${data.path}` }
+      }
+    } else if (!existsSync(filePath)) {
+      return { success: false, error: `File not found: ${filePath}` }
+    }
+
+    console.log('[FILE_READ_IMAGE] Loading:', filePath)
+
+    const ext = extname(filePath).toLowerCase()
+    const mimeMap: Record<string, string> = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+    }
+    const mime = mimeMap[ext] || 'image/png'
+
+    const buffer = await readFile(filePath)
+    const base64 = buffer.toString('base64')
+    return { success: true, data: { dataUrl: `data:${mime};base64,${base64}` } }
+  })
+
+  // ── Sound Notify ──
+
+  handle(IPC.SOUND_GET_SETTINGS, (): IpcResponse => {
+    const settings = getSettingValue('soundNotify')
+    return { success: true, data: settings }
+  })
+
+  handle(IPC.SOUND_UPDATE_SETTINGS, (data: Partial<{
+    enabled: boolean
+    mode: 'milestone' | 'full' | 'completion'
+    volume: number
+    voiceEnabled: boolean
+    voiceName: string
+  }>): IpcResponse => {
+    const current = getSettingValue('soundNotify')
+    const updated = { ...current, ...data }
+    setSettingValue('soundNotify', updated)
+    return { success: true, data: updated }
+  })
+
+  handle(IPC.SOUND_TOGGLE, (): IpcResponse<{ enabled: boolean }> => {
+    const current = getSettingValue('soundNotify')
+    const newEnabled = !current.enabled
+    console.log('[IPC] SOUND_TOGGLE:', current.enabled, '->', newEnabled)
+    setSettingValue('soundNotify', { ...current, enabled: newEnabled })
+    // Play a confirmation sound when enabling
+    if (newEnabled) {
+      playDirectSound('notify')
+    }
+    return { success: true, data: { enabled: newEnabled } }
+  })
+
+  handle(IPC.SOUND_PLAY, (data: { event: string }): IpcResponse => {
+    console.log('[IPC] SOUND_PLAY received:', data)
+    playDirectSound(data.event as SoundEvent)
+    return { success: true }
+  })
+
+  handle(IPC.SOUND_SPEAK, (data: { message: string }): IpcResponse => {
+    console.log('[IPC] SOUND_SPEAK received:', data)
+    speakDirect(data.message)
+    return { success: true }
+  })
+
   // ── Orchestrator (CEO Multi-Agent) ──
 
   handle(IPC.ORCHESTRATOR_EXECUTE, async (data: {
@@ -968,9 +1060,11 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
       },
       (event: OrchestratorEvent) => {
         // Broadcast events to all renderer windows
+        // Sound notifications for orchestrator events
         switch (event.type) {
           case 'plan':
             broadcastToAll(IPC.ORCHESTRATOR_PLAN, { plan: event.plan, agentIds: event.agentIds })
+            playSoundEffect('plan_ready', '编排计划已生成，开始分配任务')
             break
           case 'agents-selected': {
             // Sync selected agents to dock pet + header
@@ -989,6 +1083,7 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
               name: event.name,
               task: event.task,
             })
+            playSoundEffect('sub_agent_start', `${event.name} 开始执行任务`)
             // Sync sub-agent to dock pet + header on every sub-start
             const currentIds = (getSettingValue('teamAgentIds') as string[] | undefined) ?? ['ceo']
             if (!currentIds.includes(event.agentId)) {
@@ -1013,12 +1108,14 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
               agentId: event.agentId,
               result: event.result,
             })
+            playSoundEffect('sub_agent_done', `${event.agentId} 任务完成`)
             break
           case 'sub-error':
             broadcastToAll(IPC.ORCHESTRATOR_SUB_ERROR, {
               agentId: event.agentId,
               error: event.error,
             })
+            playSoundEffect('error', `${event.agentId} 执行出错`)
             break
           case 'progress':
             broadcastToAll(IPC.ORCHESTRATOR_PROGRESS, {
@@ -1029,9 +1126,11 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
             break
           case 'result':
             broadcastToAll(IPC.ORCHESTRATOR_RESULT, { result: event.result })
+            playSoundEffect('agent_done', '全部任务已完成')
             break
           case 'error':
             broadcastToAll(IPC.ORCHESTRATOR_ERROR, { message: event.message })
+            playSoundEffect('error', '执行出错，请检查')
             break
           case 'status':
             broadcastToAll(IPC.ORCHESTRATOR_STATUS_CHANGE, { status: event.status })

@@ -68,6 +68,14 @@ interface AppSettings {
       lastLoginAt?: string
     }
   }
+  /** 音效通知设置 */
+  soundNotify: {
+    enabled: boolean
+    mode: 'milestone' | 'full' | 'completion'
+    volume: number       // 0-100
+    voiceEnabled: boolean // TTS 语音播报
+    voiceName: string     // macOS say voice name
+  }
 }
 
 const defaults: AppSettings = {
@@ -81,6 +89,13 @@ const defaults: AppSettings = {
   theme: 'dark',
   onboardingCompleted: false,
   teamAgentIds: ['ceo', 'xhs-agent', 'growth-agent', 'brand-reviewer'],
+  soundNotify: {
+    enabled: false,
+    mode: 'milestone',
+    volume: 70,
+    voiceEnabled: false,
+    voiceName: 'Lili',
+  },
 }
 
 const store = new Store<AppSettings>({
@@ -102,6 +117,7 @@ export function getAppSettings(): AppSettings {
     brand: store.get('brand'),
     teamAgentIds: store.get('teamAgentIds'),
     platformAuth: store.get('platformAuth'),
+    soundNotify: store.get('soundNotify'),
   }
 }
 

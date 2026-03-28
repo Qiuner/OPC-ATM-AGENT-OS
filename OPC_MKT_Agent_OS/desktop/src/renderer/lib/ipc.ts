@@ -110,6 +110,22 @@ interface WindowApi {
     setMouseForward(ignore: boolean): Promise<IpcResponse>
     onPopoverAgent(callback: (data: { agentId: string }) => void): () => void
   }
+  file: {
+    readImage(path: string): Promise<IpcResponse<{ dataUrl: string }>>
+  }
+  soundNotify: {
+    getSettings(): Promise<IpcResponse<{
+      enabled: boolean
+      mode: 'milestone' | 'full' | 'completion'
+      volume: number
+      voiceEnabled: boolean
+      voiceName: string
+    }>>
+    updateSettings(data: Record<string, unknown>): Promise<IpcResponse>
+    toggle(): Promise<IpcResponse<{ enabled: boolean }>>
+    play(event: string): Promise<IpcResponse>
+    speak(message: string): Promise<IpcResponse>
+  }
   onboarding: {
     status(): Promise<IpcResponse<{ completed: boolean; hasApiKey: boolean }>>
     complete(data: Record<string, unknown>): Promise<IpcResponse>

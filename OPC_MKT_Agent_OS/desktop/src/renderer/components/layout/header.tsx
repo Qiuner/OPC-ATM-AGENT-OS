@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Sun, Moon, Monitor } from 'lucide-react'
+import { Bell, Sun, Moon, Monitor, Volume2, VolumeX } from 'lucide-react'
 import { getApi } from '@/lib/ipc'
 import { useTheme } from '@/hooks/use-theme'
 import type { Task } from '@/types'
@@ -301,6 +301,7 @@ export function Header(): React.JSX.Element {
     plan?: string
   }>({ isRunning: false, ceoStatus: 'idle' })
   const [reviewCount, setReviewCount] = useState(0)
+  const [soundEnabled, setSoundEnabled] = useState(false)
   const [themeMenuOpen, setThemeMenuOpen] = useState(false)
   const themeMenuRef = useRef<HTMLDivElement>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -322,12 +323,13 @@ export function Header(): React.JSX.Element {
     if (!api) return
     try {
       // Real-time agent status (same source as Dock Pet)
-      const [statusRes, teamRes, tasksRes, contentsRes, orchRes] = await Promise.all([
+      const [statusRes, teamRes, tasksRes, contentsRes, orchRes, soundRes] = await Promise.all([
         api.agent.status(),
         api.team.getAgents(),
         api.tasks.list(),
         api.contents.list({ status: 'review' }),
         api.orchestrator?.status().catch(() => null),
+        api.soundNotify?.getSettings().catch(() => null),
       ])
 
       if (statusRes.success && statusRes.data) {
@@ -384,6 +386,11 @@ export function Header(): React.JSX.Element {
         setOrchState({ isRunning: od.isRunning, ceoStatus: od.ceoStatus, plan: od.plan })
       } else {
         setOrchState({ isRunning: false, ceoStatus: 'idle' })
+      }
+      // Sound state
+      if (soundRes && soundRes.success && soundRes.data) {
+        const sd = soundRes.data as { enabled: boolean }
+        setSoundEnabled(sd.enabled)
       }
     } catch {
       // silently ignore
@@ -476,6 +483,27 @@ export function Header(): React.JSX.Element {
             <Bell className="h-[18px] w-[18px] text-foreground/40 hover:text-foreground/70 transition-colors" />
             {reviewCount > 0 && (
               <div className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500" />
+            )}
+          </button>
+
+          {/* Sound toggle */}
+          <button
+            className="relative h-8 w-8 flex items-center justify-center rounded-lg transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
+            onClick={async () => {
+              const api = getApi()
+              if (!api) return
+              const res = await api.soundNotify.toggle()
+              if (res.success && res.data) {
+                const d = res.data as { enabled: boolean }
+                setSoundEnabled(d.enabled)
+              }
+            }}
+            title={soundEnabled ? '关闭音效' : '开启音效'}
+          >
+            {soundEnabled ? (
+              <Volume2 className="h-[18px] w-[18px] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors" />
+            ) : (
+              <VolumeX className="h-[18px] w-[18px] text-foreground/40 hover:text-foreground/70 transition-colors" />
             )}
           </button>
 

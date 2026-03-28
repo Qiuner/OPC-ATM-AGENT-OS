@@ -267,6 +267,26 @@ const api = {
     },
   },
 
+  /** File access */
+  file: {
+    readImage: (path: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.FILE_READ_IMAGE, { path }),
+  },
+
+  /** Sound Notify */
+  soundNotify: {
+    getSettings: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.SOUND_GET_SETTINGS),
+    updateSettings: (data: Record<string, unknown>): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.SOUND_UPDATE_SETTINGS, data),
+    toggle: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.SOUND_TOGGLE),
+    play: (event: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.SOUND_PLAY, { event }),
+    speak: (message: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.SOUND_SPEAK, { message }),
+  },
+
   /** Onboarding */
   onboarding: {
     status: (): Promise<IpcResponse> =>

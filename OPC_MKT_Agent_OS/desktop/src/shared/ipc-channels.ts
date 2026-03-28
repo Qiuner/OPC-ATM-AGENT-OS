@@ -124,10 +124,20 @@ export const IPC = {
   DOCK_PET_MOUSE_FORWARD: 'dock-pet:mouse-forward',
   DOCK_PET_POPOVER_AGENT: 'dock-pet:popover-agent',
 
+  // ── File (local file access) ──
+  FILE_READ_IMAGE: 'fs:file:read-image',
+
   // ── Orchestrator (CEO Multi-Agent) ──
   ORCHESTRATOR_EXECUTE: 'orchestrator:execute',
   ORCHESTRATOR_ABORT: 'orchestrator:abort',
   ORCHESTRATOR_STATUS: 'orchestrator:status',
+
+  // ── Sound Notify ──
+  SOUND_GET_SETTINGS: 'sound:settings:get',
+  SOUND_UPDATE_SETTINGS: 'sound:settings:update',
+  SOUND_TOGGLE: 'sound:toggle',
+  SOUND_PLAY: 'sound:play',
+  SOUND_SPEAK: 'sound:speak',
 
   // ── Orchestrator Events (main → renderer push) ──
   ORCHESTRATOR_PLAN: 'orchestrator:plan',

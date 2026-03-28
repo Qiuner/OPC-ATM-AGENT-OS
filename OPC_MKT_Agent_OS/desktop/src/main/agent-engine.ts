@@ -19,6 +19,7 @@ import { BrowserWindow } from 'electron'
 import { getApiKey } from './safe-storage'
 import { IPC } from '../shared/ipc-channels'
 import { isOrchestratorRunning, getSubAgentStatuses } from './orchestrator-engine'
+import { playSoundEffect } from './sound-notify'
 
 // ── .env 文件加载 ──
 
@@ -314,6 +315,7 @@ export async function executeAgent(
       signal: activeAbort.signal,
     })
     console.log('[AgentEngine] claude process spawned, pid:', activeProcess.pid)
+    playSoundEffect('agent_start')
   } catch (err) {
     activeProcess = null
     activeAbort = null
@@ -414,9 +416,11 @@ export async function executeAgent(
         const errMsg = stderrChunks.join('').slice(0, 500) || `claude process exited with code ${code}`
         console.error('[AgentEngine] execution failed:', errMsg)
         sendChunk(request.agentId, { type: 'error', message: errMsg })
+        playSoundEffect('error', 'Agent 执行出错')
         finish({ success: false, error: errMsg })
       } else {
         console.log('[AgentEngine] execution succeeded, result length:', finalResult.length, 'images:', capturedImageUrls.length)
+        playSoundEffect('agent_done', 'Agent 任务完成')
         finish({ success: true, result: finalResult, sessionId, cost: totalCost, imageUrls: capturedImageUrls })
       }
     })
@@ -448,6 +452,7 @@ function processStreamEvent(event: StreamJsonEvent, agentId: string): void {
               tool: (block.name || '') as string,
               toolInput: JSON.stringify(block.input || {}).slice(0, 500),
             })
+            playSoundEffect('tool_call')
           }
         }
       }

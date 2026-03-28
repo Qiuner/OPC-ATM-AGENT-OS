@@ -11,6 +11,8 @@ import {
   LogIn,
   LogOut,
   RefreshCw,
+  Volume2,
+  VolumeX,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -70,6 +72,21 @@ export function SettingsPage(): React.JSX.Element {
   const [keyVisible, setKeyVisible] = useState<Record<string, boolean>>({})
   const [keySaving, setKeySaving] = useState<string | null>(null)
 
+  // Sound notify
+  const [soundSettings, setSoundSettings] = useState<{
+    enabled: boolean
+    mode: 'milestone' | 'full' | 'completion'
+    volume: number
+    voiceEnabled: boolean
+    voiceName: string
+  }>({
+    enabled: false,
+    mode: 'milestone',
+    volume: 70,
+    voiceEnabled: false,
+    voiceName: 'Lili',
+  })
+
   const [loading, setLoading] = useState(true)
 
   // ── Load initial state ──
@@ -82,9 +99,10 @@ export function SettingsPage(): React.JSX.Element {
     }
 
     try {
-      const [authRes, keysRes] = await Promise.all([
+      const [authRes, keysRes, soundRes] = await Promise.all([
         api.platformAuth.status(),
         api.keys.getStatus(),
+        api.soundNotify?.getSettings().catch(() => null),
       ])
 
       if (authRes.success && authRes.data) {
@@ -92,6 +110,9 @@ export function SettingsPage(): React.JSX.Element {
       }
       if (keysRes.success && keysRes.data) {
         setKeyStatus(keysRes.data)
+      }
+      if (soundRes && soundRes.success && soundRes.data) {
+        setSoundSettings(soundRes.data as typeof soundSettings)
       }
     } catch (err) {
       console.error('[Settings] Failed to load state:', err)
@@ -168,6 +189,28 @@ export function SettingsPage(): React.JSX.Element {
 
     await api.keys.delete(providerId)
     setKeyStatus(prev => ({ ...prev, [providerId]: false }))
+  }
+
+  // ── Sound Notify Handlers ──
+
+  const handleSoundUpdate = async (data: Partial<typeof soundSettings>) => {
+    const api = getApi()
+    if (!api) return
+    const updated = { ...soundSettings, ...data }
+    setSoundSettings(updated)
+    await api.soundNotify.updateSettings(data)
+  }
+
+  const handleTestSound = async (event: string) => {
+    const api = getApi()
+    if (!api) return
+    await api.soundNotify.play(event)
+  }
+
+  const handleTestVoice = async () => {
+    const api = getApi()
+    if (!api) return
+    await api.soundNotify.speak('你好，音效通知已开启')
   }
 
   // ── Render ──
@@ -295,7 +338,196 @@ export function SettingsPage(): React.JSX.Element {
           )}
         </section>
 
-        {/* ── Section 2: API Keys ── */}
+        {/* ── Section 2: Sound & Voice Notifications ── */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Volume2 className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Sound & Voice Notifications</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Agent 工作时播放音效提醒，让你可以离开屏幕做其他事。使用 macOS 原生音效，零延迟。
+          </p>
+
+          <div className="rounded-xl border border-border bg-card p-5 space-y-5">
+            {/* Master toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-medium text-foreground">启用音效通知</span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Agent 启动、完成、出错时播放系统提示音
+                </p>
+              </div>
+              <button
+                onClick={() => handleSoundUpdate({ enabled: !soundSettings.enabled })}
+                className="relative h-6 w-11 rounded-full transition-colors focus:outline-none"
+                style={{
+                  background: soundSettings.enabled ? '#a78bfa' : 'rgba(255,255,255,0.1)',
+                }}
+              >
+                <div
+                  className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"
+                  style={{
+                    transform: soundSettings.enabled ? 'translateX(22px)' : 'translateX(2px)',
+                  }}
+                />
+              </button>
+            </div>
+
+            {soundSettings.enabled && (
+              <>
+                {/* Divider */}
+                <div className="border-t border-border" />
+
+                {/* Mode selector */}
+                <div>
+                  <span className="text-sm font-medium text-foreground">通知模式</span>
+                  <div className="grid grid-cols-3 gap-3 mt-2">
+                    {([
+                      {
+                        key: 'milestone' as const,
+                        label: '🔔 关键节点',
+                        events: [
+                          { icon: '🚀', name: 'Agent 启动', sound: 'Blow' },
+                          { icon: '🎉', name: '任务完成', sound: 'Hero' },
+                          { icon: '❌', name: '错误', sound: 'Sosumi' },
+                          { icon: '⚠️', name: '需要审批', sound: 'Basso' },
+                          { icon: '📋', name: '计划就绪', sound: 'Purr' },
+                          { icon: '✅', name: '子Agent完成', sound: 'Glass' },
+                        ],
+                      },
+                      {
+                        key: 'full' as const,
+                        label: '📢 全部步骤',
+                        events: [
+                          { icon: '🚀', name: 'Agent 启动', sound: 'Blow' },
+                          { icon: '🎉', name: '任务完成', sound: 'Hero' },
+                          { icon: '🔧', name: '工具调用', sound: 'Tink' },
+                          { icon: '❌', name: '错误', sound: 'Sosumi' },
+                          { icon: '⚠️', name: '需要审批', sound: 'Basso' },
+                          { icon: '👤', name: '子Agent启动', sound: 'Pop' },
+                          { icon: '✅', name: '子Agent完成', sound: 'Glass' },
+                          { icon: '📋', name: '计划就绪', sound: 'Purr' },
+                        ],
+                      },
+                      {
+                        key: 'completion' as const,
+                        label: '✅ 仅完成',
+                        events: [
+                          { icon: '🎉', name: '任务完成', sound: 'Hero' },
+                          { icon: '❌', name: '错误', sound: 'Sosumi' },
+                        ],
+                      },
+                    ]).map(({ key, label, events }) => (
+                      <button
+                        key={key}
+                        onClick={() => handleSoundUpdate({ mode: key })}
+                        className="rounded-lg border p-3 text-left transition-colors"
+                        style={{
+                          borderColor: soundSettings.mode === key
+                            ? '#a78bfa'
+                            : 'rgba(255,255,255,0.08)',
+                          background: soundSettings.mode === key
+                            ? 'rgba(167,139,250,0.08)'
+                            : 'transparent',
+                        }}
+                      >
+                        <div className="text-sm font-medium text-foreground">{label}</div>
+                        <div className="mt-2 space-y-1">
+                          {events.map(({ icon, name, sound }) => (
+                            <div key={name} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <span>{icon}</span>
+                              <span className="flex-1">{name}</span>
+                              <span className="text-[10px] opacity-50">{sound}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Volume slider */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-foreground">音量</span>
+                    <span className="text-xs text-muted-foreground">{soundSettings.volume}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={soundSettings.volume}
+                    onChange={(e) => handleSoundUpdate({ volume: Number(e.target.value) })}
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, #a78bfa ${soundSettings.volume}%, rgba(255,255,255,0.1) ${soundSettings.volume}%)`,
+                    }}
+                  />
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-border" />
+
+                {/* Voice toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-medium text-foreground">语音播报</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      使用 macOS TTS 朗读关键通知（如 &quot;任务已完成&quot;）
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleSoundUpdate({ voiceEnabled: !soundSettings.voiceEnabled })}
+                    className="relative h-6 w-11 rounded-full transition-colors focus:outline-none"
+                    style={{
+                      background: soundSettings.voiceEnabled ? '#a78bfa' : 'rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    <div
+                      className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"
+                      style={{
+                        transform: soundSettings.voiceEnabled ? 'translateX(22px)' : 'translateX(2px)',
+                      }}
+                    />
+                  </button>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-border" />
+
+                {/* Test buttons */}
+                <div>
+                  <span className="text-sm font-medium text-foreground mb-2 block">试听音效</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {([
+                      { event: 'agent_start', label: '🚀 启动' },
+                      { event: 'agent_done', label: '🎉 完成' },
+                      { event: 'error', label: '❌ 错误' },
+                      { event: 'sub_agent_start', label: '👤 子Agent启动' },
+                      { event: 'sub_agent_done', label: '✅ 子Agent完成' },
+                      { event: 'plan_ready', label: '📋 计划就绪' },
+                    ]).map(({ event, label }) => (
+                      <Button
+                        key={event}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleTestSound(event)}
+                        className="text-xs"
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-2">
+                    每种事件有不同的系统音效{soundSettings.voiceEnabled ? ' + 语音播报' : ''}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* ── Section 3: API Keys ── */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <Key className="h-5 w-5 text-primary" />

@@ -27,6 +27,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import Markdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { getApi } from "@/lib/ipc";
 import { PixelAgentSVG, type MarketingAgentId, type PixelAgentStatus } from "@/components/features/agent-monitor/pixel-agents";
@@ -255,6 +256,7 @@ interface ExecTask {
   startedAt?: number;
   finishedAt?: number;
   content: string;
+  imageUrls: string[];
 }
 
 interface ExecLogEntry {
@@ -1043,20 +1045,97 @@ function AgentBubble({ msg }: { msg: StudioMessage }) {
           </span>
         </div>
         <div
-          className="rounded-2xl rounded-tl-md px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap"
+          className="rounded-2xl rounded-tl-md px-4 py-2.5 text-sm leading-relaxed prose prose-sm prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
           style={{
             background: "var(--muted)",
             border: "1px solid var(--border)",
             color: "var(--foreground)",
           }}
         >
-          {msg.content}
+          <Markdown>{msg.content}</Markdown>
           {msg.isStreaming && (
             <span className="inline-block w-1.5 h-4 ml-0.5 animate-pulse rounded-sm bg-white/50" />
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+// ==========================================
+// Image Preview
+// ==========================================
+
+function ImagePreview({ path }: { path: string }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const api = getApi();
+    if (!api) return;
+    api.file.readImage(path).then((res) => {
+      if (cancelled) return;
+      if (res.success && res.data) {
+        setDataUrl((res.data as { dataUrl: string }).dataUrl);
+      } else {
+        setError(true);
+      }
+    }).catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, [path]);
+
+  if (error) {
+    return (
+      <div
+        className="rounded-lg p-2 text-xs flex items-center gap-1.5"
+        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+      >
+        🖼️ {path.split("/").pop()}
+      </div>
+    );
+  }
+
+  if (!dataUrl) {
+    return (
+      <div
+        className="rounded-lg h-20 w-20 flex items-center justify-center"
+        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}
+      >
+        <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--muted-foreground)" }} />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setExpanded(true)}
+        className="rounded-lg overflow-hidden transition-transform hover:scale-[1.02] cursor-pointer"
+        style={{ border: "1px solid var(--border)" }}
+      >
+        <img
+          src={dataUrl}
+          alt={path.split("/").pop() ?? "image"}
+          className="h-24 w-auto object-cover"
+        />
+      </button>
+      {expanded && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.8)" }}
+          onClick={() => setExpanded(false)}
+        >
+          <img
+            src={dataUrl}
+            alt={path.split("/").pop() ?? "image"}
+            className="max-w-[85vw] max-h-[85vh] rounded-xl shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1239,6 +1318,7 @@ export function TeamStudioPage(): React.JSX.Element {
           progress: 0,
           toolCallCount: 0,
           content: '',
+          imageUrls: [],
         }],
         logs: [{
           id: createId(),
@@ -1658,6 +1738,7 @@ export function TeamStudioPage(): React.JSX.Element {
           progress: 0,
           toolCallCount: 0,
           content: "",
+          imageUrls: [],
         },
       ],
       // 恢复会话时保留之前的 logs，用分隔线标记
@@ -1734,10 +1815,29 @@ export function TeamStudioPage(): React.JSX.Element {
           }
           if (event.type === "tool_result") {
             const toolContent = (event.content as string) || "";
-            // Capture image paths from generate_image tool results
-            const pathMatch = toolContent.match(/路径:\s*(.+?)(?:\n|$)/);
-            if (pathMatch?.[1]) {
-              setCapturedImageUrls(prev => [...prev, pathMatch[1].trim()]);
+            // Capture image paths from tool results — multiple formats
+            const imagePatterns = [
+              /路径[:：]\s*(.+?\.(?:png|jpe?g|webp|gif|svg))(?:\s|$|\n)/i,
+              /文件路径[:：]\s*(.+?\.(?:png|jpe?g|webp|gif|svg))(?:\s|$|\n)/i,
+              /file_path["']?\s*[:：]\s*["']?(.+?\.(?:png|jpe?g|webp|gif|svg))["']?/i,
+              /saved?\s+(?:to|at)\s+(.+?\.(?:png|jpe?g|webp|gif|svg))/i,
+            ];
+            for (const pat of imagePatterns) {
+              const m = toolContent.match(pat);
+              if (m?.[1]) {
+                const imgPath = m[1].trim();
+                setCapturedImageUrls(prev => [...prev, imgPath]);
+                // Also add to the current task
+                setExec(prev => ({
+                  ...prev,
+                  tasks: prev.tasks.map(t =>
+                    t.agentId === targetAgentId
+                      ? { ...t, imageUrls: t.imageUrls.includes(imgPath) ? t.imageUrls : [...t.imageUrls, imgPath] }
+                      : t
+                  ),
+                }));
+                break;
+              }
             }
             setExec((prev) => ({
               ...prev,
@@ -1785,6 +1885,27 @@ export function TeamStudioPage(): React.JSX.Element {
         // Broadcast final result to popover
         if (resultContent) {
           window.api?.chatSync?.send({ agentId: targetAgentId, role: 'assistant', content: resultContent, mode: 'exec' });
+        }
+        // Extract image paths from agent text output → bind to task
+        const imgPathRegex = /(?:文件(?:路径|保存在)|路径|saved?\s+(?:to|at))[:：]?\s*[`"]?([^\s`"]+\.(?:png|jpe?g|webp|gif|svg))[`"]?/gi;
+        let imgMatch: RegExpExecArray | null;
+        const foundPaths: string[] = [];
+        while ((imgMatch = imgPathRegex.exec(resultContent)) !== null) {
+          foundPaths.push(imgMatch[1].trim());
+        }
+        if (foundPaths.length > 0) {
+          setCapturedImageUrls(prev => {
+            const newPaths = foundPaths.filter(p => !prev.includes(p));
+            return newPaths.length ? [...prev, ...newPaths] : prev;
+          });
+          setExec(prev => ({
+            ...prev,
+            tasks: prev.tasks.map(t =>
+              t.agentId === targetAgentId
+                ? { ...t, imageUrls: [...new Set([...t.imageUrls, ...foundPaths])] }
+                : t
+            ),
+          }));
         }
         // Auto-detect structured content preview from agent output
         const parsed = parseXhsStructuredContent(resultContent);
@@ -2319,7 +2440,7 @@ export function TeamStudioPage(): React.JSX.Element {
 
                     {task.content && (
                       <div
-                        className="rounded-lg p-3 text-sm leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-y-auto"
+                        className="rounded-lg p-3 text-sm leading-relaxed prose prose-sm prose-invert max-w-none max-h-[300px] overflow-y-auto [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                         style={{
                           background: "var(--muted)",
                           border:
@@ -2327,10 +2448,19 @@ export function TeamStudioPage(): React.JSX.Element {
                           color: "var(--foreground)",
                         }}
                       >
-                        {task.content}
+                        <Markdown>{task.content}</Markdown>
                         {task.status === "running" && (
                           <span className="inline-block w-1.5 h-4 ml-0.5 animate-pulse rounded-sm bg-white/50" />
                         )}
+                      </div>
+                    )}
+
+                    {/* Image preview */}
+                    {task.imageUrls.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {task.imageUrls.map((imgPath, idx) => (
+                          <ImagePreview key={idx} path={imgPath} />
+                        ))}
                       </div>
                     )}
 
@@ -2572,10 +2702,10 @@ export function TeamStudioPage(): React.JSX.Element {
                       const summary = cleaned.length > 200 ? cleaned.slice(0, 200) + '...' : cleaned;
                       return (
                         <div
-                          className="rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap max-h-[120px] overflow-y-auto"
+                          className="rounded-lg p-3 text-xs leading-relaxed prose prose-xs prose-invert max-w-none max-h-[120px] overflow-y-auto [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                           style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
                         >
-                          {summary}
+                          <Markdown>{summary}</Markdown>
                         </div>
                       );
                     })()}
@@ -2634,10 +2764,10 @@ export function TeamStudioPage(): React.JSX.Element {
                     </div>
                     {/* Content */}
                     <div
-                      className="p-4 text-sm leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto"
+                      className="p-4 text-sm leading-relaxed prose prose-sm prose-invert max-w-none max-h-[400px] overflow-y-auto [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                       style={{ color: "var(--foreground)" }}
                     >
-                      {finalContent}
+                      <Markdown>{finalContent}</Markdown>
                     </div>
                     {/* Action buttons */}
                     <div
