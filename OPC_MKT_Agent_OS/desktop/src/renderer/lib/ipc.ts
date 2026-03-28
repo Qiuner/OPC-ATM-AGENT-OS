@@ -164,6 +164,10 @@ interface WindowApi {
     onError(callback: (data: { message: string }) => void): () => void
     onStatusChange(callback: (data: { status: string }) => void): () => void
   }
+  skills: {
+    list(): Promise<IpcResponse>
+    openFolder(): Promise<IpcResponse>
+  }
 }
 
 declare global {

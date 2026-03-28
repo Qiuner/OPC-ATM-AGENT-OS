@@ -106,6 +106,7 @@ export const IPC = {
   SKILLS_LIST: 'fs:skills:list',
   SKILLS_CREATE: 'fs:skills:create',
   SKILLS_DELETE: 'fs:skills:delete',
+  SKILLS_OPEN_FOLDER: 'fs:skills:open-folder',
 
   // ── Team ──
   TEAM_GET_AGENTS: 'team:agents:get',

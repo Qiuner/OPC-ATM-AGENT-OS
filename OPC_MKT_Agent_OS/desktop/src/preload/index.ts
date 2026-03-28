@@ -300,6 +300,14 @@ const api = {
     validateInvite: (code: string): Promise<IpcResponse> =>
       ipcRenderer.invoke(IPC.ONBOARDING_VALIDATE_INVITE, { code }),
   },
+
+  /** Skills */
+  skills: {
+    list: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.SKILLS_LIST),
+    openFolder: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.SKILLS_OPEN_FOLDER),
+  },
 }
 
 export type DesktopApi = typeof api
