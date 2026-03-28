@@ -200,6 +200,8 @@ const api = {
       ipcRenderer.invoke(IPC.ONBOARDING_COMPLETE, data),
     envCheck: (): Promise<IpcResponse> =>
       ipcRenderer.invoke(IPC.ONBOARDING_ENV_CHECK),
+    validateInvite: (code: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.ONBOARDING_VALIDATE_INVITE, { code }),
   },
 }
 

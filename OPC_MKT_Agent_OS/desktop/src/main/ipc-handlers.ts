@@ -15,6 +15,7 @@ import {
 } from './store'
 import { getAppSettings, setAppSettings, getSettingValue, setSettingValue } from './app-store'
 import { getApiKeyStatus, setApiKey, deleteApiKey, clearAllApiKeys } from './safe-storage'
+import { VALID_INVITE_CODES, BUILTIN_API_KEY, BUILTIN_PROVIDER } from './invite-config'
 import {
   executeAgent,
   abortAgent,
@@ -651,6 +652,15 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
   })
 
   // ── Onboarding ──
+
+  handle(IPC.ONBOARDING_VALIDATE_INVITE, (data: { code: string }): IpcResponse => {
+    if (!data.code || !VALID_INVITE_CODES.includes(data.code.trim().toUpperCase())) {
+      return { success: false, error: '邀请码无效，请检查后重试' }
+    }
+    setApiKey(BUILTIN_PROVIDER, BUILTIN_API_KEY)
+    setAppSettings({ defaultProvider: BUILTIN_PROVIDER })
+    return { success: true }
+  })
 
   handle(IPC.ONBOARDING_STATUS, (): IpcResponse<{ completed: boolean; hasApiKey: boolean }> => {
     const settings = getAppSettings()
