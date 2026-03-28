@@ -1,17 +1,17 @@
 /**
  * Orchestrator Engine — CEO Agent 多 Agent 编排引擎
  *
- * 使用 Claude Agent SDK 的 Supervisor 模式：
- * - 调用 registry.buildSupervisorConfig() 构建 CEO 配置
- * - 使用 query() 启动 CEO Agent
- * - CEO 自动分析需求并调度子 Agent
- * - 流式推送事件到 renderer 进程
+ * 通过 spawn 单个 `claude` CLI 进程（CEO 角色 + --agents 参数），
+ * SDK 内部自动 spawn 子 Agent 进程。
+ * 解析 stream-json 输出，检测子 Agent 事件，推送到 renderer 进程。
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { BrowserWindow } from 'electron'
+import { IPC } from '../shared/ipc-channels'
 
 // ── Types ──
 
@@ -40,6 +40,7 @@ export interface OrchestratorState {
   isRunning: boolean
   ceoStatus: 'idle' | 'planning' | 'executing' | 'reviewing' | 'done' | 'error'
   subAgents: Map<string, SubAgentStatus>
+  onlineAgents: string[]
   plan?: string
   finalResult?: string
   error?: string
@@ -47,7 +48,8 @@ export interface OrchestratorState {
 
 /** 流式事件类型 */
 export type OrchestratorEvent =
-  | { type: 'plan'; plan: string }
+  | { type: 'plan'; plan: string; agentIds: string[] }
+  | { type: 'agents-selected'; agentIds: string[] }
   | { type: 'sub-start'; agentId: string; name: string; task: string }
   | { type: 'sub-stream'; agentId: string; text: string }
   | { type: 'sub-done'; agentId: string; result: string }
@@ -57,10 +59,57 @@ export type OrchestratorEvent =
   | { type: 'error'; message: string }
   | { type: 'status'; status: OrchestratorState['ceoStatus'] }
 
+// ── Agent Registry (mirrored from agent-engine.ts) ──
+
+interface AgentDef {
+  id: string
+  name: string
+  description: string
+  skillFile: string
+  model: string
+  tools: string[]
+}
+
+const AGENT_REGISTRY: AgentDef[] = [
+  { id: 'ceo', name: 'CEO 营销总监', description: '营销团队总指挥，需求拆解、子 Agent 调度与质量终审', skillFile: '', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep', 'Bash', 'Agent'] },
+  { id: 'xhs-agent', name: '小红书创作专家', description: '端到端小红书营销：搜索竞品→分析爆款→内容创作→审查→发布', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'WebSearch'] },
+  { id: 'analyst-agent', name: '数据飞轮分析师', description: '分析内容表现数据，提炼胜出模式', skillFile: 'analyst.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep'] },
+  { id: 'growth-agent', name: '增长营销专家', description: '选题研究、热点捕捉、竞品分析、发布策略', skillFile: 'growth.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Glob', 'Grep', 'Bash'] },
+  { id: 'brand-reviewer', name: '品牌风控审查', description: '审查内容合规性与品牌调性一致性', skillFile: 'brand-reviewer.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Glob'] },
+  { id: 'podcast-agent', name: '播客制作专家', description: '生成播客脚本、对话式音频内容', skillFile: 'podcast.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob'] },
+  { id: 'global-content-agent', name: '全球内容创作', description: 'Generate English marketing content for Meta/X/TikTok/LinkedIn/Email/Blog', skillFile: 'global-content.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob'] },
+  { id: 'meta-ads-agent', name: 'Meta 广告投手', description: 'Meta advertising — campaign creation, budget optimization, ROAS analysis', skillFile: 'meta-ads.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Bash'] },
+  { id: 'email-agent', name: '邮件营销专家', description: 'Email marketing automation — sequences, campaigns, A/B testing', skillFile: 'email-marketing.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob'] },
+  { id: 'seo-agent', name: 'SEO 专家', description: 'Technical & content SEO — keyword research, on-page optimization', skillFile: 'seo-expert.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep', 'Bash'] },
+  { id: 'geo-agent', name: 'GEO 专家', description: 'Generative Engine Optimization — optimize content for AI search engines', skillFile: 'geo-expert.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep'] },
+  { id: 'x-twitter-agent', name: 'X/Twitter 创作专家', description: '生成高互动率的推文和 Thread', skillFile: 'x-twitter.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob'] },
+  { id: 'visual-gen-agent', name: '视觉内容生成专家', description: 'AI 图片生成 + 营销视觉创作', skillFile: 'visual-gen.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob'] },
+  { id: 'strategist-agent', name: '营销策略师', description: '制定营销策略、内容战略、渠道规划', skillFile: 'strategist.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep'] },
+]
+
+/** All known agent IDs for plan extraction */
+const ALL_AGENT_IDS = AGENT_REGISTRY.filter(a => a.id !== 'ceo').map(a => a.id)
+
 // ── Engine Root Paths ──
 
 function getEngineDir(): string {
   return join(__dirname, '../../..', 'engine')
+}
+
+function getSkillsDir(): string {
+  return join(getEngineDir(), 'skills')
+}
+
+function getMemoryDir(): string {
+  return join(getEngineDir(), 'memory')
+}
+
+async function loadFile(path: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf-8')
+  } catch {
+    return ''
+  }
 }
 
 // ── State Management ──
@@ -69,10 +118,14 @@ const state: OrchestratorState = {
   isRunning: false,
   ceoStatus: 'idle',
   subAgents: new Map(),
+  onlineAgents: [],
 }
 
 let activeProcess: ChildProcess | null = null
 let activeAbort: AbortController | null = null
+
+// Accumulated CEO text for plan detection across multiple chunks
+let accumulatedCeoText = ''
 
 // ── Public State Getters ──
 
@@ -80,6 +133,7 @@ export function getOrchestratorState(): OrchestratorState {
   return {
     ...state,
     subAgents: new Map(state.subAgents),
+    onlineAgents: [...state.onlineAgents],
   }
 }
 
@@ -91,14 +145,140 @@ export function getSubAgentStatuses(): SubAgentStatus[] {
   return Array.from(state.subAgents.values())
 }
 
+// ── Config Builders ──
+
+/**
+ * Build --agents JSON: for each non-CEO agent, construct { description, prompt, tools }
+ */
+async function buildAgentsJson(): Promise<string> {
+  const agents: Record<string, { description: string; prompt: string; tools: string[] }> = {}
+  const brandVoice = await loadFile(join(getMemoryDir(), 'context', 'brand-voice.md'))
+  const audience = await loadFile(join(getMemoryDir(), 'context', 'target-audience.md'))
+
+  for (const agent of AGENT_REGISTRY.filter(a => a.id !== 'ceo')) {
+    const skill = agent.skillFile ? await loadFile(join(getSkillsDir(), agent.skillFile)) : ''
+    agents[agent.id] = {
+      description: agent.description,
+      prompt: [
+        `你是${agent.name}。${agent.description}`,
+        skill && `## SOP\n${skill}`,
+        brandVoice && `## 品牌调性\n${brandVoice}`,
+        audience && `## 目标受众\n${audience}`,
+      ].filter(Boolean).join('\n\n'),
+      tools: agent.tools,
+    }
+  }
+  return JSON.stringify(agents)
+}
+
+/**
+ * Build CEO system prompt with routing table, workflow, and plan format markers
+ */
+async function buildCeoPrompt(userMessage: string, context?: Record<string, unknown>): Promise<string> {
+  const brandVoice = await loadFile(join(getMemoryDir(), 'context', 'brand-voice.md'))
+  const audience = await loadFile(join(getMemoryDir(), 'context', 'target-audience.md'))
+  const calendar = await loadFile(join(getMemoryDir(), 'content-calendar.json'))
+
+  const agentList = AGENT_REGISTRY
+    .filter(a => a.id !== 'ceo')
+    .map(a => `- ${a.id}: ${a.description}`)
+    .join('\n')
+
+  return `你是 CEO 营销总监，营销团队的编排者和决策者。
+
+## 核心原则 — 必须委派，禁止自己创作
+你是管理者，不是创作者。你的工作是：
+1. 分析用户需求
+2. 拆解为子任务
+3. 用 Agent 工具调度对应的子 Agent 执行
+4. 评审子 Agent 的产出质量
+5. 汇总结果交付用户
+
+**严禁**：你绝不能自己撰写小红书笔记、推文、播客脚本、视觉内容或任何营销文案。
+所有内容创作任务必须通过调用 Agent 工具委派给对应的子 Agent。
+
+## 可用团队成员
+${agentList}
+
+## 任务路由表
+| 需求类型 | 目标 Agent |
+|---------|-----------|
+| 英文多平台内容（X/LinkedIn/Meta/Email/Blog） | global-content-agent |
+| 推文/Twitter/Thread（英文） | x-twitter-agent |
+| Meta/Facebook/Instagram 广告 | meta-ads-agent |
+| Email 营销/序列 | email-agent |
+| SEO 优化/关键词/内容策略 | seo-agent |
+| GEO 优化/AI 搜索引擎优化 | geo-agent |
+| 小红书笔记/种草内容 | xhs-agent |
+| 播客/音频内容 | podcast-agent |
+| 视觉内容/封面/海报 | visual-gen-agent |
+| 营销策略/内容规划 | strategist-agent |
+| 选题研究/热点分析/竞品 | growth-agent |
+| 数据分析/内容复盘 | analyst-agent |
+| 内容审查/品牌风控 | brand-reviewer |
+
+## 标准工作流（必须严格执行）
+1. 分析用户需求 → 确定使用哪个子 Agent
+2. **立即调用 Agent 工具委派**，不要先自己写一遍再委派
+3. 收到子 Agent 结果后 → 调度 brand-reviewer 审查
+4. 审查通过 → 汇总结果交付用户
+5. 审查不通过 → 要求子 Agent 修改（最多 2 轮）
+
+## 绝对禁止
+- ❌ 绝不自己写任何内容（推文、文章、邮件、广告文案等）
+- ❌ 不要先写一个草稿再"让子 Agent 优化"
+- ❌ 不要在汇报中问用户"需要我继续调度吗？"— 直接做完全部
+- ❌ 不要只调度一个 Agent，如果任务涉及多个平台就调度多个
+
+## 输出格式要求（必须遵守）
+在开始调度前，你必须先输出执行计划，严格使用以下格式：
+---PLAN_START---
+1. [任务描述] → [目标 Agent ID]
+2. [任务描述] → [目标 Agent ID]
+...
+---PLAN_END---
+
+输出计划后立即开始调度，不要等待用户确认。
+
+## 调度子 Agent 的方法
+使用 Agent 工具调度子 Agent，调用格式：
+- agent_name: 子 Agent 的 id（如 "xhs-agent"）
+- prompt: 给子 Agent 的具体任务指令
+
+## 任务分配规则
+- 每个任务必须明确：目标、输入上下文、期望产出格式
+- 传递品牌信息和受众画像给创作型 Agent
+- 如果用户需求涉及多个内容类型，分别调度不同 Agent
+- 收到子 Agent 结果后评估质量，不达标则要求修改
+
+${brandVoice ? `## 品牌信息\n${brandVoice}\n` : ''}
+${audience ? `## 目标受众\n${audience}\n` : ''}
+${calendar ? `## 内容日历\n${calendar}\n` : ''}
+${context && Object.keys(context).length > 0 ? `## 上下文\n${JSON.stringify(context, null, 2)}\n` : ''}
+User: ${userMessage}`
+}
+
+/**
+ * Extract agent IDs from plan text (between PLAN_START/PLAN_END markers)
+ */
+function extractAgentIdsFromPlan(planText: string): string[] {
+  const ids: string[] = []
+  for (const agentId of ALL_AGENT_IDS) {
+    if (planText.includes(agentId)) {
+      ids.push(agentId)
+    }
+  }
+  return ids
+}
+
 // ── Core Execution ──
 
 /**
  * 执行 CEO 编排任务
  *
  * 流程：
- * 1. 调用 engine/agents/registry.ts 的 buildSupervisorConfig
- * 2. Spawn tsx 运行 engine/supervisor-runner.ts
+ * 1. 构建 CEO prompt + --agents JSON
+ * 2. Spawn 单个 claude CLI 进程
  * 3. 解析 stream-json 输出，检测子 Agent 事件
  * 4. 推送事件到 renderer
  */
@@ -114,98 +294,75 @@ export async function executeOrchestrator(
   state.isRunning = true
   state.ceoStatus = 'planning'
   state.subAgents.clear()
+  state.onlineAgents = ['ceo']
   state.plan = undefined
   state.finalResult = undefined
   state.error = undefined
+  accumulatedCeoText = ''
+
+  onEvent({ type: 'status', status: 'planning' })
 
   const timeout = request.timeoutMs ?? 600_000 // 10 minutes default
 
-  // Build supervisor config via tsx script
-  const configScript = `
-import { AgentRegistry } from './agents/registry.ts';
-
-const registry = AgentRegistry.getInstance();
-const config = await registry.buildSupervisorConfig(${JSON.stringify(request.prompt)}, ${JSON.stringify(request.context ?? {})});
-
-// Output config as JSON
-console.log('CONFIG_START' + JSON.stringify(config) + 'CONFIG_END');
-`
-
-  // Spawn tsx to build config
-  const configProcess = spawn('npx', ['tsx', '--eval', configScript], {
-    cwd: getEngineDir(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-
-  let configJson = ''
-  let configError = ''
-
-  configProcess.stdout?.on('data', (chunk: Buffer) => {
-    const text = chunk.toString()
-    const startIdx = text.indexOf('CONFIG_START')
-    const endIdx = text.indexOf('CONFIG_END')
-    if (startIdx !== -1 && endIdx !== -1) {
-      configJson = text.slice(startIdx + 12, endIdx)
-    }
-  })
-
-  configProcess.stderr?.on('data', (chunk: Buffer) => {
-    configError += chunk.toString()
-  })
-
-  // Wait for config
-  await new Promise<void>((resolve) => {
-    configProcess.on('close', () => resolve())
-  })
-
-  if (!configJson) {
-    state.isRunning = false
-    state.ceoStatus = 'error'
-    return { success: false, error: `Failed to build supervisor config: ${configError}` }
-  }
-
-  let config: { prompt: string; options: Record<string, unknown> }
+  // Build config
+  console.log('[Orchestrator] Building CEO config...')
+  let agentsJson: string
+  let ceoPrompt: string
   try {
-    config = JSON.parse(configJson)
-  } catch {
-    state.isRunning = false
-    state.ceoStatus = 'error'
-    return { success: false, error: 'Failed to parse supervisor config' }
-  }
-
-  // Now spawn the actual supervisor execution
-  const runnerScript = `
-import { query } from '@anthropic-ai/claude-agent-sdk';
-
-const config = ${JSON.stringify(config)};
-
-for await (const message of query({
-  prompt: config.prompt,
-  options: config.options,
-})) {
-  console.log(JSON.stringify(message));
-}
-`
-
-  activeAbort = new AbortController()
-
-  try {
-    activeProcess = spawn('npx', ['tsx', '--eval', runnerScript], {
-      cwd: getEngineDir(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      signal: activeAbort.signal,
-      env: {
-        ...process.env,
-        // Clean env to avoid Claude Code nesting issues
-        CLAUDECODE: undefined,
-        CLAUDE_CODE_ENTRYPOINT: undefined,
-        CLAUDE_CODE_IS_AGENT: undefined,
-      },
-    })
+    agentsJson = await buildAgentsJson()
+    ceoPrompt = await buildCeoPrompt(request.prompt, request.context)
   } catch (err) {
     state.isRunning = false
     state.ceoStatus = 'error'
-    const message = err instanceof Error ? err.message : 'Failed to spawn orchestrator'
+    const msg = err instanceof Error ? err.message : 'Failed to build config'
+    return { success: false, error: msg }
+  }
+
+  // Build CLI args
+  const args: string[] = [
+    '-p',
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--permission-mode', 'acceptEdits',
+    '--agents', agentsJson,
+    '--allowedTools', 'Read', 'Write', 'Glob', 'Grep', 'Bash', 'Agent',
+    '--', ceoPrompt,
+  ]
+
+  if (request.model) {
+    // Insert model before '--'
+    const dashIdx = args.indexOf('--')
+    args.splice(dashIdx, 0, '--model', request.model)
+  }
+
+  if (request.maxBudgetUsd) {
+    const dashIdx = args.indexOf('--')
+    args.splice(dashIdx, 0, '--max-budget-usd', String(request.maxBudgetUsd))
+  }
+
+  // Spawn CEO process
+  activeAbort = new AbortController()
+  const cleanEnv = { ...process.env }
+  delete cleanEnv.CLAUDECODE
+  delete cleanEnv.CLAUDE_CODE_ENTRYPOINT
+  delete cleanEnv.CLAUDE_CODE_IS_AGENT
+
+  console.log('[Orchestrator] Spawning CEO claude CLI, cwd:', getEngineDir())
+
+  try {
+    activeProcess = spawn('claude', args, {
+      cwd: getEngineDir(),
+      env: cleanEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      signal: activeAbort.signal,
+    })
+    console.log('[Orchestrator] CEO process spawned, pid:', activeProcess.pid)
+  } catch (err) {
+    state.isRunning = false
+    state.ceoStatus = 'error'
+    activeAbort = null
+    const message = err instanceof Error ? err.message : 'Failed to spawn CEO process'
+    console.error('[Orchestrator] spawn failed:', message)
     return { success: false, error: message }
   }
 
@@ -249,21 +406,23 @@ for await (const message of query({
         return // skip non-JSON lines
       }
 
-      // Process event and push to renderer
       processStreamEvent(event, onEvent)
     })
 
     activeProcess!.on('close', (code: number | null) => {
+      console.log('[Orchestrator] process closed, code:', code)
       if (code !== 0) {
         const errMsg = stderrChunks.join('').slice(0, 500) || `Process exited with code ${code}`
         onEvent({ type: 'error', message: errMsg })
         finish({ success: false, error: errMsg })
       } else {
+        onEvent({ type: 'status', status: 'done' })
         finish({ success: true, result: state.finalResult || '' })
       }
     })
 
     activeProcess!.on('error', (err: Error) => {
+      console.error('[Orchestrator] process error:', err.message)
       onEvent({ type: 'error', message: err.message })
       finish({ success: false, error: err.message })
     })
@@ -272,12 +431,12 @@ for await (const message of query({
 
 // ── Stream Event Processing ──
 
+let planDetected = false
+
 function processStreamEvent(
   event: Record<string, unknown>,
   onEvent: (event: OrchestratorEvent) => void
 ): void {
-  console.log('[Orchestrator] Event:', event.type)
-
   switch (event.type) {
     case 'assistant': {
       const message = event.message as Record<string, unknown> | undefined
@@ -287,34 +446,48 @@ function processStreamEvent(
         for (const block of content) {
           if (block?.type === 'text' && block?.text) {
             const text = block.text as string
+            accumulatedCeoText += text
 
-            // Detect plan output (early in conversation)
-            if (state.ceoStatus === 'planning' && text.includes('计划') || text.includes('任务')) {
-              state.plan = text
-              onEvent({ type: 'plan', plan: text })
+            // Detect plan via markers
+            if (!planDetected) {
+              const planMatch = accumulatedCeoText.match(/---PLAN_START---([\s\S]*?)---PLAN_END---/)
+              if (planMatch) {
+                planDetected = true
+                const planContent = planMatch[1].trim()
+                state.plan = planContent
+                const agentIds = extractAgentIdsFromPlan(planContent)
+                state.onlineAgents = ['ceo', ...agentIds]
+                state.ceoStatus = 'executing'
+
+                onEvent({ type: 'plan', plan: planContent, agentIds })
+                onEvent({ type: 'agents-selected', agentIds })
+                onEvent({ type: 'status', status: 'executing' })
+              }
             }
 
-            // Detect final result (late in conversation, contains summary)
-            if (text.includes('交付') || text.includes('结果') || text.includes('总结')) {
-              state.finalResult = text
+            // Emit sub-stream if a sub-agent is currently running
+            const runningAgent = Array.from(state.subAgents.values()).find(s => s.status === 'running')
+            if (runningAgent) {
+              onEvent({ type: 'sub-stream', agentId: runningAgent.agentId, text })
             }
-
-            onEvent({ type: 'status', status: state.ceoStatus })
           }
 
           // Detect Agent tool use (sub-agent spawn)
           if (block?.type === 'tool_use' && block?.name === 'Agent') {
             const input = block.input as Record<string, unknown> | undefined
-            const agentId = (input?.agent_name as string) || 'unknown'
-            const agentPrompt = (input?.prompt as string) || ''
+            // SDK uses subagent_type for the agent ID
+            const agentId = (input?.subagent_type as string) || (input?.agent_name as string) || (input?.name as string) || 'unknown'
+            const agentPrompt = (input?.prompt as string) || (input?.description as string) || ''
 
-            // Extract task description from prompt
+            // Extract task description
             const taskMatch = agentPrompt.match(/任务[:：](.+?)(?:\n|$)/)
             const task = taskMatch ? taskMatch[1].trim() : agentPrompt.slice(0, 100)
 
+            const agentDef = AGENT_REGISTRY.find(a => a.id === agentId)
+
             state.subAgents.set(agentId, {
               agentId,
-              name: agentId,
+              name: agentDef?.name || agentId,
               status: 'running',
               task,
               output: '',
@@ -326,20 +499,85 @@ function processStreamEvent(
             onEvent({
               type: 'sub-start',
               agentId,
-              name: agentId,
+              name: agentDef?.name || agentId,
               task,
             })
 
             // Update progress
-            const running = Array.from(state.subAgents.values())
+            emitProgress(onEvent)
+          }
+        }
+      }
+      break
+    }
+
+    // Sub-agent results come back as type: "user" with tool_use_result or tool_result content
+    case 'user': {
+      const msg = event.message as Record<string, unknown> | undefined
+      const userContent = msg?.content
+      // Check for tool_use_result in the event itself (SDK format)
+      const toolUseResult = event.tool_use_result as Record<string, unknown> | undefined
+      if (toolUseResult && toolUseResult.status === 'completed') {
+        const resultContent = Array.isArray(toolUseResult.content)
+          ? (toolUseResult.content as Array<Record<string, unknown>>)
+              .filter(b => b.type === 'text')
+              .map(b => b.text)
+              .join('\n')
+          : String(toolUseResult.content || '')
+        const isError = toolUseResult.status === 'error'
+
+        const runningAgents = Array.from(state.subAgents.values())
+          .filter(s => s.status === 'running')
+
+        if (runningAgents.length > 0) {
+          const agent = runningAgents[runningAgents.length - 1]
+          agent.endTime = Date.now()
+          if (isError) {
+            agent.status = 'error'
+            onEvent({ type: 'sub-error', agentId: agent.agentId, error: resultContent })
+          } else {
+            agent.status = 'done'
+            agent.output = resultContent
+            onEvent({ type: 'sub-done', agentId: agent.agentId, result: resultContent })
+          }
+          emitProgress(onEvent)
+
+          const stillRunning = Array.from(state.subAgents.values())
+            .filter(s => s.status === 'running')
+          if (stillRunning.length === 0 && state.ceoStatus === 'executing') {
+            state.ceoStatus = 'reviewing'
+            onEvent({ type: 'status', status: 'reviewing' })
+          }
+        }
+      }
+      // Also check array content for tool_result blocks
+      if (Array.isArray(userContent)) {
+        for (const block of (userContent as Array<Record<string, unknown>>)) {
+          if (block.type === 'tool_result') {
+            const resultContent = typeof block.content === 'string'
+              ? block.content
+              : Array.isArray(block.content)
+                ? (block.content as Array<Record<string, unknown>>).filter(b => b.type === 'text').map(b => b.text).join('\n')
+                : JSON.stringify(block.content)
+
+            const runningAgents = Array.from(state.subAgents.values())
               .filter(s => s.status === 'running')
-              .map(s => s.agentId)
-            onEvent({
-              type: 'progress',
-              done: Array.from(state.subAgents.values()).filter(s => s.status === 'done').length,
-              total: state.subAgents.size,
-              running,
-            })
+
+            if (runningAgents.length > 0) {
+              const agent = runningAgents[runningAgents.length - 1]
+              agent.endTime = Date.now()
+              agent.status = 'done'
+              agent.output = resultContent
+              onEvent({ type: 'sub-done', agentId: agent.agentId, result: resultContent })
+              emitProgress(onEvent)
+
+              const stillRunning = Array.from(state.subAgents.values())
+                .filter(s => s.status === 'running')
+              if (stillRunning.length === 0 && state.ceoStatus === 'executing') {
+                state.ceoStatus = 'reviewing'
+                onEvent({ type: 'status', status: 'reviewing' })
+              }
+            }
           }
         }
       }
@@ -349,39 +587,34 @@ function processStreamEvent(
     case 'tool_result': {
       const toolResult = event.tool_result as Record<string, unknown> | undefined
       if (toolResult) {
-        const content = typeof toolResult.content === 'string'
+        const resultContent = typeof toolResult.content === 'string'
           ? toolResult.content
           : JSON.stringify(toolResult.content)
+        const isError = !!toolResult.is_error
 
-        // Find which sub-agent this result belongs to
-        // (most recent running agent)
+        // Find the most recent running sub-agent
         const runningAgents = Array.from(state.subAgents.values())
           .filter(s => s.status === 'running')
 
         if (runningAgents.length > 0) {
           const agent = runningAgents[runningAgents.length - 1]
-          agent.status = 'done'
-          agent.output = content
           agent.endTime = Date.now()
 
-          onEvent({
-            type: 'sub-done',
-            agentId: agent.agentId,
-            result: content,
-          })
+          if (isError) {
+            agent.status = 'error'
+            onEvent({ type: 'sub-error', agentId: agent.agentId, error: resultContent })
+          } else {
+            agent.status = 'done'
+            agent.output = resultContent
+            onEvent({ type: 'sub-done', agentId: agent.agentId, result: resultContent })
+          }
 
-          // Update progress
-          const allAgents = Array.from(state.subAgents.values())
-          const stillRunning = allAgents.filter(s => s.status === 'running').map(s => s.agentId)
-          onEvent({
-            type: 'progress',
-            done: allAgents.filter(s => s.status === 'done').length,
-            total: state.subAgents.size,
-            running: stillRunning,
-          })
+          emitProgress(onEvent)
 
           // If no more running agents, CEO is reviewing
-          if (stillRunning.length === 0) {
+          const stillRunning = Array.from(state.subAgents.values())
+            .filter(s => s.status === 'running')
+          if (stillRunning.length === 0 && state.ceoStatus === 'executing') {
             state.ceoStatus = 'reviewing'
             onEvent({ type: 'status', status: 'reviewing' })
           }
@@ -411,6 +644,17 @@ function processStreamEvent(
   }
 }
 
+function emitProgress(onEvent: (event: OrchestratorEvent) => void): void {
+  const allAgents = Array.from(state.subAgents.values())
+  const running = allAgents.filter(s => s.status === 'running').map(s => s.agentId)
+  onEvent({
+    type: 'progress',
+    done: allAgents.filter(s => s.status === 'done').length,
+    total: state.subAgents.size,
+    running,
+  })
+}
+
 // ── Abort ──
 
 export function abortOrchestrator(): void {
@@ -422,6 +666,9 @@ export function abortOrchestrator(): void {
   activeAbort = null
   state.isRunning = false
   state.ceoStatus = 'idle'
+  state.onlineAgents = []
+  planDetected = false
+  accumulatedCeoText = ''
 }
 
 // ── IPC Push Helpers ──

@@ -680,8 +680,19 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
         // Broadcast events to all renderer windows
         switch (event.type) {
           case 'plan':
-            broadcastToAll(IPC.ORCHESTRATOR_PLAN, { plan: event.plan })
+            broadcastToAll(IPC.ORCHESTRATOR_PLAN, { plan: event.plan, agentIds: event.agentIds })
             break
+          case 'agents-selected': {
+            // Sync selected agents to dock pet + header
+            const ids = ['ceo', ...event.agentIds]
+            setSettingValue('teamAgentIds', ids)
+            const dockPet = getDockPetWindow()
+            if (dockPet && !dockPet.isDestroyed()) {
+              dockPet.webContents.send(IPC.TEAM_AGENTS_CHANGED, ids)
+            }
+            broadcastToAll(IPC.TEAM_AGENTS_CHANGED, ids)
+            break
+          }
           case 'sub-start':
             broadcastToAll(IPC.ORCHESTRATOR_SUB_START, {
               agentId: event.agentId,

@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { BrowserWindow } from 'electron'
 import { IPC } from '../shared/ipc-channels'
+import { isOrchestratorRunning, getSubAgentStatuses } from './orchestrator-engine'
 
 // ── Types ──
 
@@ -427,10 +428,18 @@ export interface AgentStatusInfo {
 }
 
 export function getAgentStatuses(runningAgentId?: string): AgentStatusInfo[] {
+  // Check orchestrator sub-agent statuses for dock pet sync
+  const orchSubs = isOrchestratorRunning() ? getSubAgentStatuses() : []
+  const orchRunningIds = new Set(orchSubs.filter(s => s.status === 'running').map(s => s.agentId))
+
   return AGENT_REGISTRY.map((a) => ({
     id: a.id,
     name: a.name,
     description: a.description,
-    status: a.id === runningAgentId && isAgentRunning() ? 'busy' as const : 'idle' as const,
+    status:
+      (a.id === runningAgentId && isAgentRunning()) ? 'busy' as const
+      : orchRunningIds.has(a.id) ? 'busy' as const
+      : (a.id === 'ceo' && isOrchestratorRunning()) ? 'busy' as const
+      : 'idle' as const,
   }))
 }

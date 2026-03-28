@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, Sun, Moon, Monitor } from 'lucide-react'
 import { getApi } from '@/lib/ipc'
 import { useTheme } from '@/hooks/use-theme'
-import type { Task, AgentRun } from '@/types'
+import type { Task } from '@/types'
 
 // ── Agent registry ──
 
@@ -16,14 +16,19 @@ interface AgentDef {
 
 const AGENTS: AgentDef[] = [
   { id: 'ceo', name: 'CEO', abbr: 'CEO', color: '#e74c3c' },
-  { id: 'xhs', name: 'XHS Agent', abbr: 'XHS', color: '#ff2442' },
-  { id: 'analyst', name: 'Analyst', abbr: 'AN', color: '#22d3ee' },
-  { id: 'growth', name: 'Growth', abbr: 'G', color: '#00cec9' },
+  { id: 'xhs-agent', name: 'XHS Agent', abbr: 'XHS', color: '#ff2442' },
+  { id: 'analyst-agent', name: 'Analyst', abbr: 'AN', color: '#3498db' },
+  { id: 'growth-agent', name: 'Growth', abbr: 'G', color: '#00cec9' },
   { id: 'brand-reviewer', name: 'Brand Reviewer', abbr: 'BR', color: '#a855f7' },
-  { id: 'podcast', name: 'Podcast', abbr: 'POD', color: '#f59e0b' },
-  { id: 'x-twitter', name: 'X/Twitter', abbr: 'X', color: '#1da1f2' },
-  { id: 'visual', name: 'Visual', abbr: 'VIS', color: '#ec4899' },
-  { id: 'strategist', name: 'Strategist', abbr: 'STR', color: '#8b5cf6' },
+  { id: 'podcast-agent', name: 'Podcast', abbr: 'POD', color: '#e17055' },
+  { id: 'global-content-agent', name: 'Global Content', abbr: 'GC', color: '#10b981' },
+  { id: 'meta-ads-agent', name: 'Meta Ads', abbr: 'MA', color: '#1877f2' },
+  { id: 'email-agent', name: 'Email', abbr: 'EM', color: '#f59e0b' },
+  { id: 'seo-agent', name: 'SEO', abbr: 'SEO', color: '#059669' },
+  { id: 'geo-agent', name: 'GEO', abbr: 'GEO', color: '#7c3aed' },
+  { id: 'x-twitter-agent', name: 'X/Twitter', abbr: 'X', color: '#1da1f2' },
+  { id: 'visual-gen-agent', name: 'Visual', abbr: 'VIS', color: '#fd79a8' },
+  { id: 'strategist-agent', name: 'Strategist', abbr: 'STR', color: '#6c5ce7' },
 ]
 
 type AgentStatus = 'busy' | 'pending' | 'idle' | 'offline'
@@ -58,52 +63,7 @@ const STATUS_LABEL: Record<AgentStatus, string> = {
 
 const MAX_VISIBLE = 6
 
-// ── Helper: derive agent states from runs ──
-
-function deriveAgentStates(runs: AgentRun[]): AgentState[] {
-  const runMap = new Map<string, AgentRun>()
-  for (const run of runs) {
-    const existing = runMap.get(run.agent_type)
-    if (!existing || new Date(run.started_at) > new Date(existing.started_at)) {
-      runMap.set(run.agent_type, run)
-    }
-  }
-
-  return AGENTS.map((def) => {
-    const latestRun = runMap.get(def.id)
-    if (!latestRun) {
-      return { def, status: 'offline' as AgentStatus }
-    }
-    if (latestRun.status === 'running') {
-      const elapsed = formatElapsed(latestRun.started_at)
-      return {
-        def,
-        status: 'busy' as AgentStatus,
-        currentTask: (latestRun.input?.prompt as string)?.slice(0, 60) ?? '执行中...',
-        elapsed,
-      }
-    }
-    if (latestRun.status === 'pending') {
-      return { def, status: 'pending' as AgentStatus, currentTask: '等待输入...' }
-    }
-    return {
-      def,
-      status: 'idle' as AgentStatus,
-      currentTask: (latestRun.output?.result as string)?.slice(0, 50) ?? '已完成',
-      elapsed: latestRun.finished_at ? formatElapsed(latestRun.finished_at) : undefined,
-    }
-  }).sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status])
-}
-
-function formatElapsed(dateStr: string): string {
-  const ms = Date.now() - new Date(dateStr).getTime()
-  const sec = Math.floor(ms / 1000)
-  if (sec < 60) return `${sec}s`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ${sec % 60}s`
-  const hr = Math.floor(min / 60)
-  return `${hr}h ${min % 60}m`
-}
+// deriveAgentStates removed — now using real-time agent.status() API
 
 // ── AgentAvatar ──
 
@@ -335,6 +295,11 @@ export function Header(): React.JSX.Element {
     total: number
     currentName: string | null
   }>({ done: 0, total: 0, currentName: null })
+  const [orchState, setOrchState] = useState<{
+    isRunning: boolean
+    ceoStatus: string
+    plan?: string
+  }>({ isRunning: false, ceoStatus: 'idle' })
   const [reviewCount, setReviewCount] = useState(0)
   const [themeMenuOpen, setThemeMenuOpen] = useState(false)
   const themeMenuRef = useRef<HTMLDivElement>(null)
@@ -356,14 +321,47 @@ export function Header(): React.JSX.Element {
     const api = getApi()
     if (!api) return
     try {
-      const [runsRes, tasksRes, contentsRes] = await Promise.all([
-        api.agentRuns.list(),
+      // Real-time agent status (same source as Dock Pet)
+      const [statusRes, teamRes, tasksRes, contentsRes, orchRes] = await Promise.all([
+        api.agent.status(),
+        api.team.getAgents(),
         api.tasks.list(),
         api.contents.list({ status: 'review' }),
+        api.orchestrator?.status().catch(() => null),
       ])
-      if (runsRes.success && runsRes.data) {
-        setAgents(deriveAgentStates(runsRes.data))
+
+      if (statusRes.success && statusRes.data) {
+        const data = statusRes.data as { agents: Array<{ id: string; name: string; status: string }>, isRunning?: boolean }
+        // Get online team agent IDs — only these agents show as online
+        const onlineIds = new Set(
+          teamRes.success && teamRes.data ? (teamRes.data as string[]) : []
+        )
+        const hasTeam = onlineIds.size > 0
+
+        setAgents(
+          AGENTS.map((def) => {
+            const live = data.agents.find((a) => a.id === def.id)
+            // No team launched and no single agent running → all offline
+            if (!hasTeam && live?.status !== 'busy') {
+              return { def, status: 'offline' as AgentStatus }
+            }
+            // Team launched but this agent not in the team → offline
+            if (hasTeam && !onlineIds.has(def.id)) {
+              return { def, status: 'offline' as AgentStatus }
+            }
+            // Agent is busy (running task)
+            if (live?.status === 'busy') {
+              return { def, status: 'busy' as AgentStatus, currentTask: '执行中...' }
+            }
+            // Agent in team but not busy → idle
+            if (hasTeam && onlineIds.has(def.id)) {
+              return { def, status: 'idle' as AgentStatus }
+            }
+            return { def, status: 'offline' as AgentStatus }
+          }).sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status])
+        )
       }
+
       if (tasksRes.success && tasksRes.data) {
         const tasks = tasksRes.data as Task[]
         const inProgress = tasks.filter((t) =>
@@ -380,6 +378,13 @@ export function Header(): React.JSX.Element {
       if (contentsRes.success && contentsRes.data) {
         setReviewCount((contentsRes.data as unknown[]).length)
       }
+      // Orchestrator state
+      if (orchRes && orchRes.success && orchRes.data) {
+        const od = orchRes.data as { isRunning: boolean; ceoStatus: string; plan?: string }
+        setOrchState({ isRunning: od.isRunning, ceoStatus: od.ceoStatus, plan: od.plan })
+      } else {
+        setOrchState({ isRunning: false, ceoStatus: 'idle' })
+      }
     } catch {
       // silently ignore
     }
@@ -387,7 +392,7 @@ export function Header(): React.JSX.Element {
 
   useEffect(() => {
     void fetchState()
-    intervalRef.current = setInterval(() => void fetchState(), 10_000)
+    intervalRef.current = setInterval(() => void fetchState(), 3_000)
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
@@ -404,35 +409,48 @@ export function Header(): React.JSX.Element {
       }}
     >
       {/* Left — Task progress indicator */}
-      <div className="flex items-center flex-1 min-w-0 titlebar-no-drag">
-        {taskProgress.total > 0 ? (
+      <div className="flex items-center flex-1 min-w-0 titlebar-no-drag gap-2">
+        {orchState.isRunning ? (
+          /* CEO 编排模式运行中 */
           <>
             <span
-              className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold shrink-0"
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold shrink-0"
               style={{
-                background: 'rgba(167,139,250,0.1)',
-                color: '#a78bfa',
+                background: 'rgba(231,76,60,0.1)',
+                color: '#e74c3c',
+                border: '1px solid rgba(231,76,60,0.2)',
               }}
             >
-              {taskProgress.done}/{taskProgress.total}
+              CEO 编排
             </span>
-            <span className="text-[13px] ml-2.5 shrink-0 text-foreground/35">
-              当前任务:
+            <span className="text-[13px] text-foreground font-medium max-w-[320px] truncate">
+              {orchState.ceoStatus === 'planning' && '正在分析需求...'}
+              {orchState.ceoStatus === 'executing' && '子 Agent 执行中...'}
+              {orchState.ceoStatus === 'reviewing' && '审核产出中...'}
+              {orchState.ceoStatus === 'done' && '任务完成'}
+              {orchState.ceoStatus === 'error' && '执行出错'}
+              {orchState.ceoStatus === 'idle' && '待命'}
             </span>
-            {taskProgress.currentName ? (
-              <span className="text-[13px] text-foreground font-medium max-w-[240px] truncate ml-1">
-                {taskProgress.currentName}
-              </span>
-            ) : (
-              <span className="text-[13px] ml-1 text-foreground/20">
-                全部完成
-              </span>
-            )}
+          </>
+        ) : agents.some((a) => a.status === 'busy') ? (
+          /* 单 Agent 执行中 */
+          <>
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold shrink-0"
+              style={{
+                background: 'rgba(34,211,238,0.1)',
+                color: '#22d3ee',
+                border: '1px solid rgba(34,211,238,0.2)',
+              }}
+            >
+              单 Agent
+            </span>
+            <span className="text-[13px] text-foreground font-medium max-w-[320px] truncate">
+              {agents.find((a) => a.status === 'busy')?.def.name ?? ''} 执行中...
+            </span>
           </>
         ) : (
-          <span className="text-[13px] text-foreground/20">
-            无进行中的任务
-          </span>
+          <span className="text-[13px] text-foreground/20">暂无任务</span>
         )}
       </div>
 

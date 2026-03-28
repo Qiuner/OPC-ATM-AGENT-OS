@@ -23,9 +23,12 @@ import {
   Terminal,
   Square,
   RotateCcw,
+  Settings,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getApi } from "@/lib/ipc";
+import { PixelAgentSVG, type MarketingAgentId, type PixelAgentStatus } from "@/components/features/agent-monitor/pixel-agents";
 
 // Lazy-load Monitor view
 const TeamModeView = lazy(() => import("./team-studio-monitor"));
@@ -131,9 +134,18 @@ const AGENT_COLORS: Record<
 > = {
   ceo: { color: "#e74c3c", avatar: "CEO", name: "CEO" },
   "xhs-agent": { color: "#ff2442", avatar: "XHS", name: "XHS Agent" },
-  "analyst-agent": { color: "#22d3ee", avatar: "AN", name: "Analyst" },
+  "analyst-agent": { color: "#3498db", avatar: "AN", name: "Analyst" },
   "growth-agent": { color: "#00cec9", avatar: "G", name: "Growth" },
   "brand-reviewer": { color: "#a855f7", avatar: "BR", name: "Reviewer" },
+  "podcast-agent": { color: "#e17055", avatar: "POD", name: "Podcast" },
+  "global-content-agent": { color: "#10b981", avatar: "GC", name: "Global Content" },
+  "meta-ads-agent": { color: "#1877f2", avatar: "MA", name: "Meta Ads" },
+  "email-agent": { color: "#f59e0b", avatar: "EM", name: "Email" },
+  "seo-agent": { color: "#059669", avatar: "SEO", name: "SEO" },
+  "geo-agent": { color: "#7c3aed", avatar: "GEO", name: "GEO" },
+  "x-twitter-agent": { color: "#1da1f2", avatar: "X", name: "X/Twitter" },
+  "visual-gen-agent": { color: "#fd79a8", avatar: "VIS", name: "Visual" },
+  "strategist-agent": { color: "#6c5ce7", avatar: "STR", name: "Strategist" },
 };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -366,6 +378,24 @@ async function streamAgentMessage(
 // Simple Agent Avatar (replaces PixelAgentSVG)
 // ==========================================
 
+/** Map team-studio agentIds to pixel-agents agentIds (some differ) */
+const PIXEL_AGENT_ID_MAP: Record<string, MarketingAgentId> = {
+  'ceo': 'ceo',
+  'xhs-agent': 'xhs-agent',
+  'growth-agent': 'growth-agent',
+  'brand-reviewer': 'brand-reviewer',
+  'analyst-agent': 'analyst-agent',
+  'podcast-agent': 'podcast-agent',
+  'global-content-agent': 'global-content-agent',
+  'meta-ads-agent': 'meta-ads-agent',
+  'email-agent': 'email-agent',
+  'seo-agent': 'seo-expert-agent',
+  'geo-agent': 'geo-expert-agent',
+  'x-twitter-agent': 'x-twitter-agent',
+  'visual-gen-agent': 'visual-agent',
+  'strategist-agent': 'strategist-agent',
+};
+
 function AgentAvatar({
   agentId,
   size = "sm",
@@ -375,16 +405,29 @@ function AgentAvatar({
   size?: "sm" | "md";
   online?: boolean;
 }) {
-  const colors = AGENT_COLORS[agentId] ?? {
-    color: "#888",
-    avatar: "?",
-    name: "Unknown",
-  };
-  const dim = size === "md" ? "w-9 h-9" : "w-7 h-7";
+  const pixelId = PIXEL_AGENT_ID_MAP[agentId];
+  const dim = size === "md" ? 36 : 28;
+  const status: PixelAgentStatus = online === false ? 'offline' : 'online';
+
+  if (pixelId) {
+    return (
+      <div className="shrink-0" style={{ width: dim, height: dim }}>
+        <PixelAgentSVG
+          agentId={pixelId}
+          status={status}
+          style={{ width: dim, height: dim }}
+        />
+      </div>
+    );
+  }
+
+  // Fallback for unknown agents
+  const colors = AGENT_COLORS[agentId] ?? { color: "#888", avatar: "?", name: "Unknown" };
+  const dimClass = size === "md" ? "w-9 h-9" : "w-7 h-7";
   const textSize = size === "md" ? "text-xs" : "text-[10px]";
   return (
     <div
-      className={`${dim} rounded-lg flex items-center justify-center shrink-0 font-bold ${textSize}`}
+      className={`${dimClass} rounded-lg flex items-center justify-center shrink-0 font-bold ${textSize}`}
       style={{
         background: `${colors.color}20`,
         border: `1px solid ${colors.color}40`,
@@ -398,18 +441,284 @@ function AgentAvatar({
 }
 
 // ==========================================
+// Agent Info Bar (right panel top)
+// ==========================================
+
+function AgentInfoBar({
+  agent,
+  settingsOpen,
+  onToggleSettings,
+}: {
+  agent: AgentDef;
+  settingsOpen: boolean;
+  onToggleSettings: () => void;
+}) {
+  const colors = AGENT_COLORS[agent.id] ?? { color: "#888", avatar: "?", name: "Unknown" };
+  return (
+    <div
+      className="px-4 py-3 shrink-0"
+      style={{ borderBottom: "1px solid var(--border)" }}
+    >
+      <div className="flex items-center gap-3">
+        <AgentAvatar agentId={agent.id} size="md" online />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold" style={{ color: colors.color }}>
+              {agent.labelCn}
+            </span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded"
+              style={{
+                background: `${colors.color}15`,
+                color: colors.color,
+                border: `1px solid ${colors.color}30`,
+              }}
+            >
+              {agent.level}
+            </span>
+          </div>
+          <p className="text-xs mt-0.5 truncate" style={{ color: "var(--muted-foreground)" }}>
+            {agent.bio}
+          </p>
+        </div>
+        <button
+          onClick={onToggleSettings}
+          className="flex items-center justify-center h-8 w-8 rounded-lg transition-colors hover:bg-white/5"
+          style={{ color: settingsOpen ? "#a78bfa" : "var(--muted-foreground)" }}
+          title="Agent 设置"
+        >
+          <Settings className="h-4 w-4" />
+        </button>
+      </div>
+      {/* Skill Tags */}
+      <div className="flex flex-wrap gap-1.5 mt-2.5">
+        {agent.capabilities.map((cap) => (
+          <span
+            key={cap}
+            className="text-[10px] px-2 py-0.5 rounded-full"
+            style={{
+              background: "rgba(167,139,250,0.08)",
+              color: "#a78bfa",
+              border: "1px solid rgba(167,139,250,0.15)",
+            }}
+          >
+            {cap}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// Agent Settings Panel (expandable)
+// ==========================================
+
+function AgentSettingsPanel({
+  agent,
+  onClose,
+}: {
+  agent: AgentDef;
+  onClose: () => void;
+}) {
+  const [prompt, setPrompt] = useState(agent.systemPrompt);
+
+  return (
+    <div
+      className="px-4 py-4 space-y-4 shrink-0 overflow-y-auto max-h-[50vh]"
+      style={{
+        borderBottom: "1px solid var(--border)",
+        background: "var(--muted)",
+      }}
+    >
+      {/* System Prompt */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            System Prompt
+          </label>
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-white/5 transition-colors"
+            style={{ color: "#a78bfa" }}
+          >
+            <ChevronUp className="h-3 w-3" />
+            收起
+          </button>
+        </div>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={8}
+          className="w-full rounded-lg p-3 text-sm resize-none outline-none font-mono leading-relaxed"
+          style={{
+            background: "var(--background)",
+            border: "1px solid var(--border)",
+            color: "var(--foreground)",
+          }}
+        />
+      </div>
+      {/* Skills / Capabilities */}
+      <div>
+        <label
+          className="text-xs font-semibold uppercase tracking-wider"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          Skills / 工具
+        </label>
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {agent.capabilities.map((cap) => (
+            <span
+              key={cap}
+              className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1"
+              style={{
+                background: "rgba(167,139,250,0.1)",
+                color: "#a78bfa",
+                border: "1px solid rgba(167,139,250,0.2)",
+              }}
+            >
+              {cap}
+            </span>
+          ))}
+          <button
+            className="text-xs px-2.5 py-1 rounded-full transition-colors hover:bg-white/5"
+            style={{
+              border: "1px dashed var(--border)",
+              color: "var(--muted-foreground)",
+            }}
+          >
+            + 添加
+          </button>
+        </div>
+      </div>
+      {/* Actions */}
+      <div className="flex justify-end gap-2 pt-2">
+        <button
+          className="text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-white/5"
+          style={{ color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+        >
+          恢复默认
+        </button>
+        <button
+          className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+          style={{
+            background: "rgba(167,139,250,0.15)",
+            color: "#a78bfa",
+            border: "1px solid rgba(167,139,250,0.3)",
+          }}
+        >
+          保存
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
 // Channel List Sidebar
 // ==========================================
+
+/** All available agents for single-agent mode (excluding CEO) */
+const ALL_SINGLE_AGENTS: AgentDef[] = [
+  ...AGENTS,
+  // Additional agents not in the original 4
+  {
+    id: "analyst-agent", label: "Analyst", labelCn: "数据飞轮分析师", color: "#3498db", initial: "AN",
+    bio: "分析内容表现数据，提炼胜出模式", capabilities: ["数据分析", "模式提炼"], level: "Specialist",
+    systemPrompt: "",
+  },
+  {
+    id: "podcast-agent", label: "Podcast", labelCn: "播客制作专家", color: "#e17055", initial: "POD",
+    bio: "生成播客脚本、对话式音频内容", capabilities: ["播客脚本", "音频内容"], level: "Specialist",
+    systemPrompt: "",
+  },
+  {
+    id: "global-content-agent", label: "Content", labelCn: "全球内容创作", color: "#10b981", initial: "GC",
+    bio: "英文多平台营销内容创作", capabilities: ["英文内容", "多平台"], level: "Specialist",
+    systemPrompt: "",
+  },
+  {
+    id: "x-twitter-agent", label: "X", labelCn: "X/Twitter 创作", color: "#1da1f2", initial: "X",
+    bio: "生成高互动率的推文和 Thread", capabilities: ["推文", "Thread"], level: "Specialist",
+    systemPrompt: "",
+  },
+  {
+    id: "seo-agent", label: "SEO", labelCn: "SEO 专家", color: "#059669", initial: "SEO",
+    bio: "关键词研究、内容 SEO 优化", capabilities: ["SEO", "关键词"], level: "Specialist",
+    systemPrompt: "",
+  },
+  {
+    id: "visual-gen-agent", label: "Visual", labelCn: "视觉内容生成", color: "#fd79a8", initial: "VIS",
+    bio: "AI 图片生成 + 营销视觉创作", capabilities: ["图片生成", "视觉设计"], level: "Specialist",
+    systemPrompt: "",
+  },
+  {
+    id: "strategist-agent", label: "Strategist", labelCn: "营销策略师", color: "#6c5ce7", initial: "STR",
+    bio: "制定营销策略、内容战略", capabilities: ["策略规划", "渠道规划"], level: "Specialist",
+    systemPrompt: "",
+  },
+].filter((a) => a.id !== "ceo");
 
 function ChannelList({
   activeChannel,
   onSelect,
   teamLaunched,
+  execMode,
+  orchSubAgents,
+  orchCeoStatus,
+  activeTab,
+  onTabChange,
+  onExecModeChange,
+  singleAgentRunning,
+  onLaunchTeam,
 }: {
   activeChannel: ChannelId;
   onSelect: (id: ChannelId) => void;
   teamLaunched: boolean;
+  execMode: "single" | "orchestrator";
+  orchSubAgents: Array<{ agentId: string; status: string }>;
+  orchCeoStatus: string;
+  activeTab: TabId;
+  onTabChange: (tab: TabId) => void;
+  onExecModeChange: (mode: "single" | "orchestrator") => void;
+  singleAgentRunning: string | null; // agentId of currently running single agent
+  onLaunchTeam: () => void;
 }) {
+  const isOrchMode = execMode === "orchestrator";
+  const displayAgents = isOrchMode ? AGENTS : ALL_SINGLE_AGENTS;
+  const orchStatusMap = new Map(orchSubAgents.map((sa) => [sa.agentId, sa.status]));
+
+  function getAgentStatus(agentId: string): "online" | "busy" | "done" | "offline" {
+    if (isOrchMode) {
+      if (agentId === "ceo") {
+        if (!teamLaunched) return "offline";
+        if (["planning", "executing", "reviewing"].includes(orchCeoStatus)) return "busy";
+        if (orchCeoStatus === "done") return "done";
+        return "online"; // CEO 启动后待命
+      }
+      // 子 Agent：只有被 CEO 计划选中或正在执行的才上线
+      const subStatus = orchStatusMap.get(agentId);
+      if (subStatus === "running") return "busy";
+      if (subStatus === "done") return "done";
+      if (subStatus === "error") return "offline";
+      // 未被 CEO 选中的子 Agent 保持 offline（不再因 teamLaunched 就全部变绿）
+      return "offline";
+    }
+    // 单 Agent 模式：正在执行的 Agent 亮，其他灰色
+    if (singleAgentRunning === agentId) return "busy";
+    return "offline";
+  }
+
+  const statusDotColor: Record<string, string> = {
+    online: "#22c55e",
+    busy: "#ef4444",
+    done: "#22d3ee",
+    offline: "var(--muted-foreground)",
+  };
+
   return (
     <div
       className="flex flex-col w-64 shrink-0"
@@ -418,45 +727,92 @@ function ChannelList({
         borderRight: "1px solid var(--border)",
       }}
     >
-      <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+      {/* Mode Switch: 单Agent / CEO编排 */}
+      <div className="px-3 pt-3 pb-1">
+        <div
+          className="flex rounded-lg p-0.5"
+          style={{ background: "var(--muted)", border: "1px solid var(--border)" }}
+        >
+          {(["single", "orchestrator"] as const).map((mode) => {
+            const modeColor = mode === "single" ? "#22d3ee" : "#e74c3c";
+            // CEO 编排运行中时禁止切到单 Agent
+            const disabled = mode === "single" && orchCeoStatus !== "idle" && orchCeoStatus !== "done" && orchCeoStatus !== "error" && teamLaunched;
+            return (
+              <button
+                key={mode}
+                onClick={() => !disabled && onExecModeChange(mode)}
+                disabled={disabled}
+                className={cn(
+                  "flex-1 text-xs py-1.5 rounded-md font-medium transition-all duration-200",
+                  disabled
+                    ? "opacity-30 cursor-not-allowed"
+                    : execMode === mode
+                      ? "text-foreground"
+                      : "text-[var(--muted-foreground)] hover:text-foreground/70 cursor-pointer"
+                )}
+                style={
+                  execMode === mode
+                    ? { background: `${modeColor}15`, color: modeColor, boxShadow: `inset 0 0 0 1px ${modeColor}30` }
+                    : {}
+                }
+                title={disabled ? "CEO 编排执行中，无法切换" : ""}
+              >
+                {mode === "single" ? "单 Agent" : "CEO 编排"}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* View Tabs: 执行 / 对话 / 监控 */}
+      <div className="px-3 py-1">
+        <div className="flex gap-0.5">
+          {([
+            { id: "execute" as TabId, icon: Terminal, label: "执行" },
+            { id: "chat" as TabId, icon: MessageSquare, label: "对话" },
+            { id: "monitor" as TabId, icon: Monitor, label: "监控" },
+          ]).map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              onClick={() => onTabChange(id)}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200",
+                activeTab === id
+                  ? "text-foreground"
+                  : "text-[var(--muted-foreground)] hover:text-foreground/70 hover:bg-white/[0.03]"
+              )}
+              style={
+                activeTab === id
+                  ? { background: "rgba(167,139,250,0.08)", color: "#a78bfa" }
+                  : {}
+              }
+            >
+              <Icon className="h-3 w-3" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="mx-3 my-1" style={{ borderTop: "1px solid var(--border)" }} />
+
+      {/* Section Title */}
+      <div className="px-4 py-1.5">
         <h3
-          className="text-sm font-semibold uppercase tracking-[0.12em]"
+          className="text-[10px] font-semibold uppercase tracking-[0.12em]"
           style={{ color: "var(--muted-foreground)" }}
         >
-          Agent Team
+          {isOrchMode ? "执行队列" : "选择 Agent"}
         </h3>
-        <span
-          className="h-2 w-2 rounded-full"
-          style={{
-            background: teamLaunched
-              ? "#22c55e"
-              : "var(--muted-foreground)",
-            boxShadow: teamLaunched
-              ? "0 0 6px rgba(34,197,94,0.4)"
-              : "none",
-          }}
-        />
       </div>
+
+      {/* Agent List */}
       <nav className="flex-1 overflow-y-auto space-y-0.5 px-3 py-1">
-        <button
-          onClick={() => onSelect("all")}
-          className={cn(
-            "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer",
-            activeChannel === "all"
-              ? "font-medium text-foreground"
-              : "dark:hover:bg-white/[0.03] hover:bg-black/[0.03]"
-          )}
-          style={
-            activeChannel === "all"
-              ? { background: "rgba(167,139,250,0.08)" }
-              : { color: "var(--muted-foreground)" }
-          }
-        >
-          <Users className="h-4 w-4 shrink-0" />
-          <span className="flex-1 text-left">全员</span>
-        </button>
-        {AGENTS.map((agent) => {
+        {displayAgents.map((agent) => {
           const isActive = activeChannel === agent.id;
+          const status = getAgentStatus(agent.id);
+          const isOffline = status === "offline";
           return (
             <button
               key={agent.id}
@@ -467,50 +823,36 @@ function ChannelList({
                   ? "font-medium text-foreground"
                   : "dark:hover:bg-white/[0.03] hover:bg-black/[0.03]"
               )}
-              style={
-                isActive
+              style={{
+                ...(isActive
                   ? { background: "rgba(167,139,250,0.08)" }
-                  : { color: "var(--muted-foreground)" }
-              }
+                  : { color: "var(--muted-foreground)" }),
+                opacity: isOffline && isOrchMode ? 0.35 : 1,
+              }}
             >
-              <AgentAvatar
-                agentId={agent.id}
-                online={teamLaunched}
-              />
-              <span className="flex-1 text-left truncate">
-                {agent.labelCn}
-              </span>
+              <AgentAvatar agentId={agent.id} online={!isOffline} />
+              <span className="flex-1 text-left truncate">{agent.labelCn}</span>
               <span
-                className="h-2 w-2 rounded-full shrink-0"
-                style={{
-                  background: teamLaunched
-                    ? "#22c55e"
-                    : "var(--muted-foreground)",
-                }}
+                className={`h-2 w-2 rounded-full shrink-0 ${status === "busy" ? "animate-pulse" : ""}`}
+                style={{ background: statusDotColor[status] || "var(--muted-foreground)" }}
               />
             </button>
           );
         })}
       </nav>
-      <div
-        className="px-4 py-3"
-        style={{ borderTop: "1px solid var(--border)" }}
-      >
-        <div
-          className="flex items-center gap-2 text-xs"
-          style={{ color: "var(--muted-foreground)" }}
-        >
+
+      {/* Footer: Status */}
+      <div className="px-3 py-3" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="flex items-center gap-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
           <span
             className="h-2 w-2 rounded-full"
-            style={{
-              background: teamLaunched
-                ? "#22c55e"
-                : "var(--muted-foreground)",
-            }}
+            style={{ background: teamLaunched ? "#22c55e" : "var(--muted-foreground)" }}
           />
-          {teamLaunched
-            ? `在线: ${AGENTS.length} 个 Agent`
-            : "团队未启动"}
+          {isOrchMode
+            ? teamLaunched
+              ? `CEO 编排 · ${orchSubAgents.length > 0 ? `${orchSubAgents.filter(s => s.status === "done").length}/${orchSubAgents.length} 完成` : "等待指令"}`
+              : "未启动"
+            : `${displayAgents.length} 个 Agent 可用`}
         </div>
       </div>
     </div>
@@ -656,6 +998,7 @@ export function TeamStudioPage(): React.JSX.Element {
 
   // Orchestrator (CEO Multi-Agent) state
   const [execMode, setExecMode] = useState<ExecMode>("single");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [orch, setOrch] = useState<OrchestratorState>(INITIAL_ORCHESTRATOR);
   const [orchInput, setOrchInput] = useState("");
 
@@ -1453,6 +1796,14 @@ export function TeamStudioPage(): React.JSX.Element {
     const prompt = orchInput.trim();
     setOrchInput("");
 
+    // Auto-launch team if not already launched
+    if (!teamLaunched) {
+      setTeamLaunched(true);
+      if (window.api?.team) {
+        window.api.team.setAgents(["ceo"]);
+      }
+    }
+
     // Reset orchestrator state
     setOrch({
       isRunning: true,
@@ -1508,85 +1859,87 @@ export function TeamStudioPage(): React.JSX.Element {
       {/* Channel List */}
       <ChannelList
         activeChannel={activeChannel}
-        onSelect={setActiveChannel}
+        onSelect={(id) => {
+          setActiveChannel(id);
+          setSettingsOpen(false);
+          if (execMode === "single" && id !== "all") {
+            setExecAgentId(id);
+          }
+        }}
         teamLaunched={teamLaunched}
+        execMode={execMode}
+        orchSubAgents={orch.subAgents}
+        orchCeoStatus={orch.ceoStatus}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onExecModeChange={(mode) => setExecMode(mode)}
+        singleAgentRunning={execMode === "single" && exec.isRunning ? execAgentId : null}
+        onLaunchTeam={() => {
+          const next = !teamLaunched;
+          setTeamLaunched(next);
+          if (window.api?.team) {
+            window.api.team.setAgents(next ? ["ceo"] : []);
+          }
+          if (next) {
+            setActiveTab("execute");
+            setExecMode("orchestrator");
+          }
+        }}
       />
 
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Tab Bar */}
-        <div
-          className="flex items-center gap-1 px-4 py-2 shrink-0"
-          style={{
-            borderBottom: "1px solid var(--border)",
-            background: "var(--muted)",
-          }}
-        >
-          <button
-            onClick={() => setActiveTab("execute")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
-              activeTab === "execute"
-                ? "bg-primary/10 text-foreground font-medium"
-                : "text-foreground/40 hover:text-foreground/60"
-            )}
-            style={
-              activeTab === "execute"
-                ? { border: "1px solid rgba(167,139,250,0.2)" }
-                : {}
-            }
+      {/* Main Area — border color reflects execution mode */}
+      <div
+        className="flex-1 flex flex-col min-w-0"
+        style={{
+          borderTop: execMode === "orchestrator"
+            ? "2px solid rgba(231,76,60,0.3)"
+            : "2px solid rgba(34,211,238,0.3)",
+        }}
+      >
+        {/* Top Bar — CEO mode banner OR Agent info bar */}
+        {execMode === "orchestrator" && (!activeChannel || activeChannel === "all" || activeChannel === "ceo") ? (
+          /* CEO 编排模式默认 banner */
+          <div
+            className="px-4 py-3 shrink-0 flex items-center gap-3"
+            style={{ borderBottom: "1px solid var(--border)" }}
           >
-            <Terminal className="h-3.5 w-3.5" />
-            执行模式
-          </button>
-          <button
-            onClick={() => setActiveTab("chat")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
-              activeTab === "chat"
-                ? "bg-primary/10 text-foreground font-medium"
-                : "text-foreground/40 hover:text-foreground/60"
-            )}
-            style={
-              activeTab === "chat"
-                ? { border: "1px solid rgba(167,139,250,0.2)" }
-                : {}
-            }
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            团队对话
-          </button>
-          <button
-            onClick={() => setActiveTab("monitor")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
-              activeTab === "monitor"
-                ? "bg-primary/10 text-foreground font-medium"
-                : "text-foreground/40 hover:text-foreground/60"
-            )}
-            style={
-              activeTab === "monitor"
-                ? { border: "1px solid rgba(167,139,250,0.2)" }
-                : {}
-            }
-          >
-            <Monitor className="h-3.5 w-3.5" />
-            Monitor
-          </button>
-
-          <div className="ml-auto flex items-center gap-2">
+            <AgentAvatar agentId="ceo" size="md" online={teamLaunched} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold" style={{ color: "#e74c3c" }}>
+                  CEO 编排模式
+                </span>
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded"
+                  style={{
+                    background: "rgba(231,76,60,0.1)",
+                    color: "#e74c3c",
+                    border: "1px solid rgba(231,76,60,0.2)",
+                  }}
+                >
+                  {orch.ceoStatus === "idle" && "待命"}
+                  {orch.ceoStatus === "planning" && "分析中"}
+                  {orch.ceoStatus === "executing" && "执行中"}
+                  {orch.ceoStatus === "reviewing" && "审核中"}
+                  {orch.ceoStatus === "done" && "已完成"}
+                  {orch.ceoStatus === "error" && "出错"}
+                </span>
+              </div>
+              <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                输入任务，CEO 将自动分析需求并调度子 Agent 协作完成
+              </p>
+            </div>
+            {/* 启动/关闭团队按钮 */}
             <button
               onClick={() => {
-                const next = !teamLaunched
-                setTeamLaunched(next)
-                // Sync active agents to dock pet
+                const next = !teamLaunched;
+                setTeamLaunched(next);
                 if (window.api?.team) {
-                  const ids = next ? AGENTS.map(a => a.id) : []
-                  window.api.team.setAgents(ids)
+                  window.api.team.setAgents(next ? ["ceo"] : []);
                 }
               }}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0",
                 teamLaunched
                   ? "text-red-400 hover:bg-red-500/10"
                   : "text-[#22d3ee] hover:bg-[#22d3ee]/10"
@@ -1598,49 +1951,39 @@ export function TeamStudioPage(): React.JSX.Element {
               }}
             >
               {teamLaunched ? (
-                <>
-                  <PowerOff className="h-3.5 w-3.5" /> 关闭团队
-                </>
+                <><PowerOff className="h-3.5 w-3.5" /> 关闭</>
               ) : (
-                <>
-                  <Power className="h-3.5 w-3.5" /> 启动团队
-                </>
+                <><Power className="h-3.5 w-3.5" /> 启动团队</>
               )}
             </button>
           </div>
-        </div>
+        ) : activeChannel && activeChannel !== "all" ? (
+          /* 选中具体 Agent 时显示 Agent 信息栏 */
+          (() => {
+            const allAgents = [...AGENTS, ...ALL_SINGLE_AGENTS];
+            const selectedAgent = allAgents.find((a) => a.id === activeChannel);
+            if (!selectedAgent) return null;
+            return (
+              <>
+                <AgentInfoBar
+                  agent={selectedAgent}
+                  settingsOpen={settingsOpen}
+                  onToggleSettings={() => setSettingsOpen((v) => !v)}
+                />
+                {settingsOpen && (
+                  <AgentSettingsPanel
+                    agent={selectedAgent}
+                    onClose={() => setSettingsOpen(false)}
+                  />
+                )}
+              </>
+            );
+          })()
+        ) : null}
 
         {/* Execute Mode */}
         {activeTab === "execute" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Mode Switch */}
-            <div className="px-4 py-2 border-b border-[var(--border)]">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[var(--muted-foreground)]">执行模式:</span>
-                <button
-                  onClick={() => setExecMode("single")}
-                  className={cn(
-                    "px-2 py-1 rounded text-xs transition-colors",
-                    execMode === "single"
-                      ? "bg-primary/20 text-primary font-medium"
-                      : "hover:bg-[var(--muted)] text-[var(--muted-foreground)]"
-                  )}
-                >
-                  单 Agent
-                </button>
-                <button
-                  onClick={() => setExecMode("orchestrator")}
-                  className={cn(
-                    "px-2 py-1 rounded text-xs transition-colors",
-                    execMode === "orchestrator"
-                      ? "bg-primary/20 text-primary font-medium"
-                      : "hover:bg-[var(--muted)] text-[var(--muted-foreground)]"
-                  )}
-                >
-                  CEO 编排
-                </button>
-              </div>
-            </div>
 
             {/* Single Agent Mode */}
             {execMode === "single" && (
@@ -1834,24 +2177,6 @@ export function TeamStudioPage(): React.JSX.Element {
               }}
             >
               <div className="flex gap-2">
-                <select
-                  value={execAgentId}
-                  onChange={(e) => { setExecAgentId(e.target.value); setHasSession(false); }}
-                  disabled={exec.isRunning}
-                  className="rounded-lg px-2 py-2 text-sm outline-none shrink-0 cursor-pointer"
-                  style={{
-                    background: "var(--muted)",
-                    border: "1px solid var(--border)",
-                    color: "var(--foreground)",
-                    minWidth: "120px",
-                  }}
-                >
-                  {AGENTS.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.labelCn}
-                    </option>
-                  ))}
-                </select>
                 <textarea
                   value={execInput}
                   onChange={(e) => setExecInput(e.target.value)}
