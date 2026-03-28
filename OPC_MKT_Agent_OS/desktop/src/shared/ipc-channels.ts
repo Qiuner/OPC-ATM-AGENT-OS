@@ -64,6 +64,10 @@ export const IPC = {
   AGENT_STATUS: 'agent:status',
   AGENT_SAVE_RESULT: 'agent:save-result',
 
+  // ── Agent Session (conversation continuity) ──
+  AGENT_SESSION_GET: 'agent:session:get',
+  AGENT_SESSION_CLEAR: 'agent:session:clear',
+
   // ── Agent Events (main → renderer push) ──
   AGENT_EVENT: 'agent:event',
   AGENT_STREAM_CHUNK: 'agent:stream:chunk',
@@ -95,6 +99,10 @@ export const IPC = {
   TEAM_GET_AGENTS: 'team:agents:get',
   TEAM_SET_AGENTS: 'team:agents:set',
   TEAM_AGENTS_CHANGED: 'team:agents:changed',
+
+  // ── Chat Sync (cross-window message relay) ──
+  CHAT_SYNC_SEND: 'chat:sync:send',
+  CHAT_SYNC_BROADCAST: 'chat:sync:broadcast',
 
   // ── Dock Pet ──
   DOCK_PET_TOGGLE: 'dock-pet:toggle',

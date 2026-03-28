@@ -53,6 +53,7 @@ export interface AgentExecuteRequest {
   model?: 'opus' | 'sonnet' | 'haiku'
   maxBudgetUsd?: number
   timeoutMs?: number
+  sessionId?: string  // 传入上一轮的 sessionId 以恢复对话上下文
 }
 
 /** Agent 定义（从 engine/agents/registry.ts 镜像核心字段） */
@@ -140,6 +141,20 @@ async function buildAgentPrompt(agent: AgentDef, userMessage: string, context?: 
   return `${parts}\n\n---\n\nUser: ${userMessage}`
 }
 
+// ── Session Tracking (per agent) ──
+// 保持每个 agent 最近的 sessionId，切换页面后仍可恢复对话
+const agentSessions = new Map<string, string>()
+
+/** 获取 agent 的 sessionId */
+export function getAgentSessionId(agentId: string): string | undefined {
+  return agentSessions.get(agentId)
+}
+
+/** 清除 agent 的 sessionId（开启新对话） */
+export function clearAgentSession(agentId: string): void {
+  agentSessions.delete(agentId)
+}
+
 // ── Active Process Tracking ──
 
 let activeProcess: ChildProcess | null = null
@@ -180,16 +195,24 @@ export async function executeAgent(
     abortAgent()
   }
 
-  const prompt = await buildAgentPrompt(agent, request.message, request.context)
   const timeout = request.timeoutMs ?? 300_000 // 5 minutes default
+  // 优先用请求中的 sessionId，否则从 main 进程缓存中取
+  const resumeSessionId = request.sessionId || agentSessions.get(request.agentId)
+  const isResume = !!resumeSessionId
 
   // Build CLI args
   const args: string[] = [
     '-p',
     '--output-format', 'stream-json',
     '--verbose',
-    '--permission-mode', 'acceptEdits',
   ]
+
+  // 恢复会话：用 --resume 保持对话上下文；首次：用 --permission-mode
+  if (isResume) {
+    args.push('--resume', resumeSessionId!)
+  } else {
+    args.push('--permission-mode', 'acceptEdits')
+  }
 
   if (request.model) {
     args.push('--model', request.model)
@@ -199,7 +222,13 @@ export async function executeAgent(
     args.push('--max-budget-usd', String(request.maxBudgetUsd))
   }
 
-  args.push(prompt)
+  // 首次：构建完整 prompt（含 SKILL + context）；恢复：只发用户消息
+  if (isResume) {
+    args.push(request.message)
+  } else {
+    const prompt = await buildAgentPrompt(agent, request.message, request.context)
+    args.push(prompt)
+  }
 
   // Spawn claude process
   activeAbort = new AbortController()
@@ -273,11 +302,15 @@ export async function executeAgent(
       // Process event and push to renderer
       processStreamEvent(event, request.agentId)
 
-      // Capture final result
+      // Capture final result & persist session for resume
       if (event.type === 'result') {
         finalResult = (event.result as string) || ''
         sessionId = event.session_id
         totalCost = event.total_cost_usd as number | undefined
+        if (sessionId) {
+          agentSessions.set(request.agentId, sessionId)
+          console.log('[AgentEngine] session saved:', request.agentId, '->', sessionId.slice(0, 12))
+        }
       }
     })
 

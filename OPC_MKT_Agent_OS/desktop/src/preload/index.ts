@@ -95,6 +95,10 @@ const api = {
       ipcRenderer.invoke(IPC.AGENT_STATUS),
     saveResult: (data: Record<string, unknown>): Promise<IpcResponse> =>
       ipcRenderer.invoke(IPC.AGENT_SAVE_RESULT, data),
+    getSession: (agentId: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.AGENT_SESSION_GET, { agentId }),
+    clearSession: (agentId: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.AGENT_SESSION_CLEAR, { agentId }),
     // Agent stream events (main → renderer push)
     onStreamChunk: (callback: (event: unknown) => void): (() => void) => {
       const handler = (_: Electron.IpcRendererEvent, data: unknown): void => callback(data)
@@ -153,6 +157,17 @@ const api = {
       const handler = (_: Electron.IpcRendererEvent, ids: string[]): void => callback(ids)
       ipcRenderer.on(IPC.TEAM_AGENTS_CHANGED, handler)
       return () => { ipcRenderer.removeListener(IPC.TEAM_AGENTS_CHANGED, handler) }
+    },
+  },
+
+  /** Chat sync — cross-window message relay */
+  chatSync: {
+    send: (msg: { agentId: string; role: string; content: string; mode?: string }): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.CHAT_SYNC_SEND, msg),
+    onMessage: (callback: (msg: { agentId: string; role: string; content: string; mode?: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, msg: { agentId: string; role: string; content: string; mode?: string }): void => callback(msg)
+      ipcRenderer.on(IPC.CHAT_SYNC_BROADCAST, handler)
+      return () => { ipcRenderer.removeListener(IPC.CHAT_SYNC_BROADCAST, handler) }
     },
   },
 

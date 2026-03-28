@@ -64,6 +64,8 @@ interface WindowApi {
     abort(): Promise<IpcResponse>
     status(): Promise<IpcResponse>
     saveResult(data: Record<string, unknown>): Promise<IpcResponse>
+    getSession(agentId: string): Promise<IpcResponse>
+    clearSession(agentId: string): Promise<IpcResponse>
     onStreamChunk(callback: (event: unknown) => void): () => void
     onStreamEnd(callback: () => void): () => void
     onStreamError(callback: (error: unknown) => void): () => void
@@ -84,6 +86,10 @@ interface WindowApi {
     getAgents(): Promise<IpcResponse<string[]>>
     setAgents(ids: string[]): Promise<IpcResponse<string[]>>
     onAgentsChanged(callback: (ids: string[]) => void): () => void
+  }
+  chatSync: {
+    send(msg: { agentId: string; role: string; content: string; mode?: string }): Promise<IpcResponse>
+    onMessage(callback: (msg: { agentId: string; role: string; content: string; mode?: string }) => void): () => void
   }
   dockPet: {
     toggle(): Promise<IpcResponse<{ visible: boolean }>>

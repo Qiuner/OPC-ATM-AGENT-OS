@@ -615,7 +615,11 @@ export function TeamStudioPage(): React.JSX.Element {
   const [execInput, setExecInput] = useState("");
   const execAbortRef = useRef<AbortController | null>(null);
   const execCleanupRef = useRef<(() => void) | null>(null);
+  // Track execution origin: 'local' = started from this window, 'remote' = from popover/other
+  const execOriginRef = useRef<'local' | 'remote' | null>(null);
   const [execAgentId, setExecAgentId] = useState<string>("xhs-agent");
+  // hasSession: main 进程是否已有此 agent 的 sessionId（切换页面后仍保持）
+  const [hasSession, setHasSession] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -630,9 +634,30 @@ export function TeamStudioPage(): React.JSX.Element {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [exec.logs]);
 
-  // Check agent server status on mount
+  // Check if main process has an active session for this agent
+  useEffect(() => {
+    const api = getApi();
+    if (api?.agent?.getSession) {
+      api.agent.getSession(execAgentId).then((res) => {
+        setHasSession(!!res.data?.sessionId);
+      }).catch(() => setHasSession(false));
+    }
+  }, [execAgentId]);
+
+  // Sync team launch state from persisted agent list + health check
   useEffect(() => {
     (async () => {
+      // Check persisted team agents (dock pet state)
+      if (window.api?.team) {
+        try {
+          const teamRes = await window.api.team.getAgents()
+          if (teamRes.success && teamRes.data && teamRes.data.length > 0) {
+            setTeamLaunched(true)
+            return
+          }
+        } catch { /* fall through */ }
+      }
+      // Fallback: check agent server health
       try {
         const res = await fetch(`${AGENT_CHAT_BASE}/api/health`);
         if (res.ok) setTeamLaunched(true);
@@ -640,6 +665,203 @@ export function TeamStudioPage(): React.JSX.Element {
         setTeamLaunched(false);
       }
     })();
+
+    // Listen for team changes from dock pet / other windows
+    if (window.api?.team) {
+      const unsub = window.api.team.onAgentsChanged((ids) => {
+        setTeamLaunched(ids.length > 0)
+      })
+      return unsub
+    }
+  }, []);
+
+  // Listen for chat messages from dock pet popover
+  useEffect(() => {
+    if (!window.api?.chatSync) return
+    const unsub = window.api.chatSync.onMessage((msg) => {
+      const newMsg: StudioMessage = {
+        id: createId(),
+        role: msg.role === 'user' ? 'user' : 'agent',
+        agentId: msg.role !== 'user' ? msg.agentId : undefined,
+        content: msg.content,
+        timestamp: new Date(),
+      }
+      setMessages((prev) => {
+        // Avoid duplicate if we just sent this message
+        const last = prev[prev.length - 1]
+        if (last && last.role === newMsg.role && last.content === msg.content) return prev
+        return [...prev, newMsg]
+      })
+    })
+    return unsub
+  }, [])
+
+  // Listen for remote agent executions (from dock pet popover → execute mode)
+  useEffect(() => {
+    if (!window.api?.chatSync) return;
+    const api = getApi();
+    if (!api) return;
+
+    let remoteCleanup: (() => void) | null = null;
+
+    const unsub = window.api.chatSync.onMessage((msg) => {
+      // Only handle exec-mode user messages (not chat-mode)
+      if (msg.role !== 'user' || msg.mode !== 'exec') return;
+      // If we're already tracking an execution (local or remote), ignore
+      if (execOriginRef.current) return;
+
+      const targetAgentId = msg.agentId;
+      const agent = AGENT_MAP.get(targetAgentId);
+      const agentLabel = agent?.labelCn || targetAgentId;
+
+      // Mark as remote execution
+      execOriginRef.current = 'remote';
+      setExecAgentId(targetAgentId);
+      setActiveTab('execute');
+
+      setExec({
+        isRunning: true,
+        startedAt: Date.now(),
+        prompt: msg.content,
+        tasks: [{
+          id: createId(),
+          agentId: targetAgentId,
+          description: `${agentLabel} 执行中...`,
+          status: 'running' as TaskStatus,
+          progress: 0,
+          toolCallCount: 0,
+          content: '',
+        }],
+        logs: [{
+          id: createId(),
+          timestamp: Date.now(),
+          agentId: targetAgentId,
+          type: 'info' as const,
+          message: `[Dock Pet] 开始执行: ${msg.content}`,
+        }],
+        result: '',
+      });
+
+      // Set up stream listeners for the remote execution
+      let resultContent = '';
+      let toolCount = 0;
+
+      const unsubChunk = api.agent.onStreamChunk((raw: unknown) => {
+        const event = (raw ?? {}) as Record<string, unknown>;
+        if (event.type === 'text' && event.content) {
+          resultContent += event.content as string;
+          setExec((prev) => ({
+            ...prev,
+            tasks: prev.tasks.map((t) =>
+              t.agentId === targetAgentId
+                ? { ...t, content: resultContent, progress: Math.min(90, t.progress + 2) }
+                : t
+            ),
+          }));
+        }
+        if (event.type === 'tool_use') {
+          toolCount++;
+          const toolName = (event.tool as string) || '';
+          setExec((prev) => ({
+            ...prev,
+            tasks: prev.tasks.map((t) =>
+              t.agentId === targetAgentId
+                ? { ...t, currentTool: toolName, toolCallCount: toolCount }
+                : t
+            ),
+            logs: [...prev.logs, {
+              id: createId(),
+              timestamp: Date.now(),
+              agentId: targetAgentId,
+              type: 'tool' as const,
+              message: `${TOOL_LABELS[toolName] || toolName}${event.toolInput ? ` → ${(event.toolInput as string).slice(0, 120)}` : ''}`,
+            }],
+          }));
+        }
+        if (event.type === 'tool_result') {
+          setExec((prev) => ({
+            ...prev,
+            logs: [...prev.logs, {
+              id: createId(),
+              timestamp: Date.now(),
+              agentId: targetAgentId,
+              type: 'result' as const,
+              message: `✅ ${((event.content as string) || '').slice(0, 200)}`,
+            }],
+          }));
+        }
+        if (event.type === 'error') {
+          setExec((prev) => ({
+            ...prev,
+            logs: [...prev.logs, {
+              id: createId(),
+              timestamp: Date.now(),
+              agentId: targetAgentId,
+              type: 'error' as const,
+              message: (event.message as string) || 'Unknown error',
+            }],
+          }));
+        }
+      });
+
+      const cleanup = () => {
+        unsubChunk();
+        unsubEnd();
+        unsubError();
+        execOriginRef.current = null;
+        remoteCleanup = null;
+      };
+
+      const unsubEnd = api.agent.onStreamEnd(() => {
+        cleanup();
+        setExec((prev) => ({
+          ...prev,
+          isRunning: false,
+          result: resultContent,
+          tasks: prev.tasks.map((t) =>
+            t.agentId === targetAgentId
+              ? { ...t, status: 'done' as TaskStatus, progress: 100, currentTool: undefined, finishedAt: Date.now() }
+              : t
+          ),
+          logs: [...prev.logs, {
+            id: createId(),
+            timestamp: Date.now(),
+            agentId: targetAgentId,
+            type: 'result' as const,
+            message: `执行完成 (${toolCount} 次工具调用)`,
+          }],
+        }));
+      });
+
+      const unsubError = api.agent.onStreamError((rawErr: unknown) => {
+        const err = (rawErr ?? {}) as Record<string, unknown>;
+        cleanup();
+        setExec((prev) => ({
+          ...prev,
+          isRunning: false,
+          tasks: prev.tasks.map((t) =>
+            t.agentId === targetAgentId
+              ? { ...t, status: 'error' as TaskStatus, error: (err.message as string) || 'Stream error', finishedAt: Date.now() }
+              : t
+          ),
+          logs: [...prev.logs, {
+            id: createId(),
+            timestamp: Date.now(),
+            agentId: targetAgentId,
+            type: 'error' as const,
+            message: (err.message as string) || 'Stream error',
+          }],
+        }));
+      });
+
+      remoteCleanup = cleanup;
+      execCleanupRef.current = cleanup;
+    });
+
+    return () => {
+      unsub();
+      remoteCleanup?.();
+    };
   }, []);
 
   // ---------- Chat handlers ----------
@@ -658,6 +880,9 @@ export function TeamStudioPage(): React.JSX.Element {
 
     const targetAgentId =
       activeChannel === "all" ? "ceo" : activeChannel;
+
+    // Broadcast user message to popover
+    window.api?.chatSync?.send({ agentId: targetAgentId, role: 'user', content: userMsg.content })
     const agent = AGENT_MAP.get(targetAgentId);
     if (!agent) {
       setSending(false);
@@ -690,11 +915,17 @@ export function TeamStudioPage(): React.JSX.Element {
         );
       },
       () => {
-        setMessages((prev) =>
-          prev.map((m) =>
+        setMessages((prev) => {
+          const updated = prev.map((m) =>
             m.id === agentMsgId ? { ...m, isStreaming: false } : m
           )
-        );
+          // Broadcast completed response to popover
+          const finalMsg = updated.find((m) => m.id === agentMsgId)
+          if (finalMsg?.content) {
+            window.api?.chatSync?.send({ agentId: targetAgentId, role: 'assistant', content: finalMsg.content })
+          }
+          return updated
+        });
         setSending(false);
 
         // Save to contents via IPC
@@ -754,7 +985,11 @@ export function TeamStudioPage(): React.JSX.Element {
     const agent = AGENT_MAP.get(targetAgentId);
     const agentLabel = agent?.labelCn || targetAgentId;
 
-    setExec({
+    // Mark as local execution and broadcast to popover
+    execOriginRef.current = 'local';
+    window.api?.chatSync?.send({ agentId: targetAgentId, role: 'user', content: prompt, mode: 'exec' });
+
+    setExec((prev) => ({
       isRunning: true,
       startedAt: Date.now(),
       prompt,
@@ -769,17 +1004,26 @@ export function TeamStudioPage(): React.JSX.Element {
           content: "",
         },
       ],
+      // 恢复会话时保留之前的 logs，用分隔线标记
       logs: [
+        ...(hasSession ? prev.logs : []),
+        ...(hasSession ? [{
+          id: createId(),
+          timestamp: Date.now(),
+          agentId: targetAgentId,
+          type: "info" as const,
+          message: `── 继续对话 ──`,
+        }] : []),
         {
           id: createId(),
           timestamp: Date.now(),
           agentId: targetAgentId,
-          type: "info",
+          type: "info" as const,
           message: `开始执行: ${prompt}`,
         },
       ],
       result: "",
-    });
+    }));
 
     const api = getApi();
 
@@ -875,6 +1119,11 @@ export function TeamStudioPage(): React.JSX.Element {
 
       const unsubEnd = api.agent.onStreamEnd(() => {
         cleanup();
+        execOriginRef.current = null;
+        // Broadcast final result to popover
+        if (resultContent) {
+          window.api?.chatSync?.send({ agentId: targetAgentId, role: 'assistant', content: resultContent, mode: 'exec' });
+        }
         setExec((prev) => ({
           ...prev,
           isRunning: false,
@@ -907,6 +1156,7 @@ export function TeamStudioPage(): React.JSX.Element {
         (rawErr: unknown) => {
           const err = (rawErr ?? {}) as Record<string, unknown>;
           cleanup();
+          execOriginRef.current = null;
           setExec((prev) => ({
             ...prev,
             isRunning: false,
@@ -939,11 +1189,15 @@ export function TeamStudioPage(): React.JSX.Element {
       execCleanupRef.current = cleanup;
 
       try {
+        // sessionId 由 main 进程自动管理（agentSessions Map）
         const res = await api.agent.execute({
           agentId: targetAgentId,
           message: prompt,
           mode: "direct",
         });
+        if (res.success) {
+          setHasSession(true);
+        }
         if (!res.success) {
           cleanup();
           setExec((prev) => ({
@@ -1060,6 +1314,7 @@ export function TeamStudioPage(): React.JSX.Element {
     execAbortRef.current?.abort();
     execCleanupRef.current?.();
     execCleanupRef.current = null;
+    execOriginRef.current = null;
     setExec((prev) => ({ ...prev, isRunning: false }));
   };
 
@@ -1367,7 +1622,7 @@ export function TeamStudioPage(): React.JSX.Element {
               <div className="flex gap-2">
                 <select
                   value={execAgentId}
-                  onChange={(e) => setExecAgentId(e.target.value)}
+                  onChange={(e) => { setExecAgentId(e.target.value); setHasSession(false); }}
                   disabled={exec.isRunning}
                   className="rounded-lg px-2 py-2 text-sm outline-none shrink-0 cursor-pointer"
                   style={{
@@ -1392,7 +1647,7 @@ export function TeamStudioPage(): React.JSX.Element {
                       handleExecute();
                     }
                   }}
-                  placeholder={`向 ${AGENT_MAP.get(execAgentId)?.labelCn || execAgentId} 下达任务...`}
+                  placeholder={hasSession ? `继续对话... (上下文已保持)` : `向 ${AGENT_MAP.get(execAgentId)?.labelCn || execAgentId} 下达任务...`}
                   rows={1}
                   className="flex-1 rounded-lg px-3 py-2 text-sm resize-none outline-none"
                   style={{
@@ -1426,13 +1681,13 @@ export function TeamStudioPage(): React.JSX.Element {
                   </button>
                 )}
                 <button
-                  onClick={() => setExec(INITIAL_EXEC)}
+                  onClick={() => { setExec(INITIAL_EXEC); setHasSession(false); getApi()?.agent?.clearSession(execAgentId); }}
                   className="flex items-center justify-center size-9 rounded-lg shrink-0 hover:bg-white/5 transition-colors"
                   style={{
                     border: "1px solid var(--border)",
                     color: "var(--muted-foreground)",
                   }}
-                  title="清除"
+                  title="新对话（清除上下文）"
                 >
                   <RotateCcw className="h-4 w-4" />
                 </button>

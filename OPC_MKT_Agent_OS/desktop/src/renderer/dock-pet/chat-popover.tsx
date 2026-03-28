@@ -36,23 +36,35 @@ export function ChatPopover({ agentId }: ChatPopoverProps) {
     inputRef.current?.focus()
   }, [agentId])
 
-  // Listen for stream chunks
+  // Listen for stream chunks (from any agent.execute() — local or remote)
   useEffect(() => {
     const unsubChunk = window.api.agent.onStreamChunk((event: unknown) => {
-      const e = event as { text?: string }
-      if (e.text) {
+      const e = event as { type?: string; content?: string; text?: string; agentId?: string }
+      // Only process events for our agent
+      if (e.agentId && e.agentId !== agentId) return
+      const text = e.text || (e.type === 'text' ? e.content : undefined)
+      if (text) {
+        setIsStreaming(true)
         setMessages((prev) => {
           const last = prev[prev.length - 1]
           if (last && last.role === 'assistant') {
-            return [...prev.slice(0, -1), { role: 'assistant', content: last.content + e.text }]
+            return [...prev.slice(0, -1), { role: 'assistant', content: last.content + text }]
           }
-          return [...prev, { role: 'assistant', content: e.text! }]
+          return [...prev, { role: 'assistant', content: text }]
         })
       }
     })
 
     const unsubEnd = window.api.agent.onStreamEnd(() => {
       setIsStreaming(false)
+      // Broadcast final assistant response to other windows
+      setMessages((prev) => {
+        const last = prev[prev.length - 1]
+        if (last?.role === 'assistant') {
+          window.api.chatSync?.send({ agentId, role: 'assistant', content: last.content, mode: 'exec' })
+        }
+        return prev
+      })
     })
 
     const unsubError = window.api.agent.onStreamError(() => {
@@ -64,12 +76,31 @@ export function ChatPopover({ agentId }: ChatPopoverProps) {
       unsubEnd()
       unsubError()
     }
-  }, [])
+  }, [agentId])
 
   // Reset messages when agent changes
   useEffect(() => {
     setMessages([])
     setInput('')
+  }, [agentId])
+
+  // Listen for chat sync from other windows (e.g. Team Studio)
+  useEffect(() => {
+    if (!window.api?.chatSync) return
+    const unsub = window.api.chatSync.onMessage((msg) => {
+      if (msg.agentId !== agentId) return
+      // Avoid duplicating messages we sent ourselves
+      setMessages((prev) => {
+        const last = prev[prev.length - 1]
+        if (last && last.role === msg.role && last.content === msg.content) return prev
+        if (msg.role === 'assistant' && last?.role === 'assistant') {
+          // Update streaming assistant message
+          return [...prev.slice(0, -1), { role: 'assistant' as const, content: msg.content }]
+        }
+        return [...prev, { role: msg.role as 'user' | 'assistant', content: msg.content }]
+      })
+    })
+    return unsub
   }, [agentId])
 
   const sendMessage = useCallback(async () => {
@@ -79,6 +110,9 @@ export function ChatPopover({ agentId }: ChatPopoverProps) {
     setInput('')
     setMessages((prev) => [...prev, { role: 'user', content: text }])
     setIsStreaming(true)
+
+    // Broadcast user message to other windows
+    window.api.chatSync?.send({ agentId, role: 'user', content: text, mode: 'exec' })
 
     try {
       await window.api.agent.execute({

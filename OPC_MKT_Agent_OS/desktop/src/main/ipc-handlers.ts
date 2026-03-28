@@ -20,6 +20,8 @@ import {
   abortAgent,
   isAgentRunning,
   getAgentStatuses,
+  getAgentSessionId,
+  clearAgentSession,
   type AgentExecuteRequest,
 } from './agent-engine'
 import { toggleDockPet, getMainWindow, getDockPetWindow, getChatPopoverWindow } from './index'
@@ -450,8 +452,9 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
     agentId: string; message: string; mode?: string;
     context?: Record<string, unknown>; model?: string;
     maxBudgetUsd?: number; timeoutMs?: number;
+    sessionId?: string;
   }): Promise<IpcResponse> => {
-    console.log('[IPC] AGENT_EXECUTE received:', { agentId: data.agentId, message: data.message?.slice(0, 80) })
+    console.log('[IPC] AGENT_EXECUTE received:', { agentId: data.agentId, message: data.message?.slice(0, 80), sessionId: data.sessionId?.slice(0, 12) })
     if (!data.agentId || !data.message) {
       return { success: false, error: 'agentId and message are required' }
     }
@@ -465,6 +468,7 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
       model: data.model as 'opus' | 'sonnet' | 'haiku' | undefined,
       maxBudgetUsd: data.maxBudgetUsd,
       timeoutMs: data.timeoutMs,
+      sessionId: data.sessionId,
     }
 
     const result = await executeAgent(request)
@@ -571,6 +575,18 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
   handle(IPC.AGENT_STATUS, (): IpcResponse => {
     const agents = getAgentStatuses(runningAgentId)
     return { success: true, data: { agents, isRunning: isAgentRunning() } }
+  })
+
+  // ── Agent Session (conversation continuity) ──
+
+  handle(IPC.AGENT_SESSION_GET, (data: { agentId: string }): IpcResponse => {
+    const sessionId = getAgentSessionId(data.agentId)
+    return { success: true, data: { sessionId: sessionId || null } }
+  })
+
+  handle(IPC.AGENT_SESSION_CLEAR, (data: { agentId: string }): IpcResponse => {
+    clearAgentSession(data.agentId)
+    return { success: true }
   })
 
   // ── Secure Storage (API Keys via Keychain) ──
@@ -680,6 +696,19 @@ export function registerIpcHandlers(mainWindow?: BrowserWindow): void {
       dockPet.webContents.send(IPC.TEAM_AGENTS_CHANGED, ids)
     }
     return { success: true, data: ids }
+  })
+
+  // ── Chat Sync (relay messages between popover ↔ main window) ──
+
+  handle(IPC.CHAT_SYNC_SEND, (msg: { agentId: string; role: string; content: string }): IpcResponse => {
+    // Broadcast to ALL windows so both popover and Team Studio can receive
+    const allWindows = BrowserWindow.getAllWindows()
+    for (const win of allWindows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send(IPC.CHAT_SYNC_BROADCAST, msg)
+      }
+    }
+    return { success: true }
   })
 
   // ── Dock Pet Control ──
