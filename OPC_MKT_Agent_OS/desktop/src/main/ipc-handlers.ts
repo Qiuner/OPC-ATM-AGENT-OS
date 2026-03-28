@@ -484,86 +484,13 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     runningAgentId = undefined
 
     if (result.success && result.result) {
-      // Auto-save result as task + content + agentRun
-      const saveData = {
-        mode: data.mode || 'direct',
-        agentId: data.agentId,
-        prompt: data.message,
-        result: result.result,
-      }
-      const now = nowISO()
-      const title = extractTitle(result.result) || data.message.slice(0, 80)
-
-      const tasks = readCollection<Task>('tasks')
-      const task: Task = {
-        id: generateId('task'),
-        campaign_id: 'default',
-        title,
-        description: data.message,
-        status: 'review',
-        assignee_type: 'agent',
-        assignee_id: data.agentId,
-        priority: 1,
-        due_date: null,
-        created_at: now,
-        updated_at: now,
-      }
-      tasks.push(task)
-      writeCollection('tasks', tasks)
-
-      const contents = readCollection<Content>('contents')
-      const platform = data.agentId === 'xhs-agent' ? 'xiaohongshu' : 'general'
-      const content: Content = {
-        id: generateId('cnt'),
-        task_id: task.id,
-        campaign_id: 'default',
-        title,
-        body: result.result,
-        platform,
-        status: 'review',
-        media_urls: [],
-        metadata: { mode: saveData.mode, agentId: data.agentId, prompt: data.message },
-        created_by: `agent:${data.agentId}`,
-        created_at: now,
-        updated_at: now,
-        agent_run_id: null,
-        agent_type: data.agentId,
-        learning_id: null,
-      }
-      contents.push(content)
-      writeCollection('contents', contents)
-
-      const runs = readCollection<AgentRun>('agent-runs')
-      const agentRun: AgentRun = {
-        id: generateId('run'),
-        task_id: task.id,
-        agent_type: data.agentId,
-        provider: 'anthropic',
-        model: data.model || 'claude-sonnet',
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        status: 'success',
-        input: { prompt: data.message },
-        output: { result: result.result.slice(0, 2000) },
-        error: null,
-        started_at: now,
-        finished_at: now,
-        hypothesis: null,
-        experiment_result: null,
-        learnings: null,
-      }
-      runs.push(agentRun)
-      writeCollection('agent-runs', runs)
-
+      // No auto-save — content only saved to Approval Center when user clicks "准备推送"
       return {
         success: true,
         data: {
           result: result.result,
           sessionId: result.sessionId,
           cost: result.cost,
-          taskId: task.id,
-          contentId: content.id,
-          agentRunId: agentRun.id,
         },
       }
     }
@@ -693,13 +620,25 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
             broadcastToAll(IPC.TEAM_AGENTS_CHANGED, ids)
             break
           }
-          case 'sub-start':
+          case 'sub-start': {
             broadcastToAll(IPC.ORCHESTRATOR_SUB_START, {
               agentId: event.agentId,
               name: event.name,
               task: event.task,
             })
+            // Sync sub-agent to dock pet + header on every sub-start
+            const currentIds = (getSettingValue('teamAgentIds') as string[] | undefined) ?? ['ceo']
+            if (!currentIds.includes(event.agentId)) {
+              const updatedIds = [...currentIds, event.agentId]
+              setSettingValue('teamAgentIds', updatedIds)
+              const dockPet = getDockPetWindow()
+              if (dockPet && !dockPet.isDestroyed()) {
+                dockPet.webContents.send(IPC.TEAM_AGENTS_CHANGED, updatedIds)
+              }
+              broadcastToAll(IPC.TEAM_AGENTS_CHANGED, updatedIds)
+            }
             break
+          }
           case 'sub-stream':
             broadcastToAll(IPC.ORCHESTRATOR_SUB_STREAM, {
               agentId: event.agentId,

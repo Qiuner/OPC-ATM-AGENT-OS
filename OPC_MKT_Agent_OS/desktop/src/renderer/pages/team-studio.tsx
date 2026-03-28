@@ -26,6 +26,7 @@ import {
   Settings,
   ChevronUp,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { getApi } from "@/lib/ipc";
 import { PixelAgentSVG, type MarketingAgentId, type PixelAgentStatus } from "@/components/features/agent-monitor/pixel-agents";
@@ -229,6 +230,7 @@ interface SubAgentState {
 interface OrchestratorState {
   isRunning: boolean;
   ceoStatus: "idle" | "planning" | "executing" | "reviewing" | "done" | "error";
+  prompt?: string;
   plan?: string;
   subAgents: SubAgentState[];
   progress: { done: number; total: number; running: string[] };
@@ -972,6 +974,7 @@ function StatusIcon({ status }: { status: TaskStatus }) {
 // ==========================================
 
 export function TeamStudioPage(): React.JSX.Element {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("execute");
   const [activeChannel, setActiveChannel] = useState<ChannelId>("all");
   const [teamLaunched, setTeamLaunched] = useState(false);
@@ -1808,6 +1811,7 @@ export function TeamStudioPage(): React.JSX.Element {
     setOrch({
       isRunning: true,
       ceoStatus: "planning",
+      prompt,
       subAgents: [],
       progress: { done: 0, total: 0, running: [] },
     });
@@ -1872,7 +1876,11 @@ export function TeamStudioPage(): React.JSX.Element {
         orchCeoStatus={orch.ceoStatus}
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onExecModeChange={(mode) => setExecMode(mode)}
+        onExecModeChange={(mode) => {
+          setExecMode(mode);
+          setActiveChannel("all");
+          setSettingsOpen(false);
+        }}
         singleAgentRunning={execMode === "single" && exec.isRunning ? execAgentId : null}
         onLaunchTeam={() => {
           const next = !teamLaunched;
@@ -2307,14 +2315,22 @@ export function TeamStudioPage(): React.JSX.Element {
                         <p className="text-xs text-[var(--muted-foreground)] truncate">{sa.task}</p>
                       </div>
                     </div>
-                    {sa.output && (
-                      <div
-                        className="rounded-lg p-3 text-sm leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto"
-                        style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--foreground)" }}
-                      >
-                        {sa.output}
-                      </div>
-                    )}
+                    {sa.output && (() => {
+                      // Clean output: remove line-number prefixes (e.g. "1→") and file read artifacts
+                      const cleaned = sa.output
+                        .replace(/^\d+→/gm, '')
+                        .replace(/^[\s\S]*?(#|##|###|\*\*)/m, '$1') // skip to first markdown heading or bold
+                        .trim();
+                      const summary = cleaned.length > 200 ? cleaned.slice(0, 200) + '...' : cleaned;
+                      return (
+                        <div
+                          className="rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap max-h-[120px] overflow-y-auto"
+                          style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+                        >
+                          {summary}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -2337,17 +2353,96 @@ export function TeamStudioPage(): React.JSX.Element {
                 </div>
               )}
 
-              {/* Final Result */}
-              {orch.finalResult && (
-                <div className="rounded-xl p-4" style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.2)" }}>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#22d3ee" }}>
-                    最终交付
-                  </h4>
-                  <pre className="text-sm whitespace-pre-wrap" style={{ color: "var(--foreground)" }}>
-                    {orch.finalResult}
-                  </pre>
-                </div>
-              )}
+              {/* Final Result — extract final content and render cleanly */}
+              {orch.finalResult && (() => {
+                // Try to extract the final note content (after "最终稿" or "正文" marker)
+                const raw = orch.finalResult;
+                let finalContent = raw;
+                // Look for the actual content section
+                const markers = ['### 最终稿', '**正文：**', '**正文:**', '## 最终交付', '### 最终内容'];
+                for (const marker of markers) {
+                  const idx = raw.indexOf(marker);
+                  if (idx !== -1) {
+                    finalContent = raw.slice(idx);
+                    break;
+                  }
+                }
+                // Clean up line-number prefixes if present
+                finalContent = finalContent.replace(/^\d+→/gm, '').trim();
+
+                return (
+                  <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(34,211,238,0.3)" }}>
+                    {/* Header */}
+                    <div
+                      className="px-4 py-3 flex items-center justify-between"
+                      style={{ background: "rgba(34,211,238,0.08)", borderBottom: "1px solid rgba(34,211,238,0.15)" }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-[#22d3ee]" />
+                        <h4 className="text-sm font-semibold" style={{ color: "#22d3ee" }}>
+                          最终交付
+                        </h4>
+                      </div>
+                    </div>
+                    {/* Content */}
+                    <div
+                      className="p-4 text-sm leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto"
+                      style={{ color: "var(--foreground)" }}
+                    >
+                      {finalContent}
+                    </div>
+                    {/* Action buttons */}
+                    <div
+                      className="px-4 py-3 flex items-center justify-end gap-3"
+                      style={{ borderTop: "1px solid var(--border)", background: "var(--muted)" }}
+                    >
+                      <button
+                        onClick={() => {
+                          setOrchInput("请根据以上反馈修改优化内容");
+                          setOrch((prev) => ({ ...prev, ceoStatus: "idle", finalResult: undefined }));
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-white/5"
+                        style={{ color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        重新修改
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const api = getApi();
+                          if (!api) return;
+                          // Save final delivery to Approval Center
+                          const content = finalContent;
+                          const taskPrompt = orch.prompt || "CEO 编排任务";
+                          const title = content.match(/\*\*标题[：:]\s*\*\*\s*(.+)/)?.[1]
+                            || content.match(/^#+\s*(.+)/m)?.[1]
+                            || taskPrompt.slice(0, 80);
+                          const res = await api.agent.saveResult({
+                            mode: "orchestrator",
+                            agentId: "ceo",
+                            prompt: taskPrompt,
+                            result: content,
+                            title: title.slice(0, 100),
+                            platform: "xiaohongshu",
+                          });
+                          if (res.success) {
+                            navigate("/approval");
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                        style={{
+                          background: "rgba(34,211,238,0.15)",
+                          color: "#22d3ee",
+                          border: "1px solid rgba(34,211,238,0.3)",
+                        }}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        准备推送
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Error */}
               {orch.error && (
