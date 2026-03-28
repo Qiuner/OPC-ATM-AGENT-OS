@@ -10,10 +10,7 @@
     },
     "image-gen": {
       "command": "npx",
-      "args": ["tsx", "mcps/image-gen/index.ts"],
-      "env": {
-        "GOOGLE_API_KEY": "AIzaSyA8gQrtV2rtTe_4C1CvLFqQZAk8DEzums4"
-      }
+      "args": ["tsx", "mcps/image-gen/index.ts"]
     }
   }
 }

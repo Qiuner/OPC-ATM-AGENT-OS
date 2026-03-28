@@ -83,10 +83,6 @@ export class AgentRegistry {
           command: "npx",
           args: ["tsx", join(MCPS_DIR, "xhs-data", "index.ts")],
         },
-        creatorflow: {
-          command: "npx",
-          args: ["tsx", join(MCPS_DIR, "creatorflow", "index.ts")],
-        },
         "image-gen": {
           command: "npx",
           args: ["tsx", join(MCPS_DIR, "image-gen", "index.ts")],

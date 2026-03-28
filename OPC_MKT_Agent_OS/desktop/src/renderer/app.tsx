@@ -13,6 +13,7 @@ import { ApprovalPage } from '@/pages/approval'
 import { PublishingPage } from '@/pages/publishing'
 import { CreatorFlowPage } from '@/pages/creatorflow'
 import { AnalyticsPage } from '@/pages/analytics'
+import { SettingsPage } from '@/pages/settings'
 import { getApi } from '@/lib/ipc'
 import { useTheme } from '@/hooks/use-theme'
 
@@ -81,6 +82,7 @@ export function App(): React.JSX.Element {
               <Route path="/publishing" element={<PublishingPage />} />
               <Route path="/creatorflow" element={<CreatorFlowPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </main>
           <StatusBar />

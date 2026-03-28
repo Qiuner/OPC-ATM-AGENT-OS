@@ -22,6 +22,8 @@ interface PublishItem {
   body?: string;
   tags?: string[];
   fromApi: boolean;
+  platform: string;
+  mediaUrls: string[];
 }
 
 type TabKey = "pending" | "exported" | "published";
@@ -59,6 +61,8 @@ function mapContentToPublishItem(content: Content): PublishItem {
     body: content.body,
     tags,
     fromApi: true,
+    platform: content.platform || 'general',
+    mediaUrls: content.media_urls || [],
   };
 }
 
@@ -134,6 +138,82 @@ export function PublishingPage() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
   const [previewItem, setPreviewItem] = useState<PublishItem | null>(null);
+  const [publishing, setPublishing] = useState<string | null>(null);
+  const [publishProgress, setPublishProgress] = useState<{ stage: string; message: string } | null>(null);
+  const [xhsLoggedIn, setXhsLoggedIn] = useState<boolean | null>(null);
+
+  // 检查小红书登录状态
+  useEffect(() => {
+    const api = getApi();
+    if (!api) return;
+    api.platformAuth.status().then(res => {
+      if (res.success && res.data) {
+        const xhs = (res.data as { xhs?: { loggedIn: boolean } }).xhs;
+        setXhsLoggedIn(xhs?.loggedIn ?? false);
+      }
+    }).catch(() => setXhsLoggedIn(false));
+  }, []);
+
+  // 监听发布进度
+  useEffect(() => {
+    const api = getApi();
+    if (!api) return;
+    const unsub = api.agent.onPublishProgress((data) => {
+      console.log('[Publishing] progress:', data.stage, data.message);
+      setPublishProgress({ stage: data.stage, message: data.message });
+      if (data.stage === 'done' || data.stage === 'error') {
+        // 3 秒后清除进度
+        setTimeout(() => setPublishProgress(null), 3000);
+      }
+    });
+    return unsub;
+  }, []);
+
+  const handlePublishToXhs = async (item: PublishItem) => {
+    const api = getApi();
+    if (!api) return;
+
+    // 先检查登录态
+    if (xhsLoggedIn === false) {
+      setToast('请先在设置中完成小红书扫码登录');
+      return;
+    }
+
+    setPublishing(item.id);
+    setPublishProgress(null);
+    console.log('[Publishing] Starting XHS publish for:', item.id, item.title);
+    try {
+      const res = await api.agent.publish({
+        contentId: item.id,
+        title: item.title,
+        body: item.body || '',
+        tags: item.tags || [],
+        images: item.mediaUrls || [],
+        platform: 'xiaohongshu',
+      });
+      console.log('[Publishing] XHS publish result:', res);
+      if (res.success) {
+        setItems(prev => prev.map(i =>
+          i.id === item.id ? { ...i, tab: 'published' as const } : i
+        ));
+        setToast(`已发布到小红书: ${item.title}`);
+      } else {
+        const errMsg = (res as { error?: string }).error || '未知错误';
+        console.error('[Publishing] XHS publish failed:', errMsg);
+        if (errMsg === 'XHS_NOT_LOGGED_IN') {
+          setXhsLoggedIn(false);
+          setToast('未登录小红书，请先在设置中完成扫码登录');
+        } else {
+          setToast(`发布失败: ${errMsg}`);
+        }
+      }
+    } catch (err) {
+      console.error('[Publishing] XHS publish error:', err);
+      setToast(`发布失败: ${err instanceof Error ? err.message : '网络错误'}`);
+    } finally {
+      setPublishing(null);
+    }
+  };
 
   const fetchContents = useCallback(async () => {
     const api = getApi();
@@ -144,6 +224,9 @@ export function PublishingPage() {
         api.contents.list({ status: "approved" }),
         api.contents.list({ status: "published" }),
       ]);
+
+      console.log('[Publishing] Fetched contents: approved=%d, published=%d',
+        approvedRes.data?.length ?? 0, publishedRes.data?.length ?? 0);
 
       const apiItems: PublishItem[] = [];
       if (approvedRes.success && approvedRes.data && approvedRes.data.length > 0) {
@@ -158,11 +241,9 @@ export function PublishingPage() {
         );
       }
 
-      if (apiItems.length > 0) {
-        setItems(apiItems);
-      }
-    } catch {
-      // empty state on error
+      setItems(apiItems);
+    } catch (err) {
+      console.error('[Publishing] Failed to fetch contents:', err);
     } finally {
       setLoading(false);
     }
@@ -367,6 +448,24 @@ export function PublishingPage() {
                   </div>
                 )}
               </div>
+              {item.tab === "pending" && item.platform === "xiaohongshu" && (
+                <div className="flex items-center gap-2">
+                  {publishing === item.id && publishProgress && (
+                    <span className="text-xs max-w-[200px] truncate" style={{ color: publishProgress.stage === 'error' ? '#f87171' : 'var(--muted-foreground)' }}>
+                      {publishProgress.message}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => handlePublishToXhs(item)}
+                    disabled={publishing === item.id || xhsLoggedIn === false}
+                    className="h-8 rounded-lg px-3 text-sm font-medium text-white transition-colors disabled:opacity-50"
+                    style={{ background: xhsLoggedIn === false ? '#666' : 'linear-gradient(135deg, #FF2442, #FF6B81)' }}
+                    title={xhsLoggedIn === false ? '请先在设置中完成小红书扫码登录' : undefined}
+                  >
+                    {publishing === item.id ? '发布中...' : xhsLoggedIn === false ? '未登录小红书' : '发布到小红书'}
+                  </button>
+                </div>
+              )}
               {item.tab === "exported" && (
                 <button onClick={() => handleMarkPublished(item)} className="h-8 rounded-lg px-3 text-sm font-medium text-white transition-colors" style={{ background: "linear-gradient(135deg, #a78bfa, #7c3aed)" }}>标记为已发布</button>
               )}

@@ -21,6 +21,8 @@ export function XhsPreview({ item }: PlatformPreviewProps) {
   const authorName = getAuthorName(item);
   const body = item.body ?? '';
   const tags = item.tags ?? [];
+  const mediaUrls = (item as { mediaUrls?: string[] }).mediaUrls ?? [];
+  const hasRealImages = mediaUrls.length > 0;
 
   // Use title hash to pick a consistent cover gradient
   const coverIdx = Math.abs(item.title.length) % MOCK_COVER_IMAGES.length;
@@ -64,26 +66,40 @@ export function XhsPreview({ item }: PlatformPreviewProps) {
         </div>
 
         {/* ── Image carousel area ── */}
-        <div className="relative w-full" style={{ aspectRatio: '3/4', background: MOCK_COVER_IMAGES[coverIdx] }}>
-          {/* Simulated content overlay on image - looks like a designed cover */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-8">
-            <div
-              className="text-[20px] font-bold text-center leading-[28px]"
-              style={{ color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.15)' }}
-            >
-              {item.title.length > 30 ? item.title.slice(0, 30) + '...' : item.title}
+        <div className="relative w-full" style={{ aspectRatio: '3/4', background: hasRealImages ? '#f5f5f5' : MOCK_COVER_IMAGES[coverIdx] }}>
+          {hasRealImages ? (
+            <img
+              src={mediaUrls[0].startsWith('http') ? mediaUrls[0] : `file://${mediaUrls[0]}`}
+              alt={item.title}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                if (target.parentElement) {
+                  target.parentElement.style.background = MOCK_COVER_IMAGES[coverIdx];
+                }
+              }}
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-8">
+              <div
+                className="text-[20px] font-bold text-center leading-[28px]"
+                style={{ color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.15)' }}
+              >
+                {item.title.length > 30 ? item.title.slice(0, 30) + '...' : item.title}
+              </div>
+              <div
+                className="mt-2 text-[12px] font-medium"
+                style={{ color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 4px rgba(0,0,0,0.1)' }}
+              >
+                {authorName} · 原创内容
+              </div>
             </div>
-            <div
-              className="mt-2 text-[12px] font-medium"
-              style={{ color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 4px rgba(0,0,0,0.1)' }}
-            >
-              {authorName} · 原创内容
-            </div>
-          </div>
+          )}
 
           {/* Dot indicators */}
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-[5px]">
-            {[0, 1, 2].map((i) => (
+            {(hasRealImages ? mediaUrls : [0, 1, 2]).map((_, i) => (
               <div
                 key={i}
                 style={{

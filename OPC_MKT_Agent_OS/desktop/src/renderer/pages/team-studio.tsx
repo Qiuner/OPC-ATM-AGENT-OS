@@ -164,6 +164,75 @@ const TOOL_LABELS: Record<string, string> = {
   generate_image: "🎨 AI 生成图片",
 };
 
+/** Structured content parsed from agent's Step 6 preview */
+interface ParsedContent {
+  title: string;
+  body: string;
+  tags: string[];
+}
+
+/** Parse XHS structured content from agent output (Step 6 format) */
+function parseXhsStructuredContent(text: string): ParsedContent | null {
+  if (!text.includes('待发布内容预览')) return null;
+
+  let title = '';
+  let body = '';
+  const tags: string[] = [];
+
+  const lines = text.split('\n');
+
+  // Extract title: "标题：<content>（<charcount>/20）" or "标题：<content>"
+  const titleLine = lines.find(l => /^标题[：:]/.test(l.trim()));
+  if (titleLine) {
+    title = titleLine.trim()
+      .replace(/^标题[：:]\s*/, '')
+      .replace(/[（(]\d+\/\d+[）)].*$/, '')
+      .trim();
+  }
+
+  // Extract body: everything between "正文：" and the char count line "（<n>/1000）" or next section marker
+  const bodyStartIdx = lines.findIndex(l => /^正文[：:]/.test(l.trim()));
+  if (bodyStartIdx !== -1) {
+    const bodyLines: string[] = [];
+    // Start from the line after "正文：" (or same line if content follows the colon)
+    const firstLine = lines[bodyStartIdx].trim().replace(/^正文[：:]\s*/, '');
+    if (firstLine) bodyLines.push(firstLine);
+
+    for (let i = bodyStartIdx + 1; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      // Stop at char count marker or next section
+      if (/^[（(]\d+\/\d+[）)]/.test(trimmed)) break;
+      if (/^(标签|配图|研究依据|自检结果)[：:]/.test(trimmed)) break;
+      if (/^【/.test(trimmed) && trimmed !== '【待发布内容预览】') break;
+      bodyLines.push(line);
+    }
+    body = bodyLines.join('\n').trim();
+  }
+
+  // Extract tags: "标签：#tag1 #tag2 #tag3" — supports both #tag# and #tag formats
+  const tagLine = lines.find(l => /^标签[：:]/.test(l.trim()));
+  if (tagLine) {
+    const tagMatches = tagLine.match(/#[\u4e00-\u9fa5a-zA-Z0-9_]+#?/g);
+    if (tagMatches) {
+      for (const t of tagMatches) {
+        const tag = t.replace(/#/g, '');
+        if (tag && !tags.includes(tag)) tags.push(tag);
+      }
+    }
+  }
+
+  if (!title && !body) return null;
+  return { title, body, tags };
+}
+
+/** Check if user message is a confirmation to publish */
+const CONFIRM_KEYWORDS = ['确认发布', '确认', '没问题', '可以发布', '可以', '好的', '发布吧', '通过', 'ok', 'OK', 'yes', 'Yes'];
+function isConfirmationMessage(msg: string): boolean {
+  const trimmed = msg.trim();
+  return CONFIRM_KEYWORDS.some(kw => trimmed === kw || trimmed.startsWith(kw));
+}
+
 type ChannelId = "all" | string;
 type TabId = "execute" | "chat" | "monitor";
 type ExecMode = "single" | "orchestrator";
@@ -212,6 +281,50 @@ const INITIAL_EXEC: ExecState = {
   logs: [],
   result: "",
 };
+
+// ── Session Storage persistence (survives route navigation) ──
+const STORAGE_KEY = 'team-studio-state';
+
+interface PersistedState {
+  exec: ExecState;
+  messages: StudioMessage[];
+  execAgentId: string;
+  activeTab: TabId;
+  capturedImageUrls: string[];
+  submittedToReview: boolean;
+  pendingContent: ParsedContent | null;
+}
+
+function saveToSession(state: Partial<PersistedState>): void {
+  try {
+    const existing = loadFromSession();
+    const merged = { ...existing, ...state };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+  } catch { /* ignore quota errors */ }
+}
+
+function loadFromSession(): PersistedState | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedState;
+    // Restore Date objects in messages
+    if (parsed.messages) {
+      parsed.messages = parsed.messages.map(m => ({
+        ...m,
+        timestamp: new Date(m.timestamp),
+        isStreaming: false, // never restore streaming state
+      }));
+    }
+    // Never restore running state
+    if (parsed.exec) {
+      parsed.exec.isRunning = false;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 // ==========================================
 // Orchestrator mode types
@@ -975,28 +1088,33 @@ function StatusIcon({ status }: { status: TaskStatus }) {
 
 export function TeamStudioPage(): React.JSX.Element {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabId>("execute");
+  const restored = useRef(loadFromSession()).current;
+
+  const [activeTab, setActiveTab] = useState<TabId>(restored?.activeTab || "execute");
   const [activeChannel, setActiveChannel] = useState<ChannelId>("all");
   const [teamLaunched, setTeamLaunched] = useState(false);
 
   // Chat state
   const [messages, setMessages] = useState<StudioMessage[]>(
-    getWelcomeMessages()
+    restored?.messages?.length ? restored.messages : getWelcomeMessages()
   );
   const [inputValue, setInputValue] = useState("");
   const [sending, setSending] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Execute state
-  const [exec, setExec] = useState<ExecState>(INITIAL_EXEC);
+  const [exec, setExec] = useState<ExecState>(restored?.exec || INITIAL_EXEC);
   const [execInput, setExecInput] = useState("");
   const execAbortRef = useRef<AbortController | null>(null);
   const execCleanupRef = useRef<(() => void) | null>(null);
   // Track execution origin: 'local' = started from this window, 'remote' = from popover/other
   const execOriginRef = useRef<'local' | 'remote' | null>(null);
-  const [execAgentId, setExecAgentId] = useState<string>("xhs-agent");
+  const [execAgentId, setExecAgentId] = useState<string>(restored?.execAgentId || "xhs-agent");
   // hasSession: main 进程是否已有此 agent 的 sessionId（切换页面后仍保持）
   const [hasSession, setHasSession] = useState(false);
+  const [capturedImageUrls, setCapturedImageUrls] = useState<string[]>(restored?.capturedImageUrls || []);
+  const [submittedToReview, setSubmittedToReview] = useState(restored?.submittedToReview || false);
+  const [pendingContent, setPendingContent] = useState<ParsedContent | null>(restored?.pendingContent || null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Orchestrator (CEO Multi-Agent) state
@@ -1016,6 +1134,13 @@ export function TeamStudioPage(): React.JSX.Element {
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [exec.logs]);
+
+  // Persist UI state to sessionStorage (survives route navigation)
+  useEffect(() => {
+    if (!exec.isRunning) {
+      saveToSession({ exec, messages, execAgentId, activeTab, capturedImageUrls, submittedToReview, pendingContent });
+    }
+  }, [exec, messages, execAgentId, activeTab, capturedImageUrls, submittedToReview, pendingContent]);
 
   // Check if main process has an active session for this agent
   useEffect(() => {
@@ -1197,23 +1322,69 @@ export function TeamStudioPage(): React.JSX.Element {
 
       const unsubEnd = api.agent.onStreamEnd(() => {
         cleanup();
-        setExec((prev) => ({
-          ...prev,
-          isRunning: false,
-          result: resultContent,
-          tasks: prev.tasks.map((t) =>
-            t.agentId === targetAgentId
-              ? { ...t, status: 'done' as TaskStatus, progress: 100, currentTool: undefined, finishedAt: Date.now() }
-              : t
-          ),
-          logs: [...prev.logs, {
+        // Auto-detect structured content preview from remote agent output
+        const parsed = parseXhsStructuredContent(resultContent);
+        if (parsed) {
+          setPendingContent(parsed);
+          // 自动提交到审批中心（不再等用户确认）
+          (async () => {
+            try {
+              const platform = targetAgentId === 'xhs-agent' ? 'xiaohongshu' : 'general';
+              const res = await api.agent.submitToReview({
+                agentId: targetAgentId,
+                prompt: exec.prompt,
+                result: parsed.body,
+                title: parsed.title,
+                platform,
+                tags: parsed.tags,
+                mediaUrls: capturedImageUrls,
+              });
+              if (res.success) {
+                setSubmittedToReview(true);
+                setPendingContent(null);
+                setExec(prev => ({
+                  ...prev,
+                  logs: [...prev.logs, {
+                    id: createId(),
+                    timestamp: Date.now(),
+                    agentId: targetAgentId,
+                    type: 'result' as const,
+                    message: `✅ 内容已自动提交到审批中心：「${parsed.title}」`,
+                  }],
+                }));
+              }
+            } catch { /* silent */ }
+          })();
+        }
+        setExec((prev) => {
+          const logEntries = [...prev.logs, {
             id: createId(),
             timestamp: Date.now(),
             agentId: targetAgentId,
             type: 'result' as const,
             message: `执行完成 (${toolCount} 次工具调用)`,
-          }],
-        }));
+          }];
+          if (parsed) {
+            logEntries.push({
+              id: createId(),
+              timestamp: Date.now(),
+              agentId: targetAgentId,
+              type: 'info' as const,
+              message: `正在自动提交到审批中心：「${parsed.title}」...`,
+            });
+          }
+          return {
+            ...prev,
+            isRunning: false,
+            result: resultContent,
+            tasks: prev.tasks.map((t) =>
+              t.agentId === targetAgentId
+                ? { ...t, status: 'done' as TaskStatus, progress: 100, currentTool: undefined, finishedAt: Date.now() }
+                : t
+            ),
+            logs: logEntries,
+          };
+        });
       });
 
       const unsubError = api.agent.onStreamError((rawErr: unknown) => {
@@ -1401,27 +1572,6 @@ export function TeamStudioPage(): React.JSX.Element {
           return updated
         });
         setSending(false);
-
-        // Save to contents via IPC
-        const api = getApi();
-        if (api) {
-          const finalMsg = messages.find((m) => m.id === agentMsgId);
-          if (finalMsg && finalMsg.content) {
-            api.agent
-              .saveResult({
-                agentType: targetAgentId,
-                status: "success",
-                data: {
-                  title: `${agent.label} Response`,
-                  body: finalMsg.content,
-                  platform: "xhs",
-                },
-              })
-              .catch(() => {
-                /* silent */
-              });
-          }
-        }
       },
       (error) => {
         setMessages((prev) =>
@@ -1458,6 +1608,38 @@ export function TeamStudioPage(): React.JSX.Element {
     const targetAgentId = execAgentId;
     const agent = AGENT_MAP.get(targetAgentId);
     const agentLabel = agent?.labelCn || targetAgentId;
+
+    // Auto-submit to approval center when user confirms and structured content is pending
+    if (pendingContent && !submittedToReview && isConfirmationMessage(prompt)) {
+      const ipcApi = getApi();
+      if (ipcApi) {
+        try {
+          const res = await ipcApi.agent.submitToReview({
+            agentId: targetAgentId,
+            prompt: exec.prompt,
+            result: pendingContent.body,
+            title: pendingContent.title,
+            platform: targetAgentId === 'xhs-agent' ? 'xiaohongshu' : 'general',
+            tags: pendingContent.tags,
+            mediaUrls: capturedImageUrls,
+          });
+          if (res.success) {
+            setSubmittedToReview(true);
+            setPendingContent(null);
+            setExec(prev => ({
+              ...prev,
+              logs: [...prev.logs, {
+                id: createId(),
+                timestamp: Date.now(),
+                agentId: targetAgentId,
+                type: 'result' as const,
+                message: `✅ 内容已自动提交到审批中心：「${pendingContent.title}」`,
+              }],
+            }));
+          }
+        } catch { /* continue with normal execution */ }
+      }
+    }
 
     // Mark as local execution and broadcast to popover
     execOriginRef.current = 'local';
@@ -1551,6 +1733,12 @@ export function TeamStudioPage(): React.JSX.Element {
             }));
           }
           if (event.type === "tool_result") {
+            const toolContent = (event.content as string) || "";
+            // Capture image paths from generate_image tool results
+            const pathMatch = toolContent.match(/路径:\s*(.+?)(?:\n|$)/);
+            if (pathMatch?.[1]) {
+              setCapturedImageUrls(prev => [...prev, pathMatch[1].trim()]);
+            }
             setExec((prev) => ({
               ...prev,
               logs: [
@@ -1560,7 +1748,7 @@ export function TeamStudioPage(): React.JSX.Element {
                   timestamp: Date.now(),
                   agentId: targetAgentId,
                   type: "result" as const,
-                  message: `✅ ${((event.content as string) || "").slice(0, 200)}`,
+                  message: `✅ ${toolContent.slice(0, 200)}`,
                 },
               ],
             }));
@@ -1598,22 +1786,42 @@ export function TeamStudioPage(): React.JSX.Element {
         if (resultContent) {
           window.api?.chatSync?.send({ agentId: targetAgentId, role: 'assistant', content: resultContent, mode: 'exec' });
         }
-        setExec((prev) => ({
-          ...prev,
-          isRunning: false,
-          result: resultContent,
-          tasks: prev.tasks.map((t) =>
-            t.agentId === targetAgentId
-              ? {
-                  ...t,
-                  status: "done" as TaskStatus,
-                  progress: 100,
-                  currentTool: undefined,
-                  finishedAt: Date.now(),
-                }
-              : t
-          ),
-          logs: [
+        // Auto-detect structured content preview from agent output
+        const parsed = parseXhsStructuredContent(resultContent);
+        if (parsed) {
+          setPendingContent(parsed);
+          // 自动提交到审批中心（不再等用户确认）
+          (async () => {
+            try {
+              const platform = targetAgentId === 'xhs-agent' ? 'xiaohongshu' : 'general';
+              const res = await api.agent.submitToReview({
+                agentId: targetAgentId,
+                prompt: exec.prompt,
+                result: parsed.body,
+                title: parsed.title,
+                platform,
+                tags: parsed.tags,
+                mediaUrls: capturedImageUrls,
+              });
+              if (res.success) {
+                setSubmittedToReview(true);
+                setPendingContent(null);
+                setExec(prev => ({
+                  ...prev,
+                  logs: [...prev.logs, {
+                    id: createId(),
+                    timestamp: Date.now(),
+                    agentId: targetAgentId,
+                    type: 'result' as const,
+                    message: `✅ 内容已自动提交到审批中心：「${parsed.title}」`,
+                  }],
+                }));
+              }
+            } catch { /* silent */ }
+          })();
+        }
+        setExec((prev) => {
+          const logEntries = [
             ...prev.logs,
             {
               id: createId(),
@@ -1622,8 +1830,34 @@ export function TeamStudioPage(): React.JSX.Element {
               type: "result" as const,
               message: `执行完成 (${toolCount} 次工具调用)`,
             },
-          ],
-        }));
+          ];
+          if (parsed) {
+            logEntries.push({
+              id: createId(),
+              timestamp: Date.now(),
+              agentId: targetAgentId,
+              type: "info" as const,
+              message: `正在自动提交到审批中心：「${parsed.title}」...`,
+            });
+          }
+          return {
+            ...prev,
+            isRunning: false,
+            result: resultContent,
+            tasks: prev.tasks.map((t) =>
+              t.agentId === targetAgentId
+                ? {
+                    ...t,
+                    status: "done" as TaskStatus,
+                    progress: 100,
+                    currentTool: undefined,
+                    finishedAt: Date.now(),
+                  }
+                : t
+            ),
+            logs: logEntries,
+          };
+        });
       });
 
       const unsubError = api.agent.onStreamError(
@@ -1778,7 +2012,7 @@ export function TeamStudioPage(): React.JSX.Element {
         }));
       }
     }
-  }, [execInput, exec.isRunning, execAgentId]);
+  }, [execInput, exec.isRunning, execAgentId, pendingContent, submittedToReview, capturedImageUrls]);
 
   const handleStopExec = () => {
     const api = getApi();
@@ -2112,6 +2346,20 @@ export function TeamStudioPage(): React.JSX.Element {
                         {task.error}
                       </div>
                     )}
+
+                    {task.status === "done" && pendingContent && !submittedToReview && (
+                      <div className="pt-3 mt-3 space-y-2" style={{ borderTop: '1px solid var(--border)' }}>
+                        <div className="text-xs" style={{ color: '#22d3ee' }}>
+                          正在自动提交到审批中心：「{pendingContent.title}」...
+                        </div>
+                      </div>
+                    )}
+
+                    {task.status === "done" && submittedToReview && (
+                      <div className="pt-3 mt-3 text-xs" style={{ borderTop: '1px solid var(--border)', color: '#22d3ee' }}>
+                        ✅ 已发送到审批中心
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -2228,7 +2476,7 @@ export function TeamStudioPage(): React.JSX.Element {
                   </button>
                 )}
                 <button
-                  onClick={() => { setExec(INITIAL_EXEC); setHasSession(false); getApi()?.agent?.clearSession(execAgentId); }}
+                  onClick={() => { setExec(INITIAL_EXEC); setHasSession(false); setCapturedImageUrls([]); setSubmittedToReview(false); setPendingContent(null); sessionStorage.removeItem(STORAGE_KEY); getApi()?.agent?.clearSession(execAgentId); }}
                   className="flex items-center justify-center size-9 rounded-lg shrink-0 hover:bg-white/5 transition-colors"
                   style={{
                     border: "1px solid var(--border)",

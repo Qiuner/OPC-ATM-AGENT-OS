@@ -10,6 +10,7 @@ export interface PublishItem {
   body?: string;
   tags?: string[];
   fromApi: boolean;
+  mediaUrls?: string[];
 }
 
 export interface PlatformPreviewProps {

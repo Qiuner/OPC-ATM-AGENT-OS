@@ -392,12 +392,14 @@ export function ApprovalPage(): React.JSX.Element {
 
     const decision: ApprovalRecord["decision"] =
       dialogMode === "approve" ? "approved" : "rejected";
+    const newPipelineStage: PipelineStageKey =
+      dialogMode === "approve" ? "approved" : "pending";
     setActionLoading(dialogItemId);
 
     setItems((prev) =>
       prev.map((item) =>
         item.id === dialogItemId
-          ? { ...item, decision: decision as ApprovalDecision }
+          ? { ...item, decision: decision as ApprovalDecision, pipelineStage: newPipelineStage }
           : item
       )
     );
@@ -417,13 +419,14 @@ export function ApprovalPage(): React.JSX.Element {
         dialogMode === "approve" ? "approved" : "rejected";
       const res = await api.contents.update(dialogItemId, {
         status: newStatus,
+        metadata: { pipelineStage: newPipelineStage },
       });
 
       if (!res.success) {
         setItems((prev) =>
           prev.map((item) =>
             item.id === dialogItemId
-              ? { ...item, decision: "pending" as ApprovalDecision }
+              ? { ...item, decision: "pending" as ApprovalDecision, pipelineStage: "pending" as PipelineStageKey }
               : item
           )
         );
@@ -440,7 +443,7 @@ export function ApprovalPage(): React.JSX.Element {
       setItems((prev) =>
         prev.map((item) =>
           item.id === dialogItemId
-            ? { ...item, decision: "pending" as ApprovalDecision }
+            ? { ...item, decision: "pending" as ApprovalDecision, pipelineStage: "pending" as PipelineStageKey }
             : item
         )
       );

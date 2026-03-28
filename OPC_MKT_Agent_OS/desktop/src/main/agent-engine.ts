@@ -14,9 +14,39 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { readFileSync, existsSync } from 'node:fs'
 import { BrowserWindow } from 'electron'
+import { getApiKey } from './safe-storage'
 import { IPC } from '../shared/ipc-channels'
 import { isOrchestratorRunning, getSubAgentStatuses } from './orchestrator-engine'
+
+// ── .env 文件加载 ──
+
+/** 读取 engine/.env 文件，返回 key-value 对象 */
+function loadEnvFile(dir: string): Record<string, string> {
+  const envPath = join(dir, '.env')
+  if (!existsSync(envPath)) return {}
+  try {
+    const content = readFileSync(envPath, 'utf-8')
+    const result: Record<string, string> = {}
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const eqIdx = trimmed.indexOf('=')
+      if (eqIdx < 1) continue
+      const key = trimmed.slice(0, eqIdx).trim()
+      let value = trimmed.slice(eqIdx + 1).trim()
+      // 去除引号
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1)
+      }
+      if (value) result[key] = value
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
 
 // ── Types ──
 
@@ -97,7 +127,7 @@ function getMemoryDir(): string {
 
 const AGENT_REGISTRY: AgentDef[] = [
   { id: 'ceo', name: 'CEO 营销总监', description: '营销团队总指挥，需求拆解、子 Agent 调度与质量终审', skillFile: '', model: 'claude-sonnet-4-20250514', allowedMcpServers: ['xhs-data', 'image-gen', 'creatorflow'] },
-  { id: 'xhs-agent', name: '小红书创作专家', description: '端到端小红书营销：搜索竞品→分析爆款→内容创作→审查→发布。支持真实数据抓取和自动发布。', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514', allowedMcpServers: ['xhs-data', 'image-gen', 'creatorflow'] },
+  { id: 'xhs-agent', name: '小红书创作专家', description: '端到端小红书营销：搜索竞品→分析爆款→内容创作→审查→发布。支持真实数据抓取和自动发布。', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514', allowedMcpServers: ['xhs-data', 'image-gen'] },
   { id: 'analyst-agent', name: '数据飞轮分析师', description: '分析内容表现数据，提炼胜出模式', skillFile: 'analyst.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'growth-agent', name: '增长营销专家', description: '选题研究、热点捕捉、竞品分析、发布策略', skillFile: 'growth.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'brand-reviewer', name: '品牌风控审查', description: '审查内容合规性与品牌调性一致性', skillFile: 'brand-reviewer.SKILL.md', model: 'claude-sonnet-4-20250514' },
@@ -227,8 +257,9 @@ export async function executeAgent(
 
   // 预授权 MCP 工具（headless 模式下无法弹出授权提示）
   // --allowedTools 是 variadic，必须用 -- 分隔后面的 prompt
+  // 使用 mcp__<server>__* 通配符匹配该 server 下所有工具
   if (agent.allowedMcpServers && agent.allowedMcpServers.length > 0) {
-    args.push('--allowedTools', ...agent.allowedMcpServers.map(s => `mcp__${s}`))
+    args.push('--allowedTools', ...agent.allowedMcpServers.map(s => `mcp__${s}__*`))
   }
 
   // 用 -- 分隔选项和 prompt（防止 variadic --allowedTools 吞掉 prompt）
@@ -251,6 +282,29 @@ export async function executeAgent(
   delete cleanEnv.CLAUDECODE
   delete cleanEnv.CLAUDE_CODE_ENTRYPOINT
   delete cleanEnv.CLAUDE_CODE_IS_AGENT
+
+  // 1. 从 engine/.env 加载配置
+  const dotEnv = loadEnvFile(getEngineDir())
+  for (const [key, value] of Object.entries(dotEnv)) {
+    if (!cleanEnv[key]) {
+      cleanEnv[key] = value
+    }
+  }
+
+  // 2. 从 safe-storage (keychain) 注入 API key（优先级高于 .env）
+  const keyMapping: Record<string, string> = {
+    'anthropic': 'ANTHROPIC_API_KEY',
+    'openai': 'OPENAI_API_KEY',
+    'google': 'GOOGLE_API_KEY',
+    'dashscope': 'DASHSCOPE_API_KEY',
+    'replicate': 'REPLICATE_API_TOKEN',
+  }
+  for (const [provider, envVar] of Object.entries(keyMapping)) {
+    const key = getApiKey(provider)
+    if (key) {
+      cleanEnv[envVar] = key
+    }
+  }
 
   try {
     activeProcess = spawn('claude', args, {
@@ -288,10 +342,12 @@ export async function executeAgent(
   let finalResult = ''
   let sessionId: string | undefined
   let totalCost: number | undefined
+  const capturedImageUrls: string[] = []
+  let lastToolWasImageGen = false
 
   return new Promise((resolve) => {
     let resolved = false
-    const finish = (result: { success: boolean; result?: string; error?: string; sessionId?: string; cost?: number }): void => {
+    const finish = (result: { success: boolean; result?: string; error?: string; sessionId?: string; cost?: number; imageUrls?: string[] }): void => {
       if (resolved) return
       resolved = true
       clearTimeout(timer)
@@ -313,6 +369,30 @@ export async function executeAgent(
 
       // Process event and push to renderer
       processStreamEvent(event, request.agentId)
+
+      // Track generate_image tool calls to capture image paths from results
+      if (event.type === 'assistant') {
+        const msg = event.message as Record<string, unknown> | undefined
+        const blocks = msg?.content
+        if (Array.isArray(blocks)) {
+          for (const block of blocks) {
+            if (block?.type === 'tool_use' && block?.name === 'generate_image') {
+              lastToolWasImageGen = true
+            }
+          }
+        }
+      }
+      if (event.type === 'tool_result' && lastToolWasImageGen) {
+        lastToolWasImageGen = false
+        const tr = event.tool_result as Record<string, unknown> | undefined
+        const resultText = typeof tr?.content === 'string'
+          ? tr.content
+          : JSON.stringify(tr?.content || '')
+        const pathMatch = resultText.match(/路径:\s*(.+?)(?:\n|$)/)
+        if (pathMatch?.[1]) {
+          capturedImageUrls.push(pathMatch[1].trim())
+        }
+      }
 
       // Capture final result & persist session for resume
       if (event.type === 'result') {
@@ -336,8 +416,8 @@ export async function executeAgent(
         sendChunk(request.agentId, { type: 'error', message: errMsg })
         finish({ success: false, error: errMsg })
       } else {
-        console.log('[AgentEngine] execution succeeded, result length:', finalResult.length)
-        finish({ success: true, result: finalResult, sessionId, cost: totalCost })
+        console.log('[AgentEngine] execution succeeded, result length:', finalResult.length, 'images:', capturedImageUrls.length)
+        finish({ success: true, result: finalResult, sessionId, cost: totalCost, imageUrls: capturedImageUrls })
       }
     })
 

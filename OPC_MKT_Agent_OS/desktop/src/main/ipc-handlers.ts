@@ -6,6 +6,7 @@
  */
 
 import { ipcMain, BrowserWindow } from 'electron'
+import { join } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 import {
   readCollection,
@@ -181,7 +182,17 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     const items = readCollection<Content>('contents')
     const index = items.findIndex((c) => c.id === id)
     if (index === -1) return { success: false, error: `Content not found: ${id}` }
-    const updated: Content = { ...items[index], ...data, id: items[index].id, updated_at: nowISO() }
+    const existing = items[index]
+    // Deep merge metadata to avoid overwriting existing metadata fields
+    const updated: Content = {
+      ...existing,
+      ...data,
+      metadata: data.metadata
+        ? { ...(existing.metadata || {}), ...(data.metadata as Record<string, unknown>) }
+        : existing.metadata,
+      id: existing.id,
+      updated_at: nowISO(),
+    }
     items[index] = updated
     writeCollection('contents', items)
     return { success: true, data: updated }
@@ -452,6 +463,220 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     return { success: true, data: { taskId: task.id, contentId: content.id, agentRunId: agentRun.id } }
   })
 
+  // ── Submit content to Approval Center ──
+
+  handle(IPC.AGENT_SUBMIT_TO_REVIEW, (data: {
+    agentId: string; prompt: string; result: string;
+    title?: string; platform?: string; campaignId?: string;
+    tags?: string[]; mediaUrls?: string[];
+  }): IpcResponse<{ taskId: string; contentId: string }> => {
+    if (!data.result) {
+      return { success: false, error: 'result is required' }
+    }
+    const now = nowISO()
+    const title = data.title || extractTitle(data.result) || data.prompt?.slice(0, 80) || 'Untitled'
+
+    const tasks = readCollection<Task>('tasks')
+    const task: Task = {
+      id: generateId('task'),
+      campaign_id: data.campaignId || 'default',
+      title,
+      description: data.prompt || '',
+      status: 'review',
+      assignee_type: 'agent',
+      assignee_id: data.agentId || 'unknown',
+      priority: 1,
+      due_date: null,
+      created_at: now,
+      updated_at: now,
+    }
+    tasks.push(task)
+    writeCollection('tasks', tasks)
+
+    const contents = readCollection<Content>('contents')
+    const platform = data.platform || (data.agentId === 'xhs-agent' ? 'xiaohongshu' : 'general')
+    const content: Content = {
+      id: generateId('cnt'),
+      task_id: task.id,
+      campaign_id: data.campaignId || 'default',
+      title,
+      body: data.result,
+      platform,
+      status: 'review',
+      media_urls: data.mediaUrls || [],
+      metadata: {
+        agentId: data.agentId,
+        prompt: data.prompt,
+        tags: data.tags || [],
+      },
+      created_by: `agent:${data.agentId}`,
+      created_at: now,
+      updated_at: now,
+      agent_run_id: null,
+      agent_type: data.agentId,
+      learning_id: null,
+    }
+    contents.push(content)
+    writeCollection('contents', contents)
+
+    console.log('[IPC] SUBMIT_TO_REVIEW: created task=%s content=%s', task.id, content.id)
+    return { success: true, data: { taskId: task.id, contentId: content.id } }
+  })
+
+  // ── Publish content via script (直接调用 Playwright，不经过 Claude CLI) ──
+  // 使用 spawn 流式读取进度，推送到 renderer
+
+  handle(IPC.AGENT_PUBLISH, async (data: {
+    contentId: string; title: string; body: string;
+    tags?: string[]; images?: string[]; platform: string;
+  }): Promise<IpcResponse> => {
+    if (data.platform !== 'xiaohongshu') {
+      return { success: false, error: `Publishing not supported for platform: ${data.platform}` }
+    }
+
+    // 1. 检查小红书登录状态（先读 store，fallback 检查 cookie 文件）
+    let xhsLoggedIn = getAppSettings().platformAuth?.xhs?.loggedIn ?? false
+    if (!xhsLoggedIn) {
+      try {
+        const { statSync } = require('node:fs') as typeof import('node:fs')
+        const { homedir } = require('node:os') as typeof import('node:os')
+        const cookiePath = join(homedir(), '.xhs-mcp', 'storage-state.json')
+        const info = statSync(cookiePath)
+        if (info.size > 100) {
+          console.log('[IPC] AGENT_PUBLISH: store says not logged in, but cookie file exists (%d bytes) — proceeding', info.size)
+          xhsLoggedIn = true
+          setAppSettings({ platformAuth: { ...getAppSettings().platformAuth, xhs: { loggedIn: true, lastLoginAt: info.mtime.toISOString() } } })
+        }
+      } catch { /* cookie file doesn't exist */ }
+    }
+    if (!xhsLoggedIn) {
+      console.log('[IPC] AGENT_PUBLISH: xhs not logged in (no cookie file)')
+      return { success: false, error: 'XHS_NOT_LOGGED_IN' }
+    }
+
+    // 2. 构建脚本参数
+    const scriptArgs = JSON.stringify({
+      title: data.title,
+      content: data.body,
+      tags: data.tags || [],
+      images: data.images || [],
+    })
+
+    const engineDir = join(__dirname, '../../..', 'engine')
+    const scriptPath = join(engineDir, 'scripts', 'xhs-publish.ts')
+    console.log('[IPC] AGENT_PUBLISH: spawning script, contentId=%s, title=%s', data.contentId, data.title?.slice(0, 40))
+
+    // 发送进度到所有 renderer 窗口
+    const sendProgress = (stage: string, message: string, detail?: string) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send(IPC.AGENT_PUBLISH_PROGRESS, { contentId: data.contentId, stage, message, detail })
+        }
+      }
+    }
+
+    // 3. spawn 脚本（流式读取 stdout）
+    const { spawn } = await import('node:child_process')
+
+    return new Promise<IpcResponse>((resolve) => {
+      const child = spawn('npx', ['tsx', scriptPath, scriptArgs], {
+        cwd: engineDir,
+        env: { ...process.env },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+
+      let stdout = ''
+      let stderr = ''
+      let lastResult: { success?: boolean; noteUrl?: string; error?: string; message?: string } | null = null
+
+      // 超时 3 分钟
+      const timeout = setTimeout(() => {
+        child.kill()
+        sendProgress('error', '发布超时 (3分钟)')
+        resolve({ success: false, error: '发布超时' })
+      }, 180_000)
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        const text = chunk.toString()
+        stdout += text
+        // 逐行解析 JSON 进度
+        for (const line of text.split('\n')) {
+          const trimmed = line.trim()
+          if (!trimmed || !trimmed.startsWith('{')) continue
+          try {
+            const msg = JSON.parse(trimmed) as { type: string; stage?: string; message?: string; detail?: string; success?: boolean; noteUrl?: string; error?: string }
+            if (msg.type === 'progress') {
+              console.log('[IPC] AGENT_PUBLISH progress: [%s] %s', msg.stage, msg.message)
+              sendProgress(msg.stage || 'unknown', msg.message || '', msg.detail)
+            } else if (msg.type === 'result') {
+              lastResult = msg
+            }
+          } catch { /* ignore non-JSON lines */ }
+        }
+      })
+
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString()
+      })
+
+      child.on('close', (code) => {
+        clearTimeout(timeout)
+        if (stderr) {
+          console.error('[IPC] AGENT_PUBLISH stderr:', stderr.slice(0, 500))
+        }
+
+        // 从 stdout 解析最终结果
+        if (!lastResult) {
+          // fallback: 从 stdout 找最后一个 JSON 行
+          const lines = stdout.trim().split('\n')
+          const jsonLine = lines.reverse().find(l => l.trim().startsWith('{'))
+          try { lastResult = JSON.parse(jsonLine || '{}') } catch { /* */ }
+        }
+
+        if (lastResult?.success) {
+          // 更新内容状态为 published
+          const contents = readCollection<Content>('contents')
+          const idx = contents.findIndex(c => c.id === data.contentId)
+          if (idx !== -1) {
+            contents[idx] = {
+              ...contents[idx],
+              status: 'published',
+              updated_at: nowISO(),
+              metadata: {
+                ...contents[idx].metadata,
+                pipelineStage: 'published',
+                publishedAt: nowISO(),
+                noteUrl: lastResult.noteUrl,
+              },
+            }
+            writeCollection('contents', contents)
+          }
+          sendProgress('done', '发布成功!', lastResult.noteUrl)
+          resolve({ success: true, data: { noteUrl: lastResult.noteUrl } })
+          return
+        }
+
+        // 失败 — 如果是登录态问题，同步更新 store
+        const errMsg = lastResult?.error || lastResult?.message || (code !== 0 ? `脚本退出码: ${code}` : '发布失败')
+        if (errMsg === 'XHS_NOT_LOGGED_IN') {
+          setAppSettings({
+            platformAuth: { ...getAppSettings().platformAuth, xhs: { loggedIn: false } },
+          })
+        }
+        sendProgress('error', errMsg)
+        resolve({ success: false, error: errMsg })
+      })
+
+      child.on('error', (err) => {
+        clearTimeout(timeout)
+        const msg = err.message || 'spawn error'
+        console.error('[IPC] AGENT_PUBLISH: spawn error:', msg)
+        sendProgress('error', msg)
+        resolve({ success: false, error: msg })
+      })
+    })
+  })
+
   // ── Agent Execution (connected to agent-engine.ts) ──
 
   // Track currently running agent ID for status reporting
@@ -491,6 +716,7 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
           result: result.result,
           sessionId: result.sessionId,
           cost: result.cost,
+          imageUrls: result.imageUrls || [],
         },
       }
     }
@@ -550,6 +776,143 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
 
   handle(IPC.KEYS_CLEAR, (): IpcResponse => {
     clearAllApiKeys()
+    return { success: true }
+  })
+
+  // ── Platform Auth (cookie-based logins) ──
+
+  handle(IPC.PLATFORM_AUTH_STATUS, (): IpcResponse => {
+    const settings = getAppSettings()
+    let xhsAuth = settings.platformAuth?.xhs ?? { loggedIn: false }
+
+    // 如果 app-store 没有记录，但 cookie 文件存在，则视为已登录（兼容旧数据）
+    if (!xhsAuth.loggedIn) {
+      try {
+        const { statSync } = require('node:fs') as typeof import('node:fs')
+        const { homedir } = require('node:os') as typeof import('node:os')
+        const cookiePath = join(homedir(), '.xhs-mcp', 'storage-state.json')
+        const info = statSync(cookiePath)
+        if (info.size > 100) {
+          xhsAuth = { loggedIn: true, lastLoginAt: info.mtime.toISOString() }
+          setAppSettings({
+            platformAuth: { ...settings.platformAuth, xhs: xhsAuth },
+          })
+        }
+      } catch {
+        // cookie 文件不存在，保持 loggedIn: false
+      }
+    }
+
+    return {
+      success: true,
+      data: { xhs: xhsAuth },
+    }
+  })
+
+  handle(IPC.PLATFORM_AUTH_LOGIN, async (data: { platform: string }): Promise<IpcResponse> => {
+    if (data.platform !== 'xhs') {
+      return { success: false, error: `Login not supported for platform: ${data.platform}` }
+    }
+
+    // 直接调用登录脚本（不再走 Claude CLI agent）
+    const engineDir = join(__dirname, '../../..', 'engine')
+    const scriptPath = join(engineDir, 'scripts', 'xhs-login.ts')
+    console.log('[IPC] PLATFORM_AUTH_LOGIN: spawning login script:', scriptPath)
+
+    const { spawn } = await import('node:child_process')
+
+    return new Promise<IpcResponse>((resolve) => {
+      const child = spawn('npx', ['tsx', scriptPath], {
+        cwd: engineDir,
+        env: { ...process.env },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+
+      let stdout = ''
+      let lastResult: { status?: string; message?: string } | null = null
+
+      // 登录超时 150 秒
+      const timeout = setTimeout(() => {
+        child.kill()
+        resolve({ success: false, error: '登录超时 (150s)' })
+      }, 150_000)
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        const text = chunk.toString()
+        stdout += text
+        for (const line of text.split('\n')) {
+          const trimmed = line.trim()
+          if (!trimmed || !trimmed.startsWith('{')) continue
+          try {
+            const msg = JSON.parse(trimmed) as { type: string; status?: string; message?: string }
+            if (msg.type === 'result') {
+              lastResult = msg
+            }
+            console.log('[IPC] LOGIN progress:', trimmed)
+          } catch { /* ignore */ }
+        }
+      })
+
+      child.stderr.on('data', (chunk: Buffer) => {
+        console.error('[IPC] LOGIN stderr:', chunk.toString().slice(0, 300))
+      })
+
+      child.on('close', (code) => {
+        clearTimeout(timeout)
+
+        if (!lastResult) {
+          const lines = stdout.trim().split('\n')
+          const jsonLine = lines.reverse().find(l => l.trim().startsWith('{'))
+          try { lastResult = JSON.parse(jsonLine || '{}') } catch { /* */ }
+        }
+
+        if (lastResult?.status === 'success') {
+          setAppSettings({
+            platformAuth: {
+              ...getAppSettings().platformAuth,
+              xhs: {
+                loggedIn: true,
+                lastLoginAt: new Date().toISOString(),
+              },
+            },
+          })
+          resolve({ success: true, data: { status: 'success' } })
+        } else {
+          resolve({ success: false, error: lastResult?.message || `登录失败 (code: ${code})` })
+        }
+      })
+
+      child.on('error', (err) => {
+        clearTimeout(timeout)
+        console.error('[IPC] LOGIN spawn error:', err.message)
+        resolve({ success: false, error: err.message })
+      })
+    })
+  })
+
+  handle(IPC.PLATFORM_AUTH_LOGOUT, (data: { platform: string }): IpcResponse => {
+    if (data.platform !== 'xhs') {
+      return { success: false, error: `Logout not supported for platform: ${data.platform}` }
+    }
+
+    setAppSettings({
+      platformAuth: {
+        ...getAppSettings().platformAuth,
+        xhs: { loggedIn: false },
+      },
+    })
+
+    // 清理 cookie 文件
+    try {
+      const fs = require('node:fs')
+      const path = require('node:path')
+      const os = require('node:os')
+      const cookiePath = path.join(os.homedir(), '.xhs-mcp', 'storage-state.json')
+      fs.unlinkSync(cookiePath)
+    } catch {
+      // 忽略清理失败
+    }
+
     return { success: true }
   })
 

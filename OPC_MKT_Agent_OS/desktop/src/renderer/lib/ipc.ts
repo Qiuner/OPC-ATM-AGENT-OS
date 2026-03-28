@@ -70,6 +70,16 @@ interface WindowApi {
     onStreamEnd(callback: () => void): () => void
     onStreamError(callback: (error: unknown) => void): () => void
     onEvent(callback: (event: unknown) => void): () => void
+    submitToReview(data: Record<string, unknown>): Promise<IpcResponse<{ taskId: string; contentId: string }>>
+    publish(data: Record<string, unknown>): Promise<IpcResponse>
+    onPublishProgress(callback: (data: { contentId: string; stage: string; message: string; detail?: string }) => void): () => void
+  }
+  platformAuth: {
+    status(): Promise<IpcResponse<{
+      xhs: { loggedIn: boolean; username?: string; lastLoginAt?: string }
+    }>>
+    login(platform: string): Promise<IpcResponse>
+    logout(platform: string): Promise<IpcResponse>
   }
   keys: {
     getStatus(): Promise<IpcResponse<Record<string, boolean>>>

@@ -120,6 +120,25 @@ const api = {
       ipcRenderer.on(IPC.AGENT_EVENT, handler)
       return () => { ipcRenderer.removeListener(IPC.AGENT_EVENT, handler) }
     },
+    submitToReview: (data: Record<string, unknown>): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.AGENT_SUBMIT_TO_REVIEW, data),
+    publish: (data: Record<string, unknown>): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.AGENT_PUBLISH, data),
+    onPublishProgress: (callback: (data: { contentId: string; stage: string; message: string; detail?: string }) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: { contentId: string; stage: string; message: string; detail?: string }): void => callback(data)
+      ipcRenderer.on(IPC.AGENT_PUBLISH_PROGRESS, handler)
+      return () => { ipcRenderer.removeListener(IPC.AGENT_PUBLISH_PROGRESS, handler) }
+    },
+  },
+
+  /** Platform auth — cookie-based logins (XHS, etc.) */
+  platformAuth: {
+    status: (): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.PLATFORM_AUTH_STATUS),
+    login: (platform: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.PLATFORM_AUTH_LOGIN, { platform }),
+    logout: (platform: string): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.PLATFORM_AUTH_LOGOUT, { platform }),
   },
 
   /** Secure storage — API Keys via OS Keychain */

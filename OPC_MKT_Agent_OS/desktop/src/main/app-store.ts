@@ -60,6 +60,14 @@ interface AppSettings {
   widgetVisible?: boolean
   /** Dock Pet 活跃团队 agent 列表 */
   teamAgentIds?: string[]
+  /** 平台授权状态（cookie-based logins） */
+  platformAuth?: {
+    xhs?: {
+      loggedIn: boolean
+      username?: string
+      lastLoginAt?: string
+    }
+  }
 }
 
 const defaults: AppSettings = {
@@ -93,6 +101,7 @@ export function getAppSettings(): AppSettings {
     onboardingCompleted: store.get('onboardingCompleted'),
     brand: store.get('brand'),
     teamAgentIds: store.get('teamAgentIds'),
+    platformAuth: store.get('platformAuth'),
   }
 }
 
@@ -131,7 +140,7 @@ export function getWindowState(): { bounds?: { x: number; y: number; width: numb
 export function getWidgetState(): { bounds?: { x: number; y: number; width: number; height: number }; visible?: boolean } {
   return {
     bounds: store.get('widgetBounds'),
-    visible: store.get('widgetVisible') ?? true,
+    visible: store.get('widgetVisible') ?? false,
   }
 }
 

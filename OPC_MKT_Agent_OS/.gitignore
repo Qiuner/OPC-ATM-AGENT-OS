@@ -11,3 +11,5 @@ desktop/dist/
 desktop/release/
 desktop/out/
 desktop/node_modules/
+engine/output/
+engine/tools/image-gen/output/

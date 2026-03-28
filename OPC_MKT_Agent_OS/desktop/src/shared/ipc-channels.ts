@@ -68,6 +68,11 @@ export const IPC = {
   AGENT_SESSION_GET: 'agent:session:get',
   AGENT_SESSION_CLEAR: 'agent:session:clear',
 
+  // ── Agent Content Pipeline ──
+  AGENT_SUBMIT_TO_REVIEW: 'agent:submit-to-review',
+  AGENT_PUBLISH: 'agent:publish',
+  AGENT_PUBLISH_PROGRESS: 'agent:publish:progress',
+
   // ── Agent Events (main → renderer push) ──
   AGENT_EVENT: 'agent:event',
   AGENT_STREAM_CHUNK: 'agent:stream:chunk',
@@ -79,6 +84,11 @@ export const IPC = {
   KEYS_SET: 'secure:keys:set',
   KEYS_DELETE: 'secure:keys:delete',
   KEYS_CLEAR: 'secure:keys:clear',
+
+  // ── Platform Auth (cookie-based logins) ──
+  PLATFORM_AUTH_STATUS: 'platform:auth:status',
+  PLATFORM_AUTH_LOGIN: 'platform:auth:login',
+  PLATFORM_AUTH_LOGOUT: 'platform:auth:logout',
 
   // ── Theme ──
   THEME_GET: 'config:theme:get',

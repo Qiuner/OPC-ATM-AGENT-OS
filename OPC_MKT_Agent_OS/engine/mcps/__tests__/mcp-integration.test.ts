@@ -111,7 +111,7 @@ async function testToolDefinitions() {
 
   const servers = [
     { name: "creatorflow", expectedCount: 7, prefix: "creatorflow_" },
-    { name: "xhs-data", expectedCount: 7, prefix: "xhs_" },
+    { name: "xhs-data", expectedCount: 5, prefix: "xhs_" },
     { name: "podcast-tts", expectedCount: 6, prefix: "tts_" },
   ];
 
@@ -210,72 +210,14 @@ async function testMockMode() {
     console.log("MOCK PASS [creatorflow/unknown_tool]: 未知工具正确返回错误");
   }
 
-  // --- XHS Data Mock ---
+  // --- XHS Data (Playwright-based, only unknown tool test) ---
   {
     const { handleToolCall } = await import(join(MCPS_DIR, "xhs-data", "tools.ts"));
 
-    // get note metrics
-    const metricsResult = await handleToolCall("xhs_get_note_metrics", {
-      noteId: "note_001",
-    }) as ToolResult;
-    console.assert(!metricsResult.isError, "MOCK FAIL [xhs/metrics]: 不应返回错误");
-    const metricsData = JSON.parse(metricsResult.content[0].text);
-    console.assert(typeof metricsData.likes === "number", "MOCK FAIL [xhs/metrics]: likes 应为数字");
-    console.assert(typeof metricsData.collects === "number", "MOCK FAIL [xhs/metrics]: collects 应为数字");
-    console.assert(typeof metricsData.performanceScore === "number", "MOCK FAIL [xhs/metrics]: performanceScore 应为数字");
-    console.log("MOCK PASS [xhs/get_note_metrics]: 返回 mock 指标数据");
-
-    // batch get metrics
-    const batchResult = await handleToolCall("xhs_batch_get_metrics", {
-      noteIds: ["n1", "n2", "n3"],
-    }) as ToolResult;
-    console.assert(!batchResult.isError, "MOCK FAIL [xhs/batch]: 不应返回错误");
-    const batchData = JSON.parse(batchResult.content[0].text);
-    console.assert(batchData.metrics.length === 3, `MOCK FAIL [xhs/batch]: 应返回 3 条，实际 ${batchData.metrics.length}`);
-    console.log("MOCK PASS [xhs/batch_get_metrics]: 返回 mock 批量数据");
-
-    // trending topics
-    const trendingResult = await handleToolCall("xhs_get_trending_topics", {}) as ToolResult;
-    console.assert(!trendingResult.isError, "MOCK FAIL [xhs/trending]: 不应返回错误");
-    const trendingData = JSON.parse(trendingResult.content[0].text);
-    console.assert(Array.isArray(trendingData.topics), "MOCK FAIL [xhs/trending]: topics 应为数组");
-    console.assert(trendingData.topics.length > 0, "MOCK FAIL [xhs/trending]: topics 不应为空");
-    console.log("MOCK PASS [xhs/get_trending_topics]: 返回 mock 热搜数据");
-
-    // search notes
-    const searchResult = await handleToolCall("xhs_search_notes", {
-      keyword: "AI工具",
-    }) as ToolResult;
-    console.assert(!searchResult.isError, "MOCK FAIL [xhs/search]: 不应返回错误");
-    const searchData = JSON.parse(searchResult.content[0].text);
-    console.assert(Array.isArray(searchData.notes), "MOCK FAIL [xhs/search]: notes 应为数组");
-    console.assert(searchData.notes[0].title.includes("AI工具"), "MOCK FAIL [xhs/search]: 标题应包含关键词");
-    console.log("MOCK PASS [xhs/search_notes]: 返回 mock 搜索结果");
-
-    // batch empty validation
-    const emptyBatch = await handleToolCall("xhs_batch_get_metrics", {
-      noteIds: [],
-    }) as ToolResult;
-    console.assert(emptyBatch.isError === true, "MOCK FAIL [xhs/batch_empty]: 空 noteIds 应返回错误");
-    console.log("MOCK PASS [xhs/batch_empty]: 空 noteIds 正确返回错误");
-
-    // batch over limit validation
-    const overBatch = await handleToolCall("xhs_batch_get_metrics", {
-      noteIds: Array(51).fill("n"),
-    }) as ToolResult;
-    console.assert(overBatch.isError === true, "MOCK FAIL [xhs/batch_over]: >50 应返回错误");
-    console.log("MOCK PASS [xhs/batch_over_limit]: 超过 50 个正确返回错误");
-
-    // publish without cookie
-    delete process.env.XHS_COOKIE;
-    const publishResult = await handleToolCall("xhs_publish_note", {
-      title: "测试",
-      content: "内容",
-    }) as ToolResult;
-    console.assert(publishResult.isError === true, "MOCK FAIL [xhs/publish_no_cookie]: 无 cookie 应返回错误");
-    const publishErr = JSON.parse(publishResult.content[0].text);
-    console.assert(publishErr.error.includes("XHS_COOKIE"), "MOCK FAIL [xhs/publish_no_cookie]: 错误应提及 XHS_COOKIE");
-    console.log("MOCK PASS [xhs/publish_no_cookie]: 无 cookie 时正确拒绝发布");
+    // unknown tool
+    const unknownResult = await handleToolCall("fake_xhs_tool", {}) as ToolResult;
+    console.assert(unknownResult.isError === true, "MOCK FAIL [xhs/unknown]: 应返回 isError=true");
+    console.log("MOCK PASS [xhs/unknown_tool]: 未知工具正确返回错误");
   }
 
   // --- Podcast TTS Mock ---
@@ -367,11 +309,12 @@ async function testRegistryMCPMapping() {
   );
   console.log("REG-MCP PASS [ceo]: 挂载 creatorflow");
 
-  // XHS Agent 应挂载 xhs-data + creatorflow
+  // XHS Agent 应挂载 xhs-data + image-gen
   const xhs = registry.get("xhs-agent");
   console.assert(xhs?.mcpServers?.["xhs-data"], "REG-MCP FAIL: XHS 应挂载 xhs-data MCP");
-  console.assert(xhs?.mcpServers?.creatorflow, "REG-MCP FAIL: XHS 应挂载 creatorflow MCP");
-  console.log("REG-MCP PASS [xhs-agent]: 挂载 xhs-data + creatorflow");
+  console.assert(xhs?.mcpServers?.["image-gen"], "REG-MCP FAIL: XHS 应挂载 image-gen MCP");
+  console.assert(!xhs?.mcpServers?.creatorflow, "REG-MCP FAIL: XHS 不应挂载 creatorflow MCP");
+  console.log("REG-MCP PASS [xhs-agent]: 挂载 xhs-data + image-gen");
 
   // Analyst 应挂载 xhs-data
   const analyst = registry.get("analyst-agent");
@@ -411,12 +354,13 @@ async function testSupervisorMCPAggregation() {
   const options = config.options as Record<string, unknown>;
   const mcpServers = options.mcpServers as Record<string, unknown>;
 
-  // 应聚合所有 3 个 MCP Server
+  // 应聚合所有 MCP Server（去重后）
   const mcpKeys = Object.keys(mcpServers);
   console.assert(mcpKeys.includes("creatorflow"), "SUP-MCP FAIL: 应包含 creatorflow");
   console.assert(mcpKeys.includes("xhs-data"), "SUP-MCP FAIL: 应包含 xhs-data");
   console.assert(mcpKeys.includes("podcast-tts"), "SUP-MCP FAIL: 应包含 podcast-tts");
-  console.assert(mcpKeys.length === 3, `SUP-MCP FAIL: 应有 3 个 MCP Server，实际 ${mcpKeys.length}: [${mcpKeys.join(", ")}]`);
+  console.assert(mcpKeys.includes("image-gen"), "SUP-MCP FAIL: 应包含 image-gen");
+  console.assert(mcpKeys.length === 4, `SUP-MCP FAIL: 应有 4 个 MCP Server，实际 ${mcpKeys.length}: [${mcpKeys.join(", ")}]`);
 
   // 每个 MCP Server 应有 command 和 args
   for (const key of mcpKeys) {

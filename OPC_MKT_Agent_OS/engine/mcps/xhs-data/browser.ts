@@ -26,7 +26,9 @@ let browserContext: BrowserContext | null = null;
 
 /** 获取或启动浏览器上下文（带 cookie 恢复） */
 async function getBrowserContext(headless = true): Promise<BrowserContext> {
-  if (browserContext) return browserContext;
+  if (browserContext) {
+    return browserContext;
+  }
   mkdirSync(DATA_DIR, { recursive: true });
 
   browserContext = await chromium.launchPersistentContext(USER_DATA_DIR, {
@@ -71,37 +73,29 @@ export async function closeBrowser(): Promise<void> {
 // 登录管理
 // ============================================================
 
-/** 检查是否已登录小红书 */
+/** 检查是否已登录小红书（基于 cookie，不打开页面） */
 export async function checkLogin(): Promise<{
   loggedIn: boolean;
   username?: string;
 }> {
   const ctx = await getBrowserContext();
-  const page = await ctx.newPage();
-  try {
-    await page.goto(XHS_URL, { waitUntil: "domcontentloaded", timeout: 15000 });
-    // 等待页面稳定
-    await page.waitForTimeout(2000);
+  // 直接检查 cookie，比打开页面检测 DOM 更可靠
+  const cookies = await ctx.cookies("https://www.xiaohongshu.com");
+  const hasSession = cookies.some((c) => c.name === "web_session" && c.value.length > 10);
+  const hasUserId = cookies.some((c) => c.name === "x-user-id-creator.xiaohongshu.com" && c.value.length > 0);
+  const hasCreatorSession = cookies.some((c) => c.name === "galaxy_creator_session_id" && c.value.length > 0);
 
-    // 多种选择器检测登录态
-    const loggedIn =
-      (await page.locator(".user-avatar").count()) > 0 ||
-      (await page.locator('[class*="user-info"]').count()) > 0 ||
-      (await page.locator('[class*="sidebar"] [class*="user"]').count()) > 0;
+  const loggedIn = hasSession && (hasUserId || hasCreatorSession);
 
-    let username: string | undefined;
-    if (loggedIn) {
-      username =
-        (await page
-          .locator('[class*="user-name"], [class*="nickname"]')
-          .first()
-          .textContent()
-          .catch(() => null)) ?? undefined;
+  let username: string | undefined;
+  if (loggedIn) {
+    // 尝试从 cookie 获取用户信息（可选）
+    const userIdCookie = cookies.find((c) => c.name === "x-user-id-creator.xiaohongshu.com");
+    if (userIdCookie) {
+      username = `user:${userIdCookie.value.slice(0, 12)}`;
     }
-    return { loggedIn, username };
-  } finally {
-    await page.close();
   }
+  return { loggedIn, username };
 }
 
 /** 启动 QR 码登录（弹出浏览器窗口，用户需手机扫码） */
@@ -121,14 +115,48 @@ export async function startQRLogin(): Promise<{
     await page.goto(XHS_URL, { waitUntil: "domcontentloaded" });
 
     // 等待用户扫码完成（最多 120 秒）
-    await page.waitForSelector(
-      '.user-avatar, [class*="user-info"], [class*="sidebar"] [class*="user"]',
-      { timeout: 120000 },
-    );
+    // 多策略检测：URL 跳转 / cookie 出现 / DOM 元素
+    const loginDetected = await Promise.race([
+      // 策略 1: URL 变化（离开登录相关页面）
+      page.waitForURL(
+        (url) => !url.pathname.includes("login") && !url.pathname.includes("passport") && url.pathname !== "/",
+        { timeout: 120000 },
+      ).then(() => "url_change" as const).catch(() => null),
+      // 策略 2: 头像或用户信息元素出现
+      page.waitForSelector(
+        '.user-avatar, [class*="user-info"], [class*="sidebar"] [class*="user"], .reds-avatar, img[class*="avatar"]',
+        { timeout: 120000 },
+      ).then(() => "selector" as const).catch(() => null),
+      // 策略 3: web_session cookie 被设置（轮询）
+      (async () => {
+        for (let i = 0; i < 60; i++) {
+          await page.waitForTimeout(2000);
+          const cookies = await ctx.cookies("https://www.xiaohongshu.com");
+          const hasSession = cookies.some((c) => c.name === "web_session" && c.value.length > 10);
+          if (hasSession) return "cookie" as const;
+        }
+        return null;
+      })(),
+    ]);
+
+    if (!loginDetected) {
+      return { status: "timeout", message: "登录超时（120s），请重试" };
+    }
+
+    console.log("[browser] Login detected via:", loginDetected);
+    // 等待页面稳定
+    await page.waitForTimeout(2000);
     await saveCookies();
-    return { status: "success", message: "登录成功，cookie 已保存到 ~/.xhs-mcp/" };
-  } catch {
-    return { status: "timeout", message: "登录超时（120s），请重试" };
+
+    // 登录主站成功后，访问创作者平台建立 creator session
+    await page.goto(CREATOR_URL, { waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(3000);
+    await saveCookies();
+
+    return { status: "success", message: "登录成功，cookie 已保存" };
+  } catch (err) {
+    console.error("[browser] startQRLogin error:", err instanceof Error ? err.message : err);
+    return { status: "timeout", message: "登录超时或失败，请重试" };
   } finally {
     await page.close();
     // 关闭 headful context，后续操作用 headless
@@ -146,92 +174,173 @@ export async function publishNote(opts: {
   content: string;
   tags?: string[];
   images?: string[];
+  onProgress?: (stage: string, message: string, detail?: string) => void;
 }): Promise<{ success: boolean; noteUrl?: string; error?: string }> {
-  const ctx = await getBrowserContext();
+  const progress = opts.onProgress ?? (() => {});
+
+  progress("browser", "正在启动浏览器(可视模式)...");
+  // 关闭旧 context 保证用 headful 模式
+  if (browserContext) {
+    await browserContext.close();
+    browserContext = null;
+  }
+  const ctx = await getBrowserContext(false); // 可视模式，用户可看到操作过程
   const page = await ctx.newPage();
 
   try {
     // 1. 导航到创作者发布页
+    progress("navigate", "正在打开创作者发布页...");
     await page.goto(CREATOR_URL, {
       waitUntil: "domcontentloaded",
-      timeout: 20000,
+      timeout: 30000,
     });
     await page.waitForTimeout(2000);
 
-    // 2. 上传图片（如果有）
-    if (opts.images && opts.images.length > 0) {
-      const fileInput = page.locator('input[type="file"]').first();
-      await fileInput.setInputFiles(opts.images);
-      // 等待图片预览出现
-      await page.waitForSelector(
-        '.img-preview-area .pr, [class*="upload-preview"], [class*="image-item"]',
-        { timeout: 30000 },
-      );
-      // 给图片上传一些缓冲时间
-      await page.waitForTimeout(2000);
+    // 检查是否被重定向到登录页（用 pathname，不含 query string）
+    const afterNavUrl = page.url();
+    const urlPath = new URL(afterNavUrl).pathname;
+    progress("navigate", `页面已打开: ${afterNavUrl.slice(0, 80)}`, afterNavUrl);
+
+    if (urlPath.includes("/login") || urlPath.includes("/passport")) {
+      progress("error", "创作者平台未登录(401)，请在设置中重新扫码登录", afterNavUrl);
+      return { success: false, error: "XHS_NOT_LOGGED_IN" };
     }
 
-    // 3. 填写标题（多种选择器 fallback）
+    // 2. 切换到"上传图文"标签页（默认可能是"上传视频"）
+    progress("navigate", "正在切换到图文发布模式...");
+    const tabClicked = await page.evaluate(() => {
+      // 找到可见的 .creator-tab（过滤掉 x < 0 的隐藏副本）
+      const tabs = Array.from(document.querySelectorAll('div.creator-tab'));
+      const tab = tabs.find(el => el.textContent?.trim() === '上传图文' && el.getBoundingClientRect().x > 0);
+      if (tab) {
+        (tab as HTMLElement).click();
+        return true;
+      }
+      return false;
+    });
+    if (tabClicked) {
+      await page.waitForTimeout(2000);
+      progress("navigate", "已切换到图文发布模式");
+    } else {
+      progress("navigate", "未找到图文标签，尝试继续...");
+    }
+
+    // 3. 上传图片（必须先上传图片，标题和正文输入框才会出现）
+    const fileInput = page.locator('input.upload-input, input[type="file"]').first();
+    await fileInput.waitFor({ state: "attached", timeout: 10000 });
+
+    if (opts.images && opts.images.length > 0) {
+      progress("upload", `正在上传 ${opts.images.length} 张图片...`);
+      await fileInput.setInputFiles(opts.images);
+      await page.waitForTimeout(5000);
+      progress("upload", "图片上传完成");
+    } else {
+      // 小红书要求至少一张图片，生成占位图
+      progress("upload", "无图片，正在生成占位图...");
+      const placeholderPath = join(DATA_DIR, 'placeholder.png');
+      const placeholderPage = await ctx.newPage();
+      await placeholderPage.setContent(`
+        <div style="width:1080px;height:1080px;background:linear-gradient(135deg,#fef2f2,#fce7f3);display:flex;align-items:center;justify-content:center;font-size:48px;color:#666;font-family:sans-serif;">
+          ${opts.title.slice(0, 10)}
+        </div>
+      `);
+      await placeholderPage.screenshot({ path: placeholderPath, clip: { x: 0, y: 0, width: 1080, height: 1080 } });
+      await placeholderPage.close();
+
+      await fileInput.setInputFiles([placeholderPath]);
+      await page.waitForTimeout(5000);
+      progress("upload", "占位图上传完成");
+    }
+
+    // 4. 等待编辑表单出现（图片上传后才有标题和正文输入框）
+    progress("fill", "等待编辑表单加载...");
+    await page.waitForTimeout(2000);
+
+    // 截图看当前页面状态
+    const formScreenshot = join(DATA_DIR, 'publish-form.png');
+    await page.screenshot({ path: formScreenshot }).catch(() => {});
+    progress("debug", `表单状态截图: ${formScreenshot}`);
+
+    // 5. 填写标题 — 找到 wrapper 内部的 input 元素
+    progress("fill", "正在填写标题...");
     const titleInput = page.locator(
-      '#title-input, div.d-input input, input[placeholder*="标题"], [class*="title"] input',
+      '[class*="c-input_inner"] input, #title-input, input[placeholder*="标题"], input[placeholder*="填写标题"]',
     ).first();
+    await titleInput.waitFor({ state: "visible", timeout: 30000 });
     await titleInput.click();
     await titleInput.fill(opts.title);
+    progress("fill", `标题已填写: ${opts.title.slice(0, 20)}`);
 
-    // 4. 填写正文
+    // 6. 填写正文
+    progress("fill", "正在填写正文...");
     const contentEditor = page.locator(
-      'div.ql-editor, #content-textarea, [contenteditable="true"]',
+      'div.ql-editor, [contenteditable="true"], #content-textarea, [class*="post-content"] [contenteditable]',
     ).first();
+    await contentEditor.waitFor({ state: "visible", timeout: 15000 });
     await contentEditor.click();
     await contentEditor.fill(opts.content);
+    progress("fill", `正文已填写 (${opts.content.length} 字)`);
 
-    // 5. 添加话题标签
+    // 6. 添加话题标签
     if (opts.tags && opts.tags.length > 0) {
+      progress("tags", `正在添加 ${opts.tags.length} 个标签...`);
       for (const tag of opts.tags) {
         await contentEditor.press("End");
         await page.keyboard.type(` #${tag}#`, { delay: 50 });
         await page.waitForTimeout(500);
       }
+      progress("tags", "标签添加完成");
     }
 
-    // 6. 点击发布按钮
+    // 7. 点击发布按钮
+    progress("publish", "正在点击发布按钮...");
     const publishBtn = page.locator(
-      '.publish-page-publish-btn button, button:has-text("发布笔记"), button:has-text("发布"), [class*="publish"] button[class*="red"], [class*="submit-btn"]',
+      'button:has-text("发布笔记"), button:has-text("发布"), .publishBtn, [class*="publish"] button[class*="red"], [class*="submit-btn"], .css-k01soj',
     ).first();
+    await publishBtn.waitFor({ state: "visible", timeout: 10000 });
     await publishBtn.click();
 
-    // 7. 等待发布结果
-    await page.waitForTimeout(5000);
-    const currentUrl = page.url();
+    // 8. 等待发布结果（等久一点）
+    progress("result", "等待发布结果...");
+    await page.waitForTimeout(8000);
+    const finalUrl = page.url();
 
-    // 检查成功标志
     const hasSuccess =
-      currentUrl.includes("publish/success") ||
+      finalUrl.includes("publish/success") ||
+      finalUrl.includes("/noteManage") ||
       (await page.locator('text="发布成功"').count()) > 0 ||
-      (await page.locator('text="已发布"').count()) > 0;
+      (await page.locator('text="已发布"').count()) > 0 ||
+      (await page.locator('text="笔记管理"').count()) > 0;
 
     await saveCookies();
 
     if (hasSuccess) {
-      return { success: true, noteUrl: currentUrl };
+      progress("done", "发布成功!", finalUrl);
+      return { success: true, noteUrl: finalUrl };
     }
 
     // 检查错误提示
     const errorText = await page
-      .locator('[class*="error"], [class*="toast"], div.length-error')
+      .locator('[class*="error"], [class*="toast"], div.length-error, [class*="red-toast"], [class*="message-error"]')
       .first()
       .textContent()
       .catch(() => null);
 
-    return {
-      success: false,
-      error: errorText || "发布结果未知，请在小红书创作者中心手动检查",
-    };
+    // 截图保存用于调试
+    const screenshotPath = join(DATA_DIR, 'publish-fail.png');
+    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+    progress("debug", `已保存失败截图: ${screenshotPath}`, finalUrl);
+
+    const errMsg = errorText || "发布结果未知，请在小红书创作者中心手动检查";
+    progress("error", errMsg, finalUrl);
+    return { success: false, error: errMsg };
   } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "未知错误",
-    };
+    const errMsg = err instanceof Error ? err.message : "未知错误";
+    // 截图保存
+    const screenshotPath = join(DATA_DIR, 'publish-error.png');
+    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+    progress("error", errMsg, screenshotPath);
+    return { success: false, error: errMsg };
   } finally {
     await page.close();
   }
