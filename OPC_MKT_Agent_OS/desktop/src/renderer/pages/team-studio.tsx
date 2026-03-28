@@ -1,0 +1,1271 @@
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  lazy,
+  Suspense,
+  type KeyboardEvent,
+} from "react";
+import {
+  Send,
+  Trash2,
+  Users,
+  MessageSquare,
+  Monitor,
+  Power,
+  PowerOff,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  Zap,
+  Terminal,
+  Square,
+  RotateCcw,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { getApi } from "@/lib/ipc";
+
+// Lazy-load Monitor view
+const TeamModeView = lazy(() => import("./team-studio-monitor"));
+
+// ==========================================
+// Constants
+// ==========================================
+
+const AGENT_CHAT_BASE = "http://localhost:3001";
+
+const SDK_AGENT_IDS = ["ceo", "xhs-agent", "growth-agent", "brand-reviewer"];
+
+interface AgentDef {
+  id: string;
+  label: string;
+  labelCn: string;
+  color: string;
+  initial: string;
+  bio: string;
+  capabilities: string[];
+  level: string;
+  systemPrompt: string;
+}
+
+const AGENTS: AgentDef[] = [
+  {
+    id: "ceo",
+    label: "CEO",
+    labelCn: "CEO 营销总监",
+    color: "#e74c3c",
+    initial: "CEO",
+    bio: "营销团队总指挥，负责需求拆解、子 Agent 调度与质量终审",
+    capabilities: ["任务拆解", "多 Agent 编排", "质量把控", "流程调度"],
+    level: "Orchestrator",
+    systemPrompt: `你是 Marketing Agent OS 的 CEO Agent，营销团队负责人。
+你管理 3 个子 Agent：xhs-agent（小红书创作）、growth-agent（增长策略）、brand-reviewer（品牌审查）。
+标准工作流：分析需求 → Growth 选题 → XHS 创作 → Brand Reviewer 审查 → 你终审交付。
+你不直接创作内容，而是拆解任务、调度子 Agent、把控质量。用中文回复。`,
+  },
+  {
+    id: "xhs-agent",
+    label: "XHS",
+    labelCn: "小红书创作专家",
+    color: "#ff2442",
+    initial: "XHS",
+    bio: "顶级小红书内容创作者，按 SOP 产出高质量种草笔记",
+    capabilities: [
+      "爆款标题",
+      "种草文案",
+      "CTA 设计",
+      "标签策略",
+      "配图建议",
+    ],
+    level: "Specialist",
+    systemPrompt: `你是一位顶级小红书营销内容创作专家。
+按 SOP 撰写内容（标题→正文→CTA→标签→配图建议），直接输出笔记内容。用中文创作。`,
+  },
+  {
+    id: "growth-agent",
+    label: "Growth",
+    labelCn: "增长营销专家",
+    color: "#00cec9",
+    initial: "G",
+    bio: "增长黑客，精通选题研究、热点捕捉与数据驱动的发布策略",
+    capabilities: [
+      "选题研究",
+      "热点捕捉",
+      "竞品分析",
+      "发布策略",
+      "数据复盘",
+    ],
+    level: "Specialist",
+    systemPrompt: `你是一位增长营销专家，精通小红书平台运营。
+负责选题研究、热点捕捉、竞品爆款分析、发布时间策略、数据复盘。
+接地气，用真实案例和数据说话。给出可立即执行的选题方案。中文沟通。`,
+  },
+  {
+    id: "brand-reviewer",
+    label: "Reviewer",
+    labelCn: "品牌风控审查",
+    color: "#a855f7",
+    initial: "BR",
+    bio: "品牌守护者，逐项审查内容合规性与品牌调性一致性",
+    capabilities: [
+      "文案审查",
+      "调性检测",
+      "敏感词过滤",
+      "合规校验",
+      "风险评估",
+    ],
+    level: "Reviewer",
+    systemPrompt: `你是品牌风控审查专家。
+审查范围：文案内容、品牌调性一致性、配图建议、敏感词/风险内容、平台合规性。
+对照品牌调性和受众画像逐项检查，输出审查报告（通过/需修改/拒绝 + 修改建议）。中文沟通。`,
+  },
+];
+
+const AGENT_MAP = new Map(AGENTS.map((a) => [a.id, a]));
+
+const AGENT_COLORS: Record<
+  string,
+  { color: string; avatar: string; name: string }
+> = {
+  ceo: { color: "#e74c3c", avatar: "CEO", name: "CEO" },
+  "xhs-agent": { color: "#ff2442", avatar: "XHS", name: "XHS Agent" },
+  "analyst-agent": { color: "#22d3ee", avatar: "AN", name: "Analyst" },
+  "growth-agent": { color: "#00cec9", avatar: "G", name: "Growth" },
+  "brand-reviewer": { color: "#a855f7", avatar: "BR", name: "Reviewer" },
+};
+
+type ChannelId = "all" | string;
+type TabId = "execute" | "chat" | "monitor";
+
+// ==========================================
+// Execute mode types
+// ==========================================
+
+type TaskStatus = "waiting" | "running" | "done" | "error";
+
+interface ExecTask {
+  id: string;
+  agentId: string;
+  description: string;
+  status: TaskStatus;
+  progress: number;
+  currentTool?: string;
+  toolCallCount: number;
+  error?: string;
+  startedAt?: number;
+  finishedAt?: number;
+  content: string;
+}
+
+interface ExecLogEntry {
+  id: string;
+  timestamp: number;
+  agentId: string;
+  type: "info" | "tool" | "result" | "error" | "communication";
+  message: string;
+}
+
+interface ExecState {
+  isRunning: boolean;
+  startedAt?: number;
+  prompt: string;
+  tasks: ExecTask[];
+  logs: ExecLogEntry[];
+  result: string;
+}
+
+const INITIAL_EXEC: ExecState = {
+  isRunning: false,
+  prompt: "",
+  tasks: [],
+  logs: [],
+  result: "",
+};
+
+// ==========================================
+// Chat mode types
+// ==========================================
+
+interface StudioMessage {
+  id: string;
+  role: "user" | "agent" | "system";
+  agentId?: string;
+  content: string;
+  timestamp: Date;
+  isStreaming?: boolean;
+}
+
+function createId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getWelcomeMessages(): StudioMessage[] {
+  const now = new Date();
+  return [
+    {
+      id: createId(),
+      role: "system",
+      content:
+        "欢迎来到 OPC Team Studio — 使用「执行模式」下达任务，或切换到「团队对话」自由对话",
+      timestamp: now,
+    },
+  ];
+}
+
+// ==========================================
+// Stream helpers
+// ==========================================
+
+function buildConversationHistory(
+  messages: StudioMessage[],
+  limit = 20
+): string {
+  return messages
+    .slice(-limit)
+    .map((m) => {
+      if (m.role === "system") return "";
+      if (m.role === "user") return `User: ${m.content}`;
+      const agent = m.agentId ? AGENT_MAP.get(m.agentId) : null;
+      return `${agent?.label ?? "Agent"}: ${m.content}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function streamAgentMessage(
+  agentId: string,
+  systemPrompt: string,
+  conversationHistory: string,
+  userMessage: string,
+  onChunk: (text: string) => void,
+  onDone: () => void,
+  onError: (error: string) => void
+): Promise<void> {
+  const isSDK = SDK_AGENT_IDS.includes(agentId);
+  const endpoint = isSDK ? "/api/chat-sdk" : "/api/chat";
+
+  try {
+    const res = await fetch(`${AGENT_CHAT_BASE}${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemPrompt,
+        conversationHistory,
+        userMessage,
+        agentName: agentId,
+      }),
+    });
+
+    if (!res.ok) {
+      onError(`Agent 服务错误: ${res.status} ${res.statusText}`);
+      onDone();
+      return;
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) {
+      onError("无法获取响应流");
+      onDone();
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        try {
+          const data = JSON.parse(line.slice(6)) as {
+            text?: string;
+            error?: string;
+            done?: boolean;
+          };
+          if (data.done) {
+            onDone();
+            return;
+          }
+          if (data.error) onError(data.error);
+          if (data.text) onChunk(data.text);
+        } catch {
+          /* skip */
+        }
+      }
+    }
+    onDone();
+  } catch (err) {
+    onError(err instanceof Error ? err.message : String(err));
+    onDone();
+  }
+}
+
+// ==========================================
+// Simple Agent Avatar (replaces PixelAgentSVG)
+// ==========================================
+
+function AgentAvatar({
+  agentId,
+  size = "sm",
+  online,
+}: {
+  agentId: string;
+  size?: "sm" | "md";
+  online?: boolean;
+}) {
+  const colors = AGENT_COLORS[agentId] ?? {
+    color: "#888",
+    avatar: "?",
+    name: "Unknown",
+  };
+  const dim = size === "md" ? "w-9 h-9" : "w-7 h-7";
+  const textSize = size === "md" ? "text-xs" : "text-[10px]";
+  return (
+    <div
+      className={`${dim} rounded-lg flex items-center justify-center shrink-0 font-bold ${textSize}`}
+      style={{
+        background: `${colors.color}20`,
+        border: `1px solid ${colors.color}40`,
+        color: colors.color,
+        opacity: online === false ? 0.4 : 1,
+      }}
+    >
+      {colors.avatar}
+    </div>
+  );
+}
+
+// ==========================================
+// Channel List Sidebar
+// ==========================================
+
+function ChannelList({
+  activeChannel,
+  onSelect,
+  teamLaunched,
+}: {
+  activeChannel: ChannelId;
+  onSelect: (id: ChannelId) => void;
+  teamLaunched: boolean;
+}) {
+  return (
+    <div
+      className="flex flex-col w-64 shrink-0"
+      style={{
+        background: "var(--sidebar)",
+        borderRight: "1px solid var(--border)",
+      }}
+    >
+      <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+        <h3
+          className="text-sm font-semibold uppercase tracking-[0.12em]"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          Agent Team
+        </h3>
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{
+            background: teamLaunched
+              ? "#22c55e"
+              : "var(--muted-foreground)",
+            boxShadow: teamLaunched
+              ? "0 0 6px rgba(34,197,94,0.4)"
+              : "none",
+          }}
+        />
+      </div>
+      <nav className="flex-1 overflow-y-auto space-y-0.5 px-3 py-1">
+        <button
+          onClick={() => onSelect("all")}
+          className={cn(
+            "flex w-full items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer",
+            activeChannel === "all"
+              ? "font-medium text-foreground"
+              : "dark:hover:bg-white/[0.03] hover:bg-black/[0.03]"
+          )}
+          style={
+            activeChannel === "all"
+              ? { background: "rgba(167,139,250,0.08)" }
+              : { color: "var(--muted-foreground)" }
+          }
+        >
+          <Users className="h-4 w-4 shrink-0" />
+          <span className="flex-1 text-left">全员</span>
+        </button>
+        {AGENTS.map((agent) => {
+          const isActive = activeChannel === agent.id;
+          return (
+            <button
+              key={agent.id}
+              onClick={() => onSelect(agent.id)}
+              className={cn(
+                "flex w-full items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-all duration-200 cursor-pointer",
+                isActive
+                  ? "font-medium text-foreground"
+                  : "dark:hover:bg-white/[0.03] hover:bg-black/[0.03]"
+              )}
+              style={
+                isActive
+                  ? { background: "rgba(167,139,250,0.08)" }
+                  : { color: "var(--muted-foreground)" }
+              }
+            >
+              <AgentAvatar
+                agentId={agent.id}
+                online={teamLaunched}
+              />
+              <span className="flex-1 text-left truncate">
+                {agent.labelCn}
+              </span>
+              <span
+                className="h-2 w-2 rounded-full shrink-0"
+                style={{
+                  background: teamLaunched
+                    ? "#22c55e"
+                    : "var(--muted-foreground)",
+                }}
+              />
+            </button>
+          );
+        })}
+      </nav>
+      <div
+        className="px-4 py-3"
+        style={{ borderTop: "1px solid var(--border)" }}
+      >
+        <div
+          className="flex items-center gap-2 text-xs"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{
+              background: teamLaunched
+                ? "#22c55e"
+                : "var(--muted-foreground)",
+            }}
+          />
+          {teamLaunched
+            ? `在线: ${AGENTS.length} 个 Agent`
+            : "团队未启动"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// Chat Bubbles
+// ==========================================
+
+function SystemBubble({ msg }: { msg: StudioMessage }) {
+  return (
+    <div className="flex justify-center py-2">
+      <span
+        className="text-xs px-3 py-1 rounded-full"
+        style={{
+          color: "var(--muted-foreground)",
+          background: "var(--muted)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        {msg.content}
+      </span>
+    </div>
+  );
+}
+
+function UserBubble({ msg }: { msg: StudioMessage }) {
+  return (
+    <div className="flex justify-end px-4 py-1.5">
+      <div className="max-w-[70%]">
+        <div
+          className="rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed text-white"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(167,139,250,0.15), rgba(124,58,237,0.15))",
+            border: "1px solid rgba(167,139,250,0.2)",
+          }}
+        >
+          {msg.content}
+        </div>
+        <div
+          className="text-[10px] mt-0.5 text-right"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          {formatTime(msg.timestamp)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgentBubble({ msg }: { msg: StudioMessage }) {
+  const agent = msg.agentId ? AGENT_MAP.get(msg.agentId) : null;
+  const agentColor = agent?.color ?? "#888";
+
+  return (
+    <div className="flex gap-2.5 px-4 py-1.5">
+      <AgentAvatar agentId={msg.agentId ?? ""} online />
+      <div className="max-w-[70%] min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span
+            className="text-xs font-semibold"
+            style={{ color: agentColor }}
+          >
+            {agent?.label ?? "Agent"}
+          </span>
+          <span
+            className="text-[10px]"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            {formatTime(msg.timestamp)}
+          </span>
+        </div>
+        <div
+          className="rounded-2xl rounded-tl-md px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap"
+          style={{
+            background: "var(--muted)",
+            border: "1px solid var(--border)",
+            color: "var(--foreground)",
+          }}
+        >
+          {msg.content}
+          {msg.isStreaming && (
+            <span className="inline-block w-1.5 h-4 ml-0.5 animate-pulse rounded-sm bg-white/50" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// Execute Mode Status Icon
+// ==========================================
+
+function StatusIcon({ status }: { status: TaskStatus }) {
+  switch (status) {
+    case "waiting":
+      return (
+        <Clock
+          className="h-4 w-4"
+          style={{ color: "var(--muted-foreground)" }}
+        />
+      );
+    case "running":
+      return <Loader2 className="h-4 w-4 animate-spin text-[#a78bfa]" />;
+    case "done":
+      return <CheckCircle className="h-4 w-4 text-[#22d3ee]" />;
+    case "error":
+      return <AlertCircle className="h-4 w-4 text-red-400" />;
+  }
+}
+
+// ==========================================
+// Main Component
+// ==========================================
+
+export function TeamStudioPage(): React.JSX.Element {
+  const [activeTab, setActiveTab] = useState<TabId>("execute");
+  const [activeChannel, setActiveChannel] = useState<ChannelId>("all");
+  const [teamLaunched, setTeamLaunched] = useState(false);
+
+  // Chat state
+  const [messages, setMessages] = useState<StudioMessage[]>(
+    getWelcomeMessages()
+  );
+  const [inputValue, setInputValue] = useState("");
+  const [sending, setSending] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Execute state
+  const [exec, setExec] = useState<ExecState>(INITIAL_EXEC);
+  const [execInput, setExecInput] = useState("");
+  const execAbortRef = useRef<AbortController | null>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [exec.logs]);
+
+  // Check agent server status on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${AGENT_CHAT_BASE}/api/health`);
+        if (res.ok) setTeamLaunched(true);
+      } catch {
+        setTeamLaunched(false);
+      }
+    })();
+  }, []);
+
+  // ---------- Chat handlers ----------
+  const handleSendChat = useCallback(async () => {
+    if (!inputValue.trim() || sending) return;
+
+    const userMsg: StudioMessage = {
+      id: createId(),
+      role: "user",
+      content: inputValue.trim(),
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setInputValue("");
+    setSending(true);
+
+    const targetAgentId =
+      activeChannel === "all" ? "ceo" : activeChannel;
+    const agent = AGENT_MAP.get(targetAgentId);
+    if (!agent) {
+      setSending(false);
+      return;
+    }
+
+    const agentMsgId = createId();
+    const agentMsg: StudioMessage = {
+      id: agentMsgId,
+      role: "agent",
+      agentId: targetAgentId,
+      content: "",
+      timestamp: new Date(),
+      isStreaming: true,
+    };
+    setMessages((prev) => [...prev, agentMsg]);
+
+    await streamAgentMessage(
+      targetAgentId,
+      agent.systemPrompt,
+      buildConversationHistory(messages),
+      userMsg.content,
+      (text) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === agentMsgId
+              ? { ...m, content: m.content + text }
+              : m
+          )
+        );
+      },
+      () => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === agentMsgId ? { ...m, isStreaming: false } : m
+          )
+        );
+        setSending(false);
+
+        // Save to contents via IPC
+        const api = getApi();
+        if (api) {
+          const finalMsg = messages.find((m) => m.id === agentMsgId);
+          if (finalMsg && finalMsg.content) {
+            api.agent
+              .saveResult({
+                agentType: targetAgentId,
+                status: "success",
+                data: {
+                  title: `${agent.label} Response`,
+                  body: finalMsg.content,
+                  platform: "xhs",
+                },
+              })
+              .catch(() => {
+                /* silent */
+              });
+          }
+        }
+      },
+      (error) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === agentMsgId
+              ? {
+                  ...m,
+                  content:
+                    m.content + `\n\n[Error: ${error}]`,
+                  isStreaming: false,
+                }
+              : m
+          )
+        );
+        setSending(false);
+      }
+    );
+  }, [inputValue, sending, activeChannel, messages]);
+
+  const handleChatKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendChat();
+    }
+  };
+
+  // ---------- Execute handlers ----------
+  const handleExecute = useCallback(async () => {
+    if (!execInput.trim() || exec.isRunning) return;
+
+    const prompt = execInput.trim();
+    setExecInput("");
+    setExec({
+      isRunning: true,
+      startedAt: Date.now(),
+      prompt,
+      tasks: [
+        {
+          id: createId(),
+          agentId: "ceo",
+          description: "CEO 分析需求，拆解任务...",
+          status: "running",
+          progress: 0,
+          toolCallCount: 0,
+          content: "",
+        },
+      ],
+      logs: [
+        {
+          id: createId(),
+          timestamp: Date.now(),
+          agentId: "ceo",
+          type: "info",
+          message: `开始执行: ${prompt}`,
+        },
+      ],
+      result: "",
+    });
+
+    // Execute via agent chat endpoint
+    try {
+      const ceo = AGENT_MAP.get("ceo");
+      if (!ceo) return;
+
+      let resultContent = "";
+
+      await streamAgentMessage(
+        "ceo",
+        ceo.systemPrompt,
+        "",
+        prompt,
+        (text) => {
+          resultContent += text;
+          setExec((prev) => ({
+            ...prev,
+            tasks: prev.tasks.map((t) =>
+              t.agentId === "ceo"
+                ? { ...t, content: resultContent, progress: 50 }
+                : t
+            ),
+          }));
+        },
+        () => {
+          setExec((prev) => ({
+            ...prev,
+            isRunning: false,
+            tasks: prev.tasks.map((t) =>
+              t.agentId === "ceo"
+                ? {
+                    ...t,
+                    status: "done" as TaskStatus,
+                    progress: 100,
+                    finishedAt: Date.now(),
+                  }
+                : t
+            ),
+            result: resultContent,
+            logs: [
+              ...prev.logs,
+              {
+                id: createId(),
+                timestamp: Date.now(),
+                agentId: "ceo",
+                type: "result" as const,
+                message: "执行完成",
+              },
+            ],
+          }));
+        },
+        (error) => {
+          setExec((prev) => ({
+            ...prev,
+            isRunning: false,
+            tasks: prev.tasks.map((t) =>
+              t.agentId === "ceo"
+                ? {
+                    ...t,
+                    status: "error" as TaskStatus,
+                    error,
+                    finishedAt: Date.now(),
+                  }
+                : t
+            ),
+            logs: [
+              ...prev.logs,
+              {
+                id: createId(),
+                timestamp: Date.now(),
+                agentId: "ceo",
+                type: "error" as const,
+                message: error,
+              },
+            ],
+          }));
+        }
+      );
+    } catch {
+      setExec((prev) => ({
+        ...prev,
+        isRunning: false,
+        tasks: prev.tasks.map((t) => ({
+          ...t,
+          status: "error" as TaskStatus,
+          error: "Agent 服务不可用",
+        })),
+      }));
+    }
+  }, [execInput, exec.isRunning]);
+
+  const handleStopExec = () => {
+    execAbortRef.current?.abort();
+    setExec((prev) => ({ ...prev, isRunning: false }));
+  };
+
+  return (
+    <div
+      className="flex h-full -m-6"
+      style={{ background: "var(--background)" }}
+    >
+      {/* Channel List */}
+      <ChannelList
+        activeChannel={activeChannel}
+        onSelect={setActiveChannel}
+        teamLaunched={teamLaunched}
+      />
+
+      {/* Main Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Tab Bar */}
+        <div
+          className="flex items-center gap-1 px-4 py-2 shrink-0"
+          style={{
+            borderBottom: "1px solid var(--border)",
+            background: "var(--muted)",
+          }}
+        >
+          <button
+            onClick={() => setActiveTab("execute")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
+              activeTab === "execute"
+                ? "bg-primary/10 text-foreground font-medium"
+                : "text-foreground/40 hover:text-foreground/60"
+            )}
+            style={
+              activeTab === "execute"
+                ? { border: "1px solid rgba(167,139,250,0.2)" }
+                : {}
+            }
+          >
+            <Terminal className="h-3.5 w-3.5" />
+            执行模式
+          </button>
+          <button
+            onClick={() => setActiveTab("chat")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
+              activeTab === "chat"
+                ? "bg-primary/10 text-foreground font-medium"
+                : "text-foreground/40 hover:text-foreground/60"
+            )}
+            style={
+              activeTab === "chat"
+                ? { border: "1px solid rgba(167,139,250,0.2)" }
+                : {}
+            }
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            团队对话
+          </button>
+          <button
+            onClick={() => setActiveTab("monitor")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
+              activeTab === "monitor"
+                ? "bg-primary/10 text-foreground font-medium"
+                : "text-foreground/40 hover:text-foreground/60"
+            )}
+            style={
+              activeTab === "monitor"
+                ? { border: "1px solid rgba(167,139,250,0.2)" }
+                : {}
+            }
+          >
+            <Monitor className="h-3.5 w-3.5" />
+            Monitor
+          </button>
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setTeamLaunched(!teamLaunched)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                teamLaunched
+                  ? "text-red-400 hover:bg-red-500/10"
+                  : "text-[#22d3ee] hover:bg-[#22d3ee]/10"
+              )}
+              style={{
+                border: teamLaunched
+                  ? "1px solid rgba(239,68,68,0.2)"
+                  : "1px solid rgba(34,211,238,0.2)",
+              }}
+            >
+              {teamLaunched ? (
+                <>
+                  <PowerOff className="h-3.5 w-3.5" /> 关闭团队
+                </>
+              ) : (
+                <>
+                  <Power className="h-3.5 w-3.5" /> 启动团队
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Execute Mode */}
+        {activeTab === "execute" && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Task/Logs area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {exec.tasks.length === 0 && !exec.result && (
+                <div className="flex flex-col items-center justify-center h-full gap-3">
+                  <Zap
+                    className="h-12 w-12"
+                    style={{ color: "var(--muted-foreground)" }}
+                  />
+                  <p
+                    className="text-sm"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
+                    输入任务描述，CEO Agent
+                    将自动拆解并调度团队执行
+                  </p>
+                </div>
+              )}
+
+              {/* Task Cards */}
+              {exec.tasks.map((task) => {
+                const ac =
+                  AGENT_COLORS[task.agentId] ?? AGENT_COLORS.ceo;
+                return (
+                  <div
+                    key={task.id}
+                    className="rounded-xl p-4 space-y-3"
+                    style={{
+                      background: "var(--muted)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <AgentAvatar
+                        agentId={task.agentId}
+                        online
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="text-sm font-semibold"
+                            style={{ color: ac.color }}
+                          >
+                            {ac.name}
+                          </span>
+                          <StatusIcon status={task.status} />
+                        </div>
+                        <p
+                          className="text-xs"
+                          style={{
+                            color: "var(--muted-foreground)",
+                          }}
+                        >
+                          {task.description}
+                        </p>
+                      </div>
+                      {task.status === "running" && (
+                        <span className="text-xs tabular-nums text-[#a78bfa]">
+                          {task.progress}%
+                        </span>
+                      )}
+                    </div>
+
+                    {task.content && (
+                      <div
+                        className="rounded-lg p-3 text-sm leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-y-auto"
+                        style={{
+                          background: "var(--muted)",
+                          border:
+                            "1px solid var(--border)",
+                          color: "var(--foreground)",
+                        }}
+                      >
+                        {task.content}
+                        {task.status === "running" && (
+                          <span className="inline-block w-1.5 h-4 ml-0.5 animate-pulse rounded-sm bg-white/50" />
+                        )}
+                      </div>
+                    )}
+
+                    {task.error && (
+                      <div
+                        className="rounded-lg p-3 text-sm text-red-400"
+                        style={{
+                          background: "rgba(239,68,68,0.08)",
+                          border:
+                            "1px solid rgba(239,68,68,0.15)",
+                        }}
+                      >
+                        {task.error}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Logs */}
+              {exec.logs.length > 0 && (
+                <div
+                  className="rounded-xl p-4"
+                  style={{
+                    background: "var(--muted)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <h4
+                    className="text-xs font-semibold uppercase tracking-wider mb-2"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
+                    Logs
+                  </h4>
+                  <div className="space-y-1 max-h-[200px] overflow-y-auto font-mono text-xs">
+                    {exec.logs.map((log) => {
+                      const ac =
+                        AGENT_COLORS[log.agentId] ??
+                        AGENT_COLORS.ceo;
+                      return (
+                        <div
+                          key={log.id}
+                          className="flex gap-2"
+                        >
+                          <span
+                            style={{
+                              color: "var(--muted-foreground)",
+                            }}
+                          >
+                            {new Date(
+                              log.timestamp
+                            ).toLocaleTimeString("zh-CN", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                            })}
+                          </span>
+                          <span style={{ color: ac.color }}>
+                            [{ac.name}]
+                          </span>
+                          <span
+                            style={{
+                              color:
+                                log.type === "error"
+                                  ? "#f87171"
+                                  : "var(--muted-foreground)",
+                            }}
+                          >
+                            {log.message}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div ref={logsEndRef} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Execute Input */}
+            <div
+              className="px-4 py-3 shrink-0"
+              style={{
+                borderTop: "1px solid var(--border)",
+                background: "var(--muted)",
+              }}
+            >
+              <div className="flex gap-2">
+                <textarea
+                  value={execInput}
+                  onChange={(e) => setExecInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleExecute();
+                    }
+                  }}
+                  placeholder="描述你的营销任务，CEO Agent 将自动拆解执行..."
+                  rows={1}
+                  className="flex-1 rounded-lg px-3 py-2 text-sm resize-none outline-none"
+                  style={{
+                    background: "var(--muted)",
+                    border: "1px solid var(--border)",
+                    color: "var(--foreground)",
+                  }}
+                  disabled={exec.isRunning}
+                />
+                {exec.isRunning ? (
+                  <button
+                    onClick={handleStopExec}
+                    className="flex items-center justify-center size-9 rounded-lg shrink-0 bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                    style={{
+                      border: "1px solid rgba(239,68,68,0.3)",
+                    }}
+                  >
+                    <Square className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleExecute}
+                    disabled={!execInput.trim()}
+                    className="flex items-center justify-center size-9 rounded-lg shrink-0 transition-colors disabled:opacity-30"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #a78bfa, #7c3aed)",
+                    }}
+                  >
+                    <Send className="h-4 w-4 text-white" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setExec(INITIAL_EXEC)}
+                  className="flex items-center justify-center size-9 rounded-lg shrink-0 hover:bg-white/5 transition-colors"
+                  style={{
+                    border: "1px solid var(--border)",
+                    color: "var(--muted-foreground)",
+                  }}
+                  title="清除"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Chat Mode */}
+        {activeTab === "chat" && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto py-4">
+              {messages.map((msg) => {
+                if (msg.role === "system")
+                  return <SystemBubble key={msg.id} msg={msg} />;
+                if (msg.role === "user")
+                  return <UserBubble key={msg.id} msg={msg} />;
+                return <AgentBubble key={msg.id} msg={msg} />;
+              })}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Chat Input */}
+            <div
+              className="px-4 py-3 shrink-0"
+              style={{
+                borderTop: "1px solid var(--border)",
+                background: "var(--muted)",
+              }}
+            >
+              <div className="flex gap-2">
+                <textarea
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleChatKeyDown}
+                  placeholder={
+                    activeChannel === "all"
+                      ? "向全员发送消息..."
+                      : `与 ${AGENT_MAP.get(activeChannel)?.labelCn ?? ""} 对话...`
+                  }
+                  rows={1}
+                  className="flex-1 rounded-lg px-3 py-2 text-sm resize-none outline-none"
+                  style={{
+                    background: "var(--muted)",
+                    border: "1px solid var(--border)",
+                    color: "var(--foreground)",
+                  }}
+                  disabled={sending}
+                />
+                <button
+                  onClick={handleSendChat}
+                  disabled={!inputValue.trim() || sending}
+                  className="flex items-center justify-center size-9 rounded-lg shrink-0 transition-colors disabled:opacity-30"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #a78bfa, #7c3aed)",
+                  }}
+                >
+                  {sending ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  ) : (
+                    <Send className="h-4 w-4 text-white" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setMessages(getWelcomeMessages())}
+                  className="flex items-center justify-center size-9 rounded-lg shrink-0 hover:bg-white/5 transition-colors"
+                  style={{
+                    border: "1px solid var(--border)",
+                    color: "var(--muted-foreground)",
+                  }}
+                  title="清除对话"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "monitor" && (
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-foreground/20" />
+              </div>
+            }
+          >
+            <TeamModeView />
+          </Suspense>
+        )}
+      </div>
+    </div>
+  );
+}

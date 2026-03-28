@@ -1,0 +1,379 @@
+/**
+ * Agent Engine — Electron Main 进程的 Agent 执行引擎
+ *
+ * 通过 spawn `claude` CLI 子进程执行 Agent 任务，
+ * 将 stream-json 输出转换为 IPC 事件推送到 renderer 进程。
+ *
+ * 采用 CLI 路径（而非直接导入 SDK）的原因：
+ * - engine/ 是 ESM，desktop main 是 CJS（electron-vite 打包）
+ * - CLI 路径不需要额外依赖，只需本机安装 claude CLI
+ * - 复用已验证的 stream-json 协议
+ */
+
+import { spawn, type ChildProcess } from 'node:child_process'
+import { createInterface } from 'node:readline'
+import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { BrowserWindow } from 'electron'
+import { IPC } from '../shared/ipc-channels'
+
+// ── Types ──
+
+/** stream-json 单行事件 */
+interface StreamJsonEvent {
+  type: string
+  subtype?: string
+  content_block?: {
+    type: string
+    text?: string
+    name?: string
+    id?: string
+    input?: unknown
+  }
+  tool_result?: {
+    tool_use_id: string
+    content: unknown
+    is_error?: boolean
+  }
+  result?: string
+  message?: Record<string, unknown>
+  is_error?: boolean
+  session_id?: string
+  total_cost_usd?: number
+  duration_ms?: number
+  [key: string]: unknown
+}
+
+/** Agent 执行请求 */
+export interface AgentExecuteRequest {
+  agentId: string
+  message: string
+  mode: 'direct' | 'team'
+  context?: Record<string, unknown>
+  model?: 'opus' | 'sonnet' | 'haiku'
+  maxBudgetUsd?: number
+  timeoutMs?: number
+}
+
+/** Agent 定义（从 engine/agents/registry.ts 镜像核心字段） */
+interface AgentDef {
+  id: string
+  name: string
+  description: string
+  skillFile: string
+  model: string
+}
+
+/** 推送到 renderer 的流式事件 */
+export interface AgentStreamChunkEvent {
+  type: 'text' | 'tool_use' | 'tool_result' | 'status' | 'error'
+  agentId: string
+  content?: string
+  tool?: string
+  toolInput?: string
+  message?: string
+}
+
+// ── Engine Root Paths ──
+
+function getEngineDir(): string {
+  // In dev: desktop/ is at OPC_MKT_Agent_OS/desktop, engine/ is at OPC_MKT_Agent_OS/engine
+  return join(__dirname, '../../..', 'engine')
+}
+
+function getSkillsDir(): string {
+  return join(getEngineDir(), 'skills')
+}
+
+function getMemoryDir(): string {
+  return join(getEngineDir(), 'memory')
+}
+
+// ── Agent Registry (static subset for CLI prompt building) ──
+
+const AGENT_REGISTRY: AgentDef[] = [
+  { id: 'ceo', name: 'CEO 营销总监', description: '营销团队总指挥，需求拆解、子 Agent 调度与质量终审', skillFile: '', model: 'claude-sonnet-4-20250514' },
+  { id: 'xhs-agent', name: '小红书创作专家', description: '按 SOP 产出高质量小红书种草笔记', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'analyst-agent', name: '数据飞轮分析师', description: '分析内容表现数据，提炼胜出模式', skillFile: 'analyst.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'growth-agent', name: '增长营销专家', description: '选题研究、热点捕捉、竞品分析、发布策略', skillFile: 'growth.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'brand-reviewer', name: '品牌风控审查', description: '审查内容合规性与品牌调性一致性', skillFile: 'brand-reviewer.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'podcast-agent', name: '播客制作专家', description: '生成播客脚本、对话式音频内容', skillFile: 'podcast.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'global-content-agent', name: '全球内容创作', description: 'Generate English marketing content for Meta/X/TikTok/LinkedIn/Email/Blog', skillFile: 'global-content.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'meta-ads-agent', name: 'Meta 广告投手', description: 'Meta advertising — campaign creation, budget optimization, ROAS analysis', skillFile: 'meta-ads.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'email-agent', name: '邮件营销专家', description: 'Email marketing automation — sequences, campaigns, A/B testing', skillFile: 'email-marketing.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'seo-agent', name: 'SEO 专家', description: 'Technical & content SEO — keyword research, on-page optimization', skillFile: 'seo-expert.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'geo-agent', name: 'GEO 专家', description: 'Generative Engine Optimization — optimize content for AI search engines', skillFile: 'geo-expert.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'x-twitter-agent', name: 'X/Twitter 创作专家', description: '生成高互动率的推文和 Thread', skillFile: 'x-twitter.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'visual-gen-agent', name: '视觉内容生成专家', description: '生成营销视觉内容：封面图、海报、配图 Prompt', skillFile: 'visual-gen.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'strategist-agent', name: '营销策略师', description: '制定营销策略、内容战略、渠道规划', skillFile: 'strategist.SKILL.md', model: 'claude-sonnet-4-20250514' },
+]
+
+function getAgentDef(id: string): AgentDef | undefined {
+  return AGENT_REGISTRY.find((a) => a.id === id)
+}
+
+// ── File Loader ──
+
+async function loadFile(path: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf-8')
+  } catch {
+    return ''
+  }
+}
+
+// ── Prompt Builder ──
+
+async function buildAgentPrompt(agent: AgentDef, userMessage: string, context?: Record<string, unknown>): Promise<string> {
+  const skill = agent.skillFile ? await loadFile(join(getSkillsDir(), agent.skillFile)) : ''
+  const brandVoice = await loadFile(join(getMemoryDir(), 'context', 'brand-voice.md'))
+  const audience = await loadFile(join(getMemoryDir(), 'context', 'target-audience.md'))
+
+  const parts = [
+    `你是${agent.name}。${agent.description}`,
+    skill && `## SOP\n${skill}`,
+    brandVoice && `## 品牌调性\n${brandVoice}`,
+    audience && `## 目标受众\n${audience}`,
+    context && Object.keys(context).length > 0 && `## 上下文\n${JSON.stringify(context, null, 2)}`,
+  ].filter(Boolean).join('\n\n---\n\n')
+
+  return `${parts}\n\n---\n\nUser: ${userMessage}`
+}
+
+// ── Active Process Tracking ──
+
+let activeProcess: ChildProcess | null = null
+let activeAbort: AbortController | null = null
+
+/** 检查是否有 Agent 正在运行 */
+export function isAgentRunning(): boolean {
+  return activeProcess !== null && !activeProcess.killed
+}
+
+/** 中止当前运行的 Agent */
+export function abortAgent(): void {
+  if (activeProcess && !activeProcess.killed) {
+    activeProcess.kill('SIGTERM')
+  }
+  activeAbort?.abort('User cancelled')
+  activeProcess = null
+  activeAbort = null
+}
+
+// ── Core Execution ──
+
+/**
+ * 执行 Agent — spawn claude CLI 子进程，流式推送事件到 renderer
+ *
+ * 返回执行结果摘要。
+ */
+export async function executeAgent(
+  request: AgentExecuteRequest,
+  mainWindow: BrowserWindow
+): Promise<{ success: boolean; result?: string; error?: string; sessionId?: string; cost?: number }> {
+  const agent = getAgentDef(request.agentId)
+  if (!agent) {
+    return { success: false, error: `Unknown agent: ${request.agentId}` }
+  }
+
+  // 如果有正在运行的 Agent，先中止
+  if (isAgentRunning()) {
+    abortAgent()
+  }
+
+  const prompt = await buildAgentPrompt(agent, request.message, request.context)
+  const timeout = request.timeoutMs ?? 300_000 // 5 minutes default
+
+  // Build CLI args
+  const args: string[] = [
+    '-p',
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--permission-mode', 'acceptEdits',
+  ]
+
+  if (request.model) {
+    args.push('--model', request.model)
+  }
+
+  if (request.maxBudgetUsd) {
+    args.push('--max-budget-usd', String(request.maxBudgetUsd))
+  }
+
+  args.push(prompt)
+
+  // Spawn claude process
+  activeAbort = new AbortController()
+
+  try {
+    activeProcess = spawn('claude', args, {
+      cwd: getEngineDir(),
+      env: {
+        ...process.env,
+        // Clean up inherited Claude env vars to prevent conflicts
+        CLAUDECODE: undefined,
+        CLAUDE_CODE_ENTRYPOINT: undefined,
+        CLAUDE_CODE_IS_AGENT: undefined,
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      signal: activeAbort.signal,
+    })
+  } catch (err) {
+    activeProcess = null
+    activeAbort = null
+    const message = err instanceof Error ? err.message : 'Failed to spawn claude process'
+    return { success: false, error: message }
+  }
+
+  // Timeout control
+  const timer = setTimeout(() => {
+    abortAgent()
+    sendChunk(mainWindow, request.agentId, { type: 'error', message: 'Execution timed out' })
+    sendEnd(mainWindow)
+  }, timeout)
+
+  // Stream parsing
+  const stdout = createInterface({ input: activeProcess.stdout! })
+  const stderrChunks: string[] = []
+
+  activeProcess.stderr?.on('data', (chunk: Buffer) => {
+    stderrChunks.push(chunk.toString())
+  })
+
+  let finalResult = ''
+  let sessionId: string | undefined
+  let totalCost: number | undefined
+
+  return new Promise((resolve) => {
+    let resolved = false
+    const finish = (result: { success: boolean; result?: string; error?: string; sessionId?: string; cost?: number }): void => {
+      if (resolved) return
+      resolved = true
+      clearTimeout(timer)
+      activeProcess = null
+      activeAbort = null
+      resolve(result)
+    }
+
+    stdout.on('line', (line: string) => {
+      const trimmed = line.trim()
+      if (!trimmed) return
+
+      let event: StreamJsonEvent
+      try {
+        event = JSON.parse(trimmed) as StreamJsonEvent
+      } catch {
+        return // skip non-JSON lines
+      }
+
+      // Process event and push to renderer
+      processStreamEvent(event, request.agentId, mainWindow)
+
+      // Capture final result
+      if (event.type === 'result') {
+        finalResult = (event.result as string) || ''
+        sessionId = event.session_id
+        totalCost = event.total_cost_usd as number | undefined
+      }
+    })
+
+    activeProcess!.on('close', (code: number | null) => {
+      sendEnd(mainWindow)
+
+      if (code !== 0 && stderrChunks.length > 0) {
+        const errMsg = stderrChunks.join('').slice(0, 500)
+        sendChunk(mainWindow, request.agentId, { type: 'error', message: errMsg })
+        finish({ success: false, error: errMsg })
+      } else {
+        finish({ success: true, result: finalResult, sessionId, cost: totalCost })
+      }
+    })
+
+    activeProcess!.on('error', (err: Error) => {
+      sendEnd(mainWindow)
+      sendChunk(mainWindow, request.agentId, { type: 'error', message: err.message })
+      finish({ success: false, error: err.message })
+    })
+  })
+}
+
+// ── Stream Event Processing ──
+
+function processStreamEvent(event: StreamJsonEvent, agentId: string, win: BrowserWindow): void {
+  switch (event.type) {
+    case 'assistant': {
+      const message = event.message as Record<string, unknown> | undefined
+      const content = message?.content
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block?.type === 'text' && block?.text) {
+            sendChunk(win, agentId, { type: 'text', content: block.text as string })
+          }
+          if (block?.type === 'tool_use') {
+            sendChunk(win, agentId, {
+              type: 'tool_use',
+              tool: (block.name || '') as string,
+              toolInput: JSON.stringify(block.input || {}).slice(0, 500),
+            })
+          }
+        }
+      }
+      break
+    }
+
+    case 'tool_result': {
+      const toolResult = event.tool_result
+      if (toolResult) {
+        sendChunk(win, agentId, {
+          type: 'tool_result',
+          content: typeof toolResult.content === 'string'
+            ? toolResult.content.slice(0, 500)
+            : JSON.stringify(toolResult.content).slice(0, 500),
+        })
+      }
+      break
+    }
+
+    case 'error': {
+      sendChunk(win, agentId, {
+        type: 'error',
+        message: (event.result as string) || 'Unknown error',
+      })
+      break
+    }
+
+    // result and system events are captured but not pushed as chunks
+    default:
+      break
+  }
+}
+
+// ── IPC Push Helpers ──
+
+function sendChunk(win: BrowserWindow, agentId: string, data: Partial<AgentStreamChunkEvent>): void {
+  if (win.isDestroyed()) return
+  win.webContents.send(IPC.AGENT_STREAM_CHUNK, { agentId, ...data })
+}
+
+function sendEnd(win: BrowserWindow): void {
+  if (win.isDestroyed()) return
+  win.webContents.send(IPC.AGENT_STREAM_END)
+}
+
+// ── Agent Status ──
+
+export interface AgentStatusInfo {
+  id: string
+  name: string
+  description: string
+  status: 'idle' | 'busy' | 'offline'
+}
+
+export function getAgentStatuses(runningAgentId?: string): AgentStatusInfo[] {
+  return AGENT_REGISTRY.map((a) => ({
+    id: a.id,
+    name: a.name,
+    description: a.description,
+    status: a.id === runningAgentId && isAgentRunning() ? 'busy' as const : 'idle' as const,
+  }))
+}

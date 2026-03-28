@@ -1,0 +1,54 @@
+appId: com.opc.mkt-agent-os
+productName: OPC MKT Agent OS
+copyright: Copyright (c) 2026 OPC
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - out/**/*
+
+extraResources:
+  - from: ../web/src/data/
+    to: data/
+    filter:
+      - "*.json"
+  - from: ../engine/skills/
+    to: skills/
+    filter:
+      - "**/*.SKILL.md"
+  - from: ../engine/memory/
+    to: memory/
+    filter:
+      - "**/*.md"
+      - "**/*.json"
+
+mac:
+  category: public.app-category.business
+  icon: build/icon.icns
+  target:
+    - target: dir
+      arch:
+        - arm64
+  identity: null
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  icon: build/icon.png
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Office

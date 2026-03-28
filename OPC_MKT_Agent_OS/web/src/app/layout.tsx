@@ -49,12 +49,12 @@ export default function RootLayout({
               <div className="flex h-screen overflow-hidden" style={{ background: '#030305' }}>
                 <Sidebar />
                 <div className="flex flex-1 flex-col overflow-hidden relative">
-                  {/* Cotify ambient glow */}
+                  {/* Ambient glow — subtle, non-intrusive */}
                   <div className="absolute inset-0 pointer-events-none z-0"
-                    style={{ background: 'radial-gradient(800px ellipse at 30% 20%, rgba(167,139,250,0.04), transparent 60%)' }}
+                    style={{ background: 'radial-gradient(600px ellipse at 25% 15%, rgba(167,139,250,0.03), transparent 55%)' }}
                   />
                   <Header />
-                  <main className="flex-1 overflow-y-auto p-6 relative z-10">{children}</main>
+                  <main className="flex-1 overflow-y-auto px-6 py-5 relative z-10">{children}</main>
                 </div>
               </div>
               <OpenClawAgent />

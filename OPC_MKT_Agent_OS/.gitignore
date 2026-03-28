@@ -8,3 +8,6 @@ node_modules/
 .env.local
 desktop/out/
 desktop/dist/
+desktop/release/
+desktop/out/
+desktop/node_modules/

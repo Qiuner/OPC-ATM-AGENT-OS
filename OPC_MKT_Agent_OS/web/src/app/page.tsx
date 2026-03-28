@@ -16,6 +16,7 @@ import {
   MessageSquare,
   PenTool,
   BarChart3,
+  TrendingUp,
 } from 'lucide-react';
 import { GeneratePlanButton } from '@/components/features/generate-plan-button';
 import type { Task, Content } from '@/types';
@@ -72,11 +73,11 @@ function formatRelativeTime(dateStr: string): string {
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return '刚刚';
-  if (diffMin < 60) return `${diffMin} 分钟前`;
+  if (diffMin < 60) return `${diffMin}m ago`;
   const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours} 小时前`;
+  if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays} 天前`;
+  if (diffDays < 30) return `${diffDays}d ago`;
   return date.toLocaleDateString('zh-CN');
 }
 
@@ -100,7 +101,6 @@ function OpenClawPanel() {
   const [botName, setBotName] = useState('');
 
   useEffect(() => {
-    // Check connection on mount
     fetch('/api/openclaw')
       .then((r) => r.json())
       .then((d: { success: boolean }) => {
@@ -157,54 +157,54 @@ function OpenClawPanel() {
   const platforms = ['X', 'LinkedIn', 'TikTok', 'Meta', 'Email', 'Blog'];
 
   return (
-    <div className="cotify-card p-6 relative overflow-hidden">
-      {/* Glow accent */}
-      <div
-        className="absolute -top-10 -right-10 w-[300px] h-[200px] pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse, rgba(34,211,238,0.06), transparent 70%)' }}
+    <div className="rounded-xl p-5 relative overflow-hidden"
+      style={{
+        background: '#0a0a0f',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      {/* Subtle glow */}
+      <div className="absolute -top-16 -right-16 w-[250px] h-[180px] pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse, rgba(34,211,238,0.04), transparent 70%)' }}
       />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-xl"
-            style={{ background: 'rgba(34,211,238,0.10)', border: '1px solid rgba(34,211,238,0.20)' }}
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg"
+            style={{ background: 'rgba(34,211,238,0.08)' }}
           >
-            <Bot className="h-5 w-5" style={{ color: '#22d3ee' }} />
+            <Bot className="h-4.5 w-4.5" style={{ color: '#22d3ee' }} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-white">OpenClaw Gateway</h3>
-              <span
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+              <h3 className="text-[13px] font-semibold text-white">OpenClaw Gateway</h3>
+              <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
                 style={{
-                  background: connected ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)',
+                  background: connected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
                   color: connected ? '#22c55e' : '#ef4444',
                 }}
               >
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
+                <span className="h-1.5 w-1.5 rounded-full"
                   style={{ background: connected ? '#22c55e' : '#ef4444' }}
                 />
-                {connected ? '已连接' : '离线'}
+                {connected ? '在线' : '离线'}
               </span>
             </div>
-            <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-              {connected ? `Bot: ${botName} — 通过指令驱动 Agent OS 生成出海内容` : '正在连接...'}
+            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              {connected ? `Bot: ${botName}` : '正在连接...'}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           {platforms.map((p) => (
             <button
               key={p}
               onClick={() => setPlatform(p)}
-              className="rounded-lg px-2 py-1 text-[11px] font-medium transition-all"
+              className="rounded-md px-2 py-1 text-[11px] font-medium transition-all duration-150"
               style={{
-                background: platform === p ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.04)',
-                color: platform === p ? '#a78bfa' : 'rgba(255,255,255,0.3)',
-                border: `1px solid ${platform === p ? 'rgba(167,139,250,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                background: platform === p ? 'rgba(167,139,250,0.12)' : 'transparent',
+                color: platform === p ? '#a78bfa' : 'rgba(255,255,255,0.25)',
               }}
             >
               {p}
@@ -213,38 +213,30 @@ function OpenClawPanel() {
         </div>
       </div>
 
-      {/* Command flow visualization */}
-      <div
-        className="flex items-center gap-2 mb-4 py-3 px-4 rounded-xl"
-        style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}
+      {/* Pipeline visualization */}
+      <div className="flex items-center gap-2 mb-4 py-2.5 px-3 rounded-lg"
+        style={{ background: 'rgba(255,255,255,0.02)' }}
       >
-        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          <Megaphone className="h-3.5 w-3.5" style={{ color: '#22d3ee' }} />
-          <span>Campaign</span>
-        </div>
-        <ArrowRight className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.15)' }} />
-        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          <Zap className="h-3.5 w-3.5" style={{ color: '#a78bfa' }} />
-          <span>Agent OS</span>
-        </div>
-        <ArrowRight className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.15)' }} />
-        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          <PenTool className="h-3.5 w-3.5" style={{ color: '#fbbf24' }} />
-          <span>Content</span>
-        </div>
-        <ArrowRight className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.15)' }} />
-        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          <Send className="h-3.5 w-3.5" style={{ color: '#22c55e' }} />
-          <span>Publish</span>
-        </div>
-        <ArrowRight className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.15)' }} />
-        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          <BarChart3 className="h-3.5 w-3.5" style={{ color: '#f472b6' }} />
-          <span>Analytics</span>
-        </div>
+        {[
+          { icon: Megaphone, label: 'Campaign', color: '#22d3ee' },
+          { icon: Zap, label: 'Agent OS', color: '#a78bfa' },
+          { icon: PenTool, label: 'Content', color: '#fbbf24' },
+          { icon: Send, label: 'Publish', color: '#22c55e' },
+          { icon: BarChart3, label: 'Analytics', color: '#f472b6' },
+        ].map((step, i, arr) => (
+          <div key={step.label} className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              <step.icon className="h-3.5 w-3.5" style={{ color: step.color }} />
+              <span>{step.label}</span>
+            </div>
+            {i < arr.length - 1 && (
+              <ArrowRight className="h-3 w-3" style={{ color: 'rgba(255,255,255,0.1)' }} />
+            )}
+          </div>
+        ))}
       </div>
 
-      {/* Input + quick commands */}
+      {/* Input */}
       <div className="flex gap-2 mb-3">
         <input
           value={command}
@@ -253,38 +245,32 @@ function OpenClawPanel() {
             if (e.key === 'Enter' && !sending) void handleSend('generate_content', command);
           }}
           placeholder="输入主题，如「AI tools for productivity」..."
-          className="flex-1 rounded-xl px-4 py-2.5 text-sm text-white placeholder-[rgba(255,255,255,0.2)] outline-none"
+          className="flex-1 rounded-lg px-3.5 py-2 text-[13px] text-white placeholder-[rgba(255,255,255,0.18)] outline-none transition-all duration-150"
           style={{
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.07)',
           }}
+          onFocus={e => (e.target as HTMLElement).style.borderColor = 'rgba(167,139,250,0.3)'}
+          onBlur={e => (e.target as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'}
         />
         <button
           onClick={() => void handleSend('generate_content', command)}
           disabled={sending || !command.trim()}
-          className="rounded-xl px-4 py-2.5 text-sm font-medium transition-all disabled:opacity-40"
-          style={{
-            background: 'rgba(167,139,250,0.15)',
-            color: '#a78bfa',
-            border: '1px solid rgba(167,139,250,0.25)',
-          }}
+          className="rounded-lg px-4 py-2 text-[13px] font-medium transition-all duration-150 disabled:opacity-30"
+          style={{ background: '#a78bfa', color: '#fff' }}
         >
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : '发送指令'}
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
         </button>
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-1.5 mb-4">
         {quickCommands.map((qc) => (
           <button
             key={qc.cmd}
             onClick={() => void handleSend(qc.cmd, command || 'AI marketing tools')}
             disabled={sending}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all hover:brightness-110 disabled:opacity-40"
-            style={{
-              background: 'rgba(255,255,255,0.04)',
-              color: 'rgba(255,255,255,0.5)',
-              border: '1px solid rgba(255,255,255,0.06)',
-            }}
+            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-all duration-150 hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-30"
+            style={{ color: 'rgba(255,255,255,0.4)' }}
           >
             <qc.icon className="h-3 w-3" />
             {qc.label}
@@ -292,39 +278,26 @@ function OpenClawPanel() {
         ))}
       </div>
 
-      {/* Command logs */}
+      {/* Logs */}
       {logs.length > 0 && (
-        <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
+        <div className="space-y-1 max-h-[160px] overflow-y-auto">
           {logs.map((log, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-[12px]"
+            <div key={i}
+              className="flex items-center gap-3 px-2.5 py-1.5 rounded-md text-[11px]"
               style={{ background: 'rgba(255,255,255,0.02)' }}
             >
-              <span style={{ color: 'rgba(255,255,255,0.2)' }}>{log.time}</span>
-              <span style={{ color: 'rgba(255,255,255,0.6)' }}>{log.command}</span>
+              <span style={{ color: 'rgba(255,255,255,0.15)' }}>{log.time}</span>
+              <span style={{ color: 'rgba(255,255,255,0.5)' }}>{log.command}</span>
               <span className="flex-1" />
-              <span
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
+              <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5"
                 style={{
-                  background:
-                    log.status === 'success'
-                      ? 'rgba(34,197,94,0.10)'
-                      : log.status === 'error'
-                        ? 'rgba(239,68,68,0.10)'
-                        : 'rgba(251,191,36,0.10)',
-                  color:
-                    log.status === 'success' ? '#22c55e' : log.status === 'error' ? '#ef4444' : '#fbbf24',
+                  background: log.status === 'success' ? 'rgba(34,197,94,0.08)' : log.status === 'error' ? 'rgba(239,68,68,0.08)' : 'rgba(251,191,36,0.08)',
+                  color: log.status === 'success' ? '#22c55e' : log.status === 'error' ? '#ef4444' : '#fbbf24',
                 }}
               >
                 {log.status === 'pending' && <Loader2 className="h-3 w-3 animate-spin" />}
-                {log.status === 'success' ? '成功' : log.status === 'error' ? '失败' : '处理中'}
+                {log.status === 'success' ? 'Done' : log.status === 'error' ? 'Failed' : '...'}
               </span>
-              {log.result && (
-                <span className="text-[11px] max-w-[200px] truncate" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                  {log.result}
-                </span>
-              )}
             </div>
           ))}
         </div>
@@ -385,100 +358,124 @@ export default function DashboardPage() {
   }, [fetchData]);
 
   const metricCards = [
-    { label: '总任务数', value: metrics.totalTasks, unit: '个', icon: ListTodo, color: '#a78bfa' },
-    { label: '待审核内容', value: metrics.reviewContents, unit: '件', amber: true, icon: Eye, color: '#fbbf24' },
-    { label: '已发布内容', value: metrics.publishedContents, unit: '篇', icon: Send, color: '#22d3ee' },
+    { label: '总任务数', value: metrics.totalTasks, unit: '个', icon: ListTodo, color: '#a78bfa', trend: '+12%' },
+    { label: '待审核', value: metrics.reviewContents, unit: '件', icon: Eye, color: '#fbbf24', alert: true },
+    { label: '已发布', value: metrics.publishedContents, unit: '篇', icon: Send, color: '#22d3ee', trend: '+8%' },
     { label: '活跃活动', value: metrics.activeCampaigns, unit: '个', icon: Megaphone, color: '#22c55e' },
   ];
 
   return (
-    <div className="space-y-6 max-w-[1200px] relative">
-      {/* Ambient glow */}
-      <div className="absolute -top-20 -left-20 w-[600px] h-[400px] pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse at 30% 30%, rgba(167,139,250,0.05), transparent 70%)' }}
-      />
-
+    <div className="space-y-5 max-w-[1100px]">
       {/* Page intro */}
-      <div className="relative">
-        <h2 className="text-2xl font-bold text-white tracking-tight" style={{ letterSpacing: '-0.03em' }}>
-          Overview
-        </h2>
-        <p className="mt-1 text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          营销 Agent OS 总览 — 查看关键指标、内容产出与平台表现。
-        </p>
-        <div className="mt-4">
-          <GeneratePlanButton />
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-white tracking-tight" style={{ letterSpacing: '-0.02em' }}>
+            Welcome back
+          </h2>
+          <p className="mt-0.5 text-[13px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+            营销 Agent OS 总览 — 查看关键指标与内容产出
+          </p>
         </div>
+        <GeneratePlanButton />
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 relative">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {metricCards.map((m) => (
-          <div key={m.label} className="cotify-card p-6 group">
-            <div className="flex items-center justify-between">
-              <p className="text-[13px] font-medium" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          <div key={m.label}
+            className="group rounded-xl p-4 transition-all duration-200 hover:-translate-y-0.5"
+            style={{
+              background: '#0a0a0f',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)'}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[12px] font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
                 {m.label}
               </p>
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl"
-                style={{ background: `${m.color}10`, border: `1px solid ${m.color}20` }}
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg"
+                style={{ background: `${m.color}0a` }}
               >
-                <m.icon className="h-4 w-4" style={{ color: m.color }} />
+                <m.icon className="h-3.5 w-3.5" style={{ color: m.color }} />
               </div>
             </div>
-            <div className="mt-3 flex items-baseline gap-1.5">
+            <div className="flex items-baseline gap-1.5">
               {loading ? (
-                <Loader2 className="h-6 w-6 animate-spin" style={{ color: 'rgba(255,255,255,0.2)' }} />
+                <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'rgba(255,255,255,0.15)' }} />
               ) : (
                 <>
-                  <span className="text-3xl font-bold text-white tracking-tight">{m.value}</span>
-                  <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>{m.unit}</span>
+                  <span className="text-2xl font-bold text-white" style={{ letterSpacing: '-0.03em' }}>
+                    {m.value}
+                  </span>
+                  <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.2)' }}>{m.unit}</span>
+                  {m.trend && (
+                    <span className="flex items-center gap-0.5 ml-auto text-[11px] font-medium"
+                      style={{ color: '#22c55e' }}
+                    >
+                      <TrendingUp className="h-3 w-3" />
+                      {m.trend}
+                    </span>
+                  )}
+                  {m.alert && m.value > 0 && (
+                    <span className="ml-auto text-[11px] font-medium" style={{ color: '#fbbf24' }}>
+                      待处理
+                    </span>
+                  )}
                 </>
               )}
             </div>
-            {m.amber && m.value > 0 && (
-              <div className="mt-2">
-                <span className="text-[12px] font-medium" style={{ color: '#fbbf24' }}>需处理</span>
-              </div>
-            )}
           </div>
         ))}
       </div>
 
-      {/* OpenClaw Integration Panel */}
+      {/* OpenClaw Panel */}
       <OpenClawPanel />
 
       {/* Recent activity */}
-      <div className="cotify-card p-6 relative">
-        <h3 className="text-sm font-semibold text-white">最近活动</h3>
+      <div className="rounded-xl p-5"
+        style={{
+          background: '#0a0a0f',
+          border: '1px solid rgba(255,255,255,0.06)',
+        }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[13px] font-semibold text-white">Recent Activity</h3>
+          <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
+            {activities.length} items
+          </span>
+        </div>
+
         {loading ? (
-          <div className="mt-4 flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin" style={{ color: 'rgba(255,255,255,0.2)' }} />
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'rgba(255,255,255,0.15)' }} />
           </div>
         ) : activities.length === 0 ? (
-          <div className="mt-4 text-center py-8 text-sm" style={{ color: 'rgba(255,255,255,0.25)' }}>
+          <div className="text-center py-8 text-[13px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
             暂无活动记录
           </div>
         ) : (
-          <div className="mt-4 space-y-0">
-            {activities.map((a) => {
+          <div className="space-y-0">
+            {activities.map((a, idx) => {
               const Icon = getActivityIcon(a.type, a.status);
               return (
                 <div key={a.id}
-                  className="flex items-center gap-3 py-3 transition-colors rounded-lg px-2 -mx-2 hover:bg-[rgba(255,255,255,0.02)]"
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                  className="flex items-center gap-3 py-2.5 transition-colors rounded-md px-2 -mx-2 hover:bg-[rgba(255,255,255,0.02)] cursor-default"
+                  style={idx < activities.length - 1 ? { borderBottom: '1px solid rgba(255,255,255,0.03)' } : {}}
                 >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg"
-                    style={{ background: 'rgba(255,255,255,0.04)' }}
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md shrink-0"
+                    style={{ background: 'rgba(255,255,255,0.03)' }}
                   >
-                    <Icon className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.35)' }} />
+                    <Icon className="h-3.5 w-3.5" style={{ color: 'rgba(255,255,255,0.3)' }} />
                   </div>
-                  <span className="flex-1 text-sm text-[rgba(255,255,255,0.7)] truncate">
+                  <span className="flex-1 text-[13px] text-[rgba(255,255,255,0.6)] truncate">
                     {a.title}
                   </span>
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${statusColors[a.status] ?? statusColors.draft}`}>
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColors[a.status] ?? statusColors.draft}`}>
                     {statusLabels[a.status] ?? a.status}
                   </span>
-                  <span className="text-[11px] whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                  <span className="text-[10px] font-mono whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.15)' }}>
                     {formatRelativeTime(a.updatedAt)}
                   </span>
                 </div>

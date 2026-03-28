@@ -1,0 +1,95 @@
+/**
+ * IPC Channel 命名规范
+ *
+ * 格式: domain:entity:action
+ *
+ * domain:
+ *   store   — JSON 文件数据 CRUD
+ *   agent   — Agent 执行相关
+ *   config  — 系统配置
+ *   fs      — 文件系统操作（skills 等）
+ *
+ * action:
+ *   list / get / create / update / delete  — CRUD
+ *   execute / stream                       — Agent 执行
+ */
+
+export const IPC = {
+  // ── Store: Tasks ──
+  TASKS_LIST: 'store:tasks:list',
+  TASKS_GET: 'store:tasks:get',
+  TASKS_CREATE: 'store:tasks:create',
+  TASKS_UPDATE: 'store:tasks:update',
+  TASKS_DELETE: 'store:tasks:delete',
+
+  // ── Store: Contents ──
+  CONTENTS_LIST: 'store:contents:list',
+  CONTENTS_GET: 'store:contents:get',
+  CONTENTS_CREATE: 'store:contents:create',
+  CONTENTS_UPDATE: 'store:contents:update',
+  CONTENTS_DELETE: 'store:contents:delete',
+
+  // ── Store: Approvals ──
+  APPROVALS_LIST: 'store:approvals:list',
+  APPROVALS_CREATE: 'store:approvals:create',
+
+  // ── Store: Context Assets ──
+  CONTEXT_LIST: 'store:context:list',
+  CONTEXT_GET: 'store:context:get',
+  CONTEXT_CREATE: 'store:context:create',
+  CONTEXT_UPDATE: 'store:context:update',
+  CONTEXT_DELETE: 'store:context:delete',
+
+  // ── Store: Metrics ──
+  METRICS_LIST: 'store:metrics:list',
+  METRICS_CREATE: 'store:metrics:create',
+
+  // ── Store: Agent Runs ──
+  AGENT_RUNS_LIST: 'store:agent-runs:list',
+
+  // ── Store: Campaigns ──
+  CAMPAIGNS_LIST: 'store:campaigns:list',
+
+  // ── Store: Settings ──
+  SETTINGS_GET: 'store:settings:get',
+  SETTINGS_UPDATE: 'store:settings:update',
+
+  // ── Config ──
+  CONFIG_GET: 'config:get',
+  CONFIG_SET: 'config:set',
+
+  // ── Agent Execution ──
+  AGENT_EXECUTE: 'agent:execute',
+  AGENT_ABORT: 'agent:abort',
+  AGENT_STATUS: 'agent:status',
+  AGENT_SAVE_RESULT: 'agent:save-result',
+
+  // ── Agent Events (main → renderer push) ──
+  AGENT_EVENT: 'agent:event',
+  AGENT_STREAM_CHUNK: 'agent:stream:chunk',
+  AGENT_STREAM_END: 'agent:stream:end',
+  AGENT_STREAM_ERROR: 'agent:stream:error',
+
+  // ── Secure Storage (API Keys via Keychain) ──
+  KEYS_GET_STATUS: 'secure:keys:status',
+  KEYS_SET: 'secure:keys:set',
+  KEYS_DELETE: 'secure:keys:delete',
+  KEYS_CLEAR: 'secure:keys:clear',
+
+  // ── Theme ──
+  THEME_GET: 'config:theme:get',
+  THEME_SET: 'config:theme:set',
+  THEME_CHANGED: 'config:theme:changed',
+
+  // ── Onboarding ──
+  ONBOARDING_STATUS: 'config:onboarding:status',
+  ONBOARDING_COMPLETE: 'config:onboarding:complete',
+  ONBOARDING_ENV_CHECK: 'config:onboarding:env-check',
+
+  // ── Skills ──
+  SKILLS_LIST: 'fs:skills:list',
+  SKILLS_CREATE: 'fs:skills:create',
+  SKILLS_DELETE: 'fs:skills:delete',
+} as const
+
+export type IpcChannel = (typeof IPC)[keyof typeof IPC]
