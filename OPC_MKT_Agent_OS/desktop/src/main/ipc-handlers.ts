@@ -9,6 +9,10 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc-channels'
 import {
+  DEFAULT_EXPERT_ROLE_ID,
+  normalizeContextOwnership,
+} from '../shared/context-ownership'
+import {
   readCollection,
   writeCollection,
   generateId,
@@ -63,6 +67,34 @@ interface ApprovalRecord {
   comment: string
   reviewer: string
   created_at: string
+}
+
+function normalizeContextAsset(asset: ContextAsset): ContextAsset {
+  const normalized = normalizeContextOwnership({
+    ...asset,
+    workspace_id: asset.workspace_id || 'ws-001',
+    metadata: asset.metadata ?? {},
+  })
+
+  return {
+    ...normalized,
+    metadata: normalized.metadata ?? {},
+  }
+}
+
+function readNormalizedContextAssets(): ContextAsset[] {
+  const items = readCollection<ContextAsset>('context-assets')
+  const normalizedItems = items.map(normalizeContextAsset)
+  const raw = JSON.stringify(items)
+  const normalized = JSON.stringify(normalizedItems)
+  if (raw !== normalized) {
+    writeCollection('context-assets', normalizedItems)
+  }
+  return normalizedItems
+}
+
+function writeNormalizedContextAssets(items: ContextAsset[]): void {
+  writeCollection('context-assets', items.map(normalizeContextAsset))
 }
 
 /** 包装 handler，统一错误处理 */
@@ -238,13 +270,16 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
   // ── Context Assets ──
 
   handle(IPC.CONTEXT_LIST, (filter?: ContextFilter): IpcResponse<ContextAsset[]> => {
-    let items = readCollection<ContextAsset>('context-assets')
+    let items = readNormalizedContextAssets()
     if (filter?.type) items = items.filter((c) => c.type === filter.type)
+    if (filter?.expert_role_id) items = items.filter((c) => c.expert_role_id === filter.expert_role_id)
+    if (filter?.scope) items = items.filter((c) => c.scope === filter.scope)
+    if (filter?.ownership_key) items = items.filter((c) => c.ownership_key === filter.ownership_key)
     return { success: true, data: items }
   })
 
   handle(IPC.CONTEXT_GET, (id: string): IpcResponse<ContextAsset | null> => {
-    const items = readCollection<ContextAsset>('context-assets')
+    const items = readNormalizedContextAssets()
     const item = items.find((c) => c.id === id) ?? null
     return { success: true, data: item }
   })
@@ -253,35 +288,49 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     if (!data.type || !data.title || !data.content) {
       return { success: false, error: 'Missing required fields: type, title, content' }
     }
-    const items = readCollection<ContextAsset>('context-assets')
+    const items = readNormalizedContextAssets()
     const now = nowISO()
-    const newItem: ContextAsset = {
+    const normalizedDraft = normalizeContextOwnership({
       ...data,
       workspace_id: data.workspace_id || 'ws-001',
+      metadata: data.metadata ?? {},
+      expert_role_id: data.expert_role_id || DEFAULT_EXPERT_ROLE_ID,
+    })
+    const newItem: ContextAsset = {
+      ...normalizedDraft,
       id: generateId('ctx'),
       created_at: now,
       updated_at: now,
     }
     items.push(newItem)
-    writeCollection('context-assets', items)
+    writeNormalizedContextAssets(items)
     return { success: true, data: newItem }
   })
 
   handle(IPC.CONTEXT_UPDATE, (id: string, data: Partial<ContextAsset>): IpcResponse<ContextAsset> => {
-    const items = readCollection<ContextAsset>('context-assets')
+    const items = readNormalizedContextAssets()
     const index = items.findIndex((c) => c.id === id)
     if (index === -1) return { success: false, error: `Context asset not found: ${id}` }
-    const updated: ContextAsset = { ...items[index], ...data, id: items[index].id, updated_at: nowISO() }
+    const existing = items[index]
+    const updated: ContextAsset = normalizeContextAsset({
+      ...existing,
+      ...data,
+      metadata: data.metadata
+        ? { ...(existing.metadata || {}), ...(data.metadata as Record<string, unknown>) }
+        : existing.metadata,
+      id: existing.id,
+      updated_at: nowISO(),
+    })
     items[index] = updated
-    writeCollection('context-assets', items)
+    writeNormalizedContextAssets(items)
     return { success: true, data: updated }
   })
 
   handle(IPC.CONTEXT_DELETE, (id: string): IpcResponse => {
-    const items = readCollection<ContextAsset>('context-assets')
+    const items = readNormalizedContextAssets()
     const filtered = items.filter((c) => c.id !== id)
     if (filtered.length === items.length) return { success: false, error: `Context asset not found: ${id}` }
-    writeCollection('context-assets', filtered)
+    writeNormalizedContextAssets(filtered)
     return { success: true }
   })
 

@@ -11,7 +11,6 @@ import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { BrowserWindow } from 'electron'
-import { IPC } from '../shared/ipc-channels'
 
 // ── Types ──
 
@@ -517,14 +516,17 @@ function processStreamEvent(
       const userContent = msg?.content
       // Check for tool_use_result in the event itself (SDK format)
       const toolUseResult = event.tool_use_result as Record<string, unknown> | undefined
-      if (toolUseResult && toolUseResult.status === 'completed') {
+      const toolUseResultStatus = typeof toolUseResult?.status === 'string'
+        ? toolUseResult.status
+        : ''
+      if (toolUseResult && (toolUseResultStatus === 'completed' || toolUseResultStatus === 'error')) {
         const resultContent = Array.isArray(toolUseResult.content)
           ? (toolUseResult.content as Array<Record<string, unknown>>)
               .filter(b => b.type === 'text')
               .map(b => b.text)
               .join('\n')
           : String(toolUseResult.content || '')
-        const isError = toolUseResult.status === 'error'
+        const isError = toolUseResultStatus === 'error'
 
         const runningAgents = Array.from(state.subAgents.values())
           .filter(s => s.status === 'running')

@@ -29,6 +29,9 @@ export interface ApprovalFilter {
 
 export interface ContextFilter {
   type?: string
+  expert_role_id?: string
+  scope?: string
+  ownership_key?: string
 }
 
 export interface MetricFilter {
