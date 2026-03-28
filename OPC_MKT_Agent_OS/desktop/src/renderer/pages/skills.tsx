@@ -4,17 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog'
-import {
   Cpu,
   Search,
   RefreshCw,
-  Download,
   FileCode2,
   Settings2,
   ChevronDown,
@@ -152,7 +144,6 @@ export function SkillsPage(): React.JSX.Element {
   const [skills, setSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [installOpen, setInstallOpen] = useState(false)
 
   const loadSkills = useCallback(async () => {
     setLoading(true)
@@ -215,15 +206,6 @@ export function SkillsPage(): React.JSX.Element {
             variant="outline"
             size="sm"
             className="h-8 text-[13px] gap-1.5"
-            onClick={() => setInstallOpen(true)}
-          >
-            <Download className="h-3.5 w-3.5" />
-            安装技能
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-[13px] gap-1.5"
             onClick={() => getApi()?.skills.openFolder()}
           >
             <FolderOpen className="h-3.5 w-3.5" />
@@ -261,25 +243,6 @@ export function SkillsPage(): React.JSX.Element {
         </div>
       )}
 
-      {/* Install dialog */}
-      <Dialog open={installOpen} onOpenChange={setInstallOpen}>
-        <DialogContent className="border-border">
-          <DialogHeader>
-            <DialogTitle>安装技能</DialogTitle>
-            <DialogDescription>
-              从技能目录安装新的 AI 能力，或上传自定义技能文件。
-            </DialogDescription>
-          </DialogHeader>
-          <div
-            className="flex flex-col items-center justify-center gap-3 rounded-lg py-10 border border-dashed border-border"
-          >
-            <Download className="h-8 w-8 text-muted-foreground/20" />
-            <p className="text-[13px] text-muted-foreground/50">
-              技能市场即将上线
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
