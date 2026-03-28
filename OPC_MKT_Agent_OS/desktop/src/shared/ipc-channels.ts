@@ -89,6 +89,7 @@ export const IPC = {
   ONBOARDING_STATUS: 'config:onboarding:status',
   ONBOARDING_COMPLETE: 'config:onboarding:complete',
   ONBOARDING_ENV_CHECK: 'config:onboarding:env-check',
+  ONBOARDING_VALIDATE_INVITE: 'config:onboarding:validate-invite',
 
   // ── Skills ──
   SKILLS_LIST: 'fs:skills:list',

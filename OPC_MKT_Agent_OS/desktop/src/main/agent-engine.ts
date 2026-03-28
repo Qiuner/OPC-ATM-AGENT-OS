@@ -63,6 +63,8 @@ interface AgentDef {
   description: string
   skillFile: string
   model: string
+  /** 需要预授权的 MCP server 名称（会转为 mcp__<name> 通配符） */
+  allowedMcpServers?: string[]
 }
 
 /** 推送到 renderer 的流式事件 */
@@ -93,8 +95,8 @@ function getMemoryDir(): string {
 // ── Agent Registry (static subset for CLI prompt building) ──
 
 const AGENT_REGISTRY: AgentDef[] = [
-  { id: 'ceo', name: 'CEO 营销总监', description: '营销团队总指挥，需求拆解、子 Agent 调度与质量终审', skillFile: '', model: 'claude-sonnet-4-20250514' },
-  { id: 'xhs-agent', name: '小红书创作专家', description: '端到端小红书营销：搜索竞品→分析爆款→内容创作→审查→发布。支持真实数据抓取和自动发布。', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'ceo', name: 'CEO 营销总监', description: '营销团队总指挥，需求拆解、子 Agent 调度与质量终审', skillFile: '', model: 'claude-sonnet-4-20250514', allowedMcpServers: ['xhs-data', 'image-gen', 'creatorflow'] },
+  { id: 'xhs-agent', name: '小红书创作专家', description: '端到端小红书营销：搜索竞品→分析爆款→内容创作→审查→发布。支持真实数据抓取和自动发布。', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514', allowedMcpServers: ['xhs-data', 'image-gen', 'creatorflow'] },
   { id: 'analyst-agent', name: '数据飞轮分析师', description: '分析内容表现数据，提炼胜出模式', skillFile: 'analyst.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'growth-agent', name: '增长营销专家', description: '选题研究、热点捕捉、竞品分析、发布策略', skillFile: 'growth.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'brand-reviewer', name: '品牌风控审查', description: '审查内容合规性与品牌调性一致性', skillFile: 'brand-reviewer.SKILL.md', model: 'claude-sonnet-4-20250514' },
@@ -105,7 +107,7 @@ const AGENT_REGISTRY: AgentDef[] = [
   { id: 'seo-agent', name: 'SEO 专家', description: 'Technical & content SEO — keyword research, on-page optimization', skillFile: 'seo-expert.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'geo-agent', name: 'GEO 专家', description: 'Generative Engine Optimization — optimize content for AI search engines', skillFile: 'geo-expert.SKILL.md', model: 'claude-sonnet-4-20250514' },
   { id: 'x-twitter-agent', name: 'X/Twitter 创作专家', description: '生成高互动率的推文和 Thread', skillFile: 'x-twitter.SKILL.md', model: 'claude-sonnet-4-20250514' },
-  { id: 'visual-gen-agent', name: '视觉内容生成专家', description: 'AI 图片生成 + 营销视觉创作。支持 OpenAI/Google/DashScope/Replicate 生图。', skillFile: 'visual-gen.SKILL.md', model: 'claude-sonnet-4-20250514' },
+  { id: 'visual-gen-agent', name: '视觉内容生成专家', description: 'AI 图片生成 + 营销视觉创作。支持 OpenAI/Google/DashScope/Replicate 生图。', skillFile: 'visual-gen.SKILL.md', model: 'claude-sonnet-4-20250514', allowedMcpServers: ['image-gen'] },
   { id: 'strategist-agent', name: '营销策略师', description: '制定营销策略、内容战略、渠道规划', skillFile: 'strategist.SKILL.md', model: 'claude-sonnet-4-20250514' },
 ]
 
@@ -221,6 +223,15 @@ export async function executeAgent(
   if (request.maxBudgetUsd) {
     args.push('--max-budget-usd', String(request.maxBudgetUsd))
   }
+
+  // 预授权 MCP 工具（headless 模式下无法弹出授权提示）
+  // --allowedTools 是 variadic，必须用 -- 分隔后面的 prompt
+  if (agent.allowedMcpServers && agent.allowedMcpServers.length > 0) {
+    args.push('--allowedTools', ...agent.allowedMcpServers.map(s => `mcp__${s}`))
+  }
+
+  // 用 -- 分隔选项和 prompt（防止 variadic --allowedTools 吞掉 prompt）
+  args.push('--')
 
   // 首次：构建完整 prompt（含 SKILL + context）；恢复：只发用户消息
   if (isResume) {

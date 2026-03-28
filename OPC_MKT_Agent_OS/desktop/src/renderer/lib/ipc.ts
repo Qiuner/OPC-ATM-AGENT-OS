@@ -107,6 +107,7 @@ interface WindowApi {
       claude: { available: boolean; version?: string }
       node: { available: boolean; version?: string }
     }>>
+    validateInvite(code: string): Promise<IpcResponse>
   }
   orchestrator: {
     execute(data: { prompt: string; context?: Record<string, unknown> }): Promise<IpcResponse>
