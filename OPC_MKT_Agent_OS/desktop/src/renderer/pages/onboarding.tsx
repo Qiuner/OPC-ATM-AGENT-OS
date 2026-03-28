@@ -373,7 +373,20 @@ function StepApiKey({ onNext, onBack }: {
   const handleNext = useCallback(async () => {
     if (activeTab === 'invite') {
       if (!inviteCode.trim()) { setError('请输入邀请码'); return }
-      onNext(selected, inviteCode.trim())
+      setValidating(true)
+      setError(null)
+      try {
+        const api = getApi()
+        if (api) {
+          const res = await api.onboarding.validateInvite(inviteCode.trim())
+          if (!res.success) { setError(res.error ?? '邀请码无效'); setValidating(false); return }
+        }
+        onNext('anthropic', '__invite__')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '验证失败')
+      } finally {
+        setValidating(false)
+      }
       return
     }
     if (!apiKey.trim()) { setError('请输入 API Key'); return }
