@@ -1377,6 +1377,49 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
 
     return { success: true, data: { claude, node } }
   })
+
+  // ── Skills ──
+
+  handle(IPC.SKILLS_LIST, async (): Promise<IpcResponse> => {
+    const { readdir, readFile } = await import('node:fs/promises')
+    const skillsDir = join(__dirname, '../../..', 'engine', 'skills')
+    const files = await readdir(skillsDir)
+    const skillFiles = files.filter((f) => f.endsWith('.SKILL.md'))
+
+    const skills = await Promise.all(
+      skillFiles.map(async (file) => {
+        const content = await readFile(join(skillsDir, file), 'utf-8')
+        const frontmatterMatch = content.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---/)
+        const meta: Record<string, string> = {}
+        if (frontmatterMatch) {
+          for (const line of frontmatterMatch[1].split('\n')) {
+            const [key, ...rest] = line.split(':')
+            if (key && rest.length) meta[key.trim()] = rest.join(':').trim()
+          }
+        }
+        return {
+          id: file.replace('.SKILL.md', ''),
+          name: meta['name'] || file.replace('.SKILL.md', ''),
+          description: meta['description'] || '',
+          version: meta['version'] || '1.0.0',
+          source: 'built-in' as const,
+          filePath: `engine/skills/${file}`,
+          enabled: true,
+          lastUpdated: meta['last_updated'] || '',
+          updatedBy: meta['updated_by'] || '',
+        }
+      })
+    )
+
+    return { success: true, data: skills }
+  })
+
+  handle(IPC.SKILLS_OPEN_FOLDER, async (): Promise<IpcResponse> => {
+    const { shell } = await import('electron')
+    const skillsDir = join(__dirname, '../../..', 'engine', 'skills')
+    await shell.openPath(skillsDir)
+    return { success: true }
+  })
 }
 
 function extractTitle(text: string): string | null {

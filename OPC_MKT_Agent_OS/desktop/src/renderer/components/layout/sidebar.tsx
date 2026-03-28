@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings,
+  FileCode2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getApi } from '@/lib/ipc'
@@ -159,6 +160,48 @@ export function Sidebar(): React.JSX.Element {
       <div
         className={cn('py-6 mt-auto space-y-4 border-t border-sidebar-border/50 px-4', collapsed ? 'px-2' : 'px-5')}
       >
+        {(() => {
+          const isSkillsActive = pathname === '/skills'
+          const skillsLink = (
+            <Link
+              to="/skills"
+              className={cn(
+                'flex items-center rounded-2xl text-[14px] font-medium transition-all duration-300 group',
+                collapsed ? 'justify-center h-12 w-12 mx-auto' : 'gap-3.5 px-4 py-3',
+                isSkillsActive
+                  ? 'text-foreground bg-sidebar-accent shadow-[0_1px_2px_rgba(0,0,0,0.02)]'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.03]'
+              )}
+            >
+              <FileCode2
+                className={cn(
+                  'shrink-0 transition-transform duration-300 group-hover:scale-110',
+                  collapsed ? 'h-6 w-6' : 'h-[20px] w-[20px]',
+                  isSkillsActive ? 'text-primary' : ''
+                )}
+              />
+              {!collapsed && (
+                <span className="flex-1 whitespace-nowrap transition-opacity duration-300 font-medium">
+                  Skills
+                </span>
+              )}
+            </Link>
+          )
+
+          return collapsed ? (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>{skillsLink}</TooltipTrigger>
+              <TooltipContent
+                side="right"
+                sideOffset={12}
+                className="text-xs font-semibold py-2 px-3 rounded-lg border-border"
+              >
+                Skills
+              </TooltipContent>
+            </Tooltip>
+          ) : skillsLink
+        })()}
+
         <div
           className={cn(
             'flex items-center rounded-2xl cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors',
