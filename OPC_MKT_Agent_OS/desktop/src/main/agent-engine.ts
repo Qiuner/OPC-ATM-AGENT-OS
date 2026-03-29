@@ -20,6 +20,8 @@ import { getApiKey } from './safe-storage'
 import { IPC } from '../shared/ipc-channels'
 import { isOrchestratorRunning, getSubAgentStatuses } from './orchestrator-engine'
 import { playSoundEffect } from './sound-notify'
+import { buildDesktopModeOverride } from './desktop-mode-overrides'
+import { startLogSession, pipelineLog, endLogSession } from './pipeline-logger'
 
 // ── .env 文件加载 ──
 
@@ -164,9 +166,12 @@ async function buildAgentPrompt(agent: AgentDef, userMessage: string, context?: 
   const brandVoice = await loadFile(join(getMemoryDir(), 'context', 'brand-voice.md'))
   const audience = await loadFile(join(getMemoryDir(), 'context', 'target-audience.md'))
 
+  const desktopOverride = buildDesktopModeOverride(agent.id)
+
   const parts = [
     `你是${agent.name}。${agent.description}`,
     skill && `## SOP\n${skill}`,
+    desktopOverride && `## Desktop 模式限制（优先级高于 SOP）\n${desktopOverride}`,
     brandVoice && `## 品牌调性\n${brandVoice}`,
     audience && `## 目标受众\n${audience}`,
     context && Object.keys(context).length > 0 && `## 上下文\n${JSON.stringify(context, null, 2)}`,
@@ -235,10 +240,12 @@ export async function executeAgent(
   const isResume = !!resumeSessionId
 
   // Build CLI args
+  const mcpConfigPath = join(getEngineDir(), '.mcp.json')
   const args: string[] = [
     '-p',
     '--output-format', 'stream-json',
     '--verbose',
+    '--mcp-config', mcpConfigPath,
   ]
 
   // 恢复会话：用 --resume 保持对话上下文；首次：用 --permission-mode
@@ -276,7 +283,6 @@ export async function executeAgent(
 
   // Spawn claude process
   activeAbort = new AbortController()
-  console.log('[AgentEngine] Spawning claude CLI:', { agentId: request.agentId, cwd: getEngineDir(), argsCount: args.length })
 
   // Build clean env: remove Claude Code nesting vars
   const cleanEnv = { ...process.env }
@@ -306,6 +312,24 @@ export async function executeAgent(
       cleanEnv[envVar] = key
     }
   }
+
+  startLogSession(request.agentId)
+  pipelineLog('agent_spawn', {
+    agentId: request.agentId,
+    mode: request.mode,
+    model: request.model,
+    cwd: getEngineDir(),
+    isResume,
+    sessionId: resumeSessionId || null,
+    allowedMcpServers: agent.allowedMcpServers || [],
+    cliArgs: args.filter(a => !a.startsWith('你是') && a.length < 200), // exclude prompt from log
+    hasAnthropicKey: !!cleanEnv.ANTHROPIC_API_KEY,
+    hasOpenaiKey: !!cleanEnv.OPENAI_API_KEY,
+    hasDashscopeKey: !!cleanEnv.DASHSCOPE_API_KEY,
+    hasDesktopOverride: !!buildDesktopModeOverride(request.agentId),
+    promptLength: args[args.length - 1]?.length || 0,
+  })
+  console.log('[AgentEngine] Spawning claude CLI:', { agentId: request.agentId, cwd: getEngineDir(), argsCount: args.length })
 
   try {
     activeProcess = spawn('claude', args, {
@@ -372,6 +396,32 @@ export async function executeAgent(
       // Process event and push to renderer
       processStreamEvent(event, request.agentId)
 
+      // Log tool calls for diagnostics
+      if (event.type === 'assistant') {
+        const msg = event.message as Record<string, unknown> | undefined
+        const blocks = msg?.content
+        if (Array.isArray(blocks)) {
+          for (const block of blocks) {
+            if (block?.type === 'tool_use') {
+              pipelineLog('tool_call', {
+                tool: block.name,
+                inputPreview: JSON.stringify(block.input || {}).slice(0, 300),
+              })
+            }
+          }
+        }
+      }
+      if (event.type === 'tool_result') {
+        const tr = event.tool_result as Record<string, unknown> | undefined
+        const resultText = typeof tr?.content === 'string'
+          ? tr.content
+          : JSON.stringify(tr?.content || '')
+        pipelineLog('tool_result', {
+          isError: tr?.is_error || false,
+          resultPreview: resultText.slice(0, 500),
+        })
+      }
+
       // Track generate_image tool calls to capture image paths from results
       if (event.type === 'assistant') {
         const msg = event.message as Record<string, unknown> | undefined
@@ -415,12 +465,30 @@ export async function executeAgent(
       if (code !== 0) {
         const errMsg = stderrChunks.join('').slice(0, 500) || `claude process exited with code ${code}`
         console.error('[AgentEngine] execution failed:', errMsg)
+        pipelineLog('agent_close', {
+          code,
+          success: false,
+          error: errMsg.slice(0, 300),
+          stderrPreview: stderrChunks.join('').slice(0, 500),
+        }, 'error')
         sendChunk(request.agentId, { type: 'error', message: errMsg })
         playSoundEffect('error', 'Agent 执行出错')
+        endLogSession()
         finish({ success: false, error: errMsg })
       } else {
         console.log('[AgentEngine] execution succeeded, result length:', finalResult.length, 'images:', capturedImageUrls.length)
+        pipelineLog('agent_close', {
+          code: 0,
+          success: true,
+          resultLength: finalResult.length,
+          resultPreview: finalResult.slice(0, 500),
+          resultTail: finalResult.slice(-500),
+          capturedImageUrls,
+          sessionId,
+          cost: totalCost,
+        })
         playSoundEffect('agent_done', 'Agent 任务完成')
+        endLogSession()
         finish({ success: true, result: finalResult, sessionId, cost: totalCost, imageUrls: capturedImageUrls })
       }
     })

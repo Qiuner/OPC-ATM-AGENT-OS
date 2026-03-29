@@ -7,6 +7,15 @@ import { getWindowState, saveWindowState, getAppSettings, getWidgetState, saveWi
 import { getDockGeometry } from './dock-geometry'
 import { loadProjectEnv } from './env'
 
+// 防止 EPIPE 导致 Electron 弹窗崩溃（dev 模式下 Vite server 未就绪时触发）
+process.on('uncaughtException', (err) => {
+  if (err?.message?.includes('EPIPE')) return
+  // 非 EPIPE 错误：复现 Electron 默认行为（弹窗 + 退出）
+  const { dialog: d } = require('electron')
+  d.showErrorBox('A JavaScript error occurred', `${err?.stack || err?.message || err}`)
+  process.exit(1)
+})
+
 // ── Module-level window refs ──
 let _mainWindow: BrowserWindow | undefined
 let _dockPetWindow: BrowserWindow | undefined
@@ -59,6 +68,9 @@ function createWindow(): BrowserWindow {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+    if (is.dev) {
+      mainWindow.webContents.openDevTools({ mode: 'bottom' })
+    }
   })
 
   mainWindow.on('close', () => {
@@ -68,6 +80,15 @@ function createWindow(): BrowserWindow {
       saveWindowState(currentBounds, false)
     } else {
       saveWindowState(bounds ?? { x: 0, y: 0, width: 1440, height: 900 }, true)
+    }
+  })
+
+  // Dev server 可能还没准备好，加载失败时自动重试
+  mainWindow.webContents.on('did-fail-load', (_e, code) => {
+    if (code === -102 && is.dev) {
+      setTimeout(() => {
+        if (!mainWindow.isDestroyed()) mainWindow.webContents.reload()
+      }, 2000)
     }
   })
 

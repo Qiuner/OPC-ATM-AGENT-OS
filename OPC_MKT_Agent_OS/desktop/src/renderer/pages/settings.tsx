@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Volume2,
   VolumeX,
+  Bug,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -72,6 +73,9 @@ export function SettingsPage(): React.JSX.Element {
   const [keyVisible, setKeyVisible] = useState<Record<string, boolean>>({})
   const [keySaving, setKeySaving] = useState<string | null>(null)
 
+  // Debug flags
+  const [debugFlags, setDebugFlags] = useState<{ mockCeoMode: boolean }>({ mockCeoMode: false })
+
   // Sound notify
   const [soundSettings, setSoundSettings] = useState<{
     enabled: boolean
@@ -99,10 +103,11 @@ export function SettingsPage(): React.JSX.Element {
     }
 
     try {
-      const [authRes, keysRes, soundRes] = await Promise.all([
+      const [authRes, keysRes, soundRes, settingsRes] = await Promise.all([
         api.platformAuth.status(),
         api.keys.getStatus(),
         api.soundNotify?.getSettings().catch(() => null),
+        api.settings.get().catch(() => null),
       ])
 
       if (authRes.success && authRes.data) {
@@ -113,6 +118,10 @@ export function SettingsPage(): React.JSX.Element {
       }
       if (soundRes && soundRes.success && soundRes.data) {
         setSoundSettings(soundRes.data as typeof soundSettings)
+      }
+      if (settingsRes && settingsRes.success && settingsRes.data) {
+        const d = (settingsRes.data as { debug?: { mockCeoMode: boolean } }).debug
+        if (d) setDebugFlags(d)
       }
     } catch (err) {
       console.error('[Settings] Failed to load state:', err)
@@ -213,18 +222,28 @@ export function SettingsPage(): React.JSX.Element {
     await api.soundNotify.speak('你好，音效通知已开启')
   }
 
+  // ── Debug Flag Handlers ──
+
+  const handleDebugUpdate = async (partial: Partial<typeof debugFlags>) => {
+    const api = getApi()
+    if (!api) return
+    const updated = { ...debugFlags, ...partial }
+    setDebugFlags(updated)
+    await api.settings.update({ debug: updated })
+  }
+
   // ── Render ──
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-8">
+    <div className="space-y-6">
       <div className="max-w-3xl mx-auto space-y-10">
         {/* Header */}
         <div>
@@ -633,6 +652,43 @@ export function SettingsPage(): React.JSX.Element {
             <p className="text-xs text-muted-foreground">
               Keys are encrypted using your operating system's secure storage (macOS Keychain / Windows Credential Manager). They are never stored in plain text or transmitted to external services.
             </p>
+          </div>
+        </section>
+
+        {/* ── Section 4: Debug ── */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Bug className="h-5 w-5 text-orange-400" />
+            <h2 className="text-lg font-semibold text-foreground">Debug</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            开发调试开关，仅用于测试。生产环境请保持关闭。
+          </p>
+
+          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+            {/* Mock CEO Mode */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-medium text-foreground">Mock CEO Mode</span>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  开启后 Agent 执行和 Quick Parse 使用模拟数据，不消耗 API 额度
+                </p>
+              </div>
+              <button
+                onClick={() => handleDebugUpdate({ mockCeoMode: !debugFlags.mockCeoMode })}
+                className="relative h-6 w-11 rounded-full transition-colors focus:outline-none"
+                style={{
+                  background: debugFlags.mockCeoMode ? '#f59e0b' : 'rgba(255,255,255,0.1)',
+                }}
+              >
+                <div
+                  className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"
+                  style={{
+                    transform: debugFlags.mockCeoMode ? 'translateX(22px)' : 'translateX(2px)',
+                  }}
+                />
+              </button>
+            </div>
           </div>
         </section>
       </div>

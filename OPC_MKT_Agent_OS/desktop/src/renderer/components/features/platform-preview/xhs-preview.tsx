@@ -1,6 +1,27 @@
+import { useState, useEffect } from 'react';
 import { PhoneFrame } from './phone-frame';
 import type { PlatformPreviewProps } from './types';
-import { getAuthorName } from './types';
+import { getAuthorName, getAdaptedContent } from './types';
+import { stripMarkdown } from '@/lib/strip-markdown';
+
+/** Load local image via IPC (same pattern as approval.tsx LocalImage) */
+function LocalImg({ path, alt, className, style }: {
+  path: string; alt?: string; className?: string; style?: React.CSSProperties;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (path.startsWith('http')) { setSrc(path); return; }
+    let cancelled = false;
+    const api = (window as unknown as { api?: { file?: { readImage(p: string): Promise<{ success: boolean; data?: { dataUrl: string } }> } } }).api;
+    if (!api?.file?.readImage) return;
+    api.file.readImage(path).then((res) => {
+      if (!cancelled && res.success && res.data) setSrc(res.data.dataUrl);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [path]);
+  if (!src) return null;
+  return <img src={src} alt={alt ?? ''} className={className} style={style} />;
+}
 
 /* ---- Mock data for realistic preview ---- */
 
@@ -19,8 +40,9 @@ const MOCK_COVER_IMAGES = [
 
 export function XhsPreview({ item }: PlatformPreviewProps) {
   const authorName = getAuthorName(item);
-  const body = item.body ?? '';
-  const tags = item.tags ?? [];
+  const adapted = getAdaptedContent(item, '小红书');
+  const body = stripMarkdown(adapted.body);
+  const tags = adapted.tags;
   const mediaUrls = (item as { mediaUrls?: string[] }).mediaUrls ?? [];
   const hasRealImages = mediaUrls.length > 0;
 
@@ -68,17 +90,10 @@ export function XhsPreview({ item }: PlatformPreviewProps) {
         {/* ── Image carousel area ── */}
         <div className="relative w-full" style={{ aspectRatio: '3/4', background: hasRealImages ? '#f5f5f5' : MOCK_COVER_IMAGES[coverIdx] }}>
           {hasRealImages ? (
-            <img
-              src={mediaUrls[0].startsWith('http') ? mediaUrls[0] : `file://${mediaUrls[0]}`}
+            <LocalImg
+              path={mediaUrls[0]}
               alt={item.title}
               className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                if (target.parentElement) {
-                  target.parentElement.style.background = MOCK_COVER_IMAGES[coverIdx];
-                }
-              }}
             />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center px-8">
@@ -122,7 +137,7 @@ export function XhsPreview({ item }: PlatformPreviewProps) {
         </div>
 
         {/* ── Body text ── */}
-        <div className="px-4 pt-2 text-[14px] leading-[24px]" style={{ color: '#333' }}>
+        <div className="px-4 pt-2 text-[14px] leading-[24px]" style={{ color: '#333', whiteSpace: 'pre-line' }}>
           {body || '分享一些超实用的干货内容，希望对大家有帮助～记得点赞收藏哦！'}
         </div>
 

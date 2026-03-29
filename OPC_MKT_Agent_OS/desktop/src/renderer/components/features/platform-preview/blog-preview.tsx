@@ -1,13 +1,16 @@
 import { BrowserFrame } from './browser-frame';
 import type { PlatformPreviewProps } from './types';
-import { getAuthorName } from './types';
+import { getAuthorName, getAdaptedContent } from './types';
+import { stripMarkdown } from '@/lib/strip-markdown';
 
 export function BlogPreview({ item }: PlatformPreviewProps) {
   const authorName = getAuthorName(item);
-  const body = item.body ?? '';
-  const tags = item.tags ?? [];
+  const adapted = getAdaptedContent(item, 'Blog');
+  const body = stripMarkdown(adapted.body);
+  const tags = adapted.tags;
   const readingTime = Math.max(1, Math.ceil((body.split(/\s+/).length) / 200));
-  const slug = item.title.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').slice(0, 40);
+  const slug = adapted.extra?.slug || item.title.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').slice(0, 40);
+  const metaDescription = adapted.extra?.metaDescription || body.slice(0, 155);
 
   return (
     <BrowserFrame url={`blog.example.com/${slug}`}>
@@ -83,7 +86,7 @@ export function BlogPreview({ item }: PlatformPreviewProps) {
             SEO Meta Description
           </div>
           <div className="text-[13px] mt-1" style={{ color: '#6b7280' }}>
-            {body.slice(0, 155)}{body.length > 155 ? '...' : ''}
+            {metaDescription}{metaDescription.length >= 155 ? '...' : ''}
           </div>
           {tags.length > 0 && (
             <div className="text-[11px] mt-1.5" style={{ color: '#9ca3af' }}>

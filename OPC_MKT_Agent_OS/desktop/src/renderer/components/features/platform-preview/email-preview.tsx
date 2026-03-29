@@ -1,12 +1,15 @@
 import { BrowserFrame } from './browser-frame';
 import type { PlatformPreviewProps } from './types';
-import { getAuthorName, getHandle } from './types';
+import { getAuthorName, getHandle, getAdaptedContent } from './types';
+import { stripMarkdown } from '@/lib/strip-markdown';
 
 export function EmailPreview({ item }: PlatformPreviewProps) {
   const brandName = getAuthorName(item);
   const handle = getHandle(item);
   const initial = brandName.charAt(0).toUpperCase();
-  const body = item.body ?? '';
+  const adapted = getAdaptedContent(item, 'Email');
+  const body = stripMarkdown(adapted.body);
+  const preheader = adapted.extra?.preheader || body.slice(0, 80);
 
   return (
     <BrowserFrame url="mail.google.com">
@@ -50,7 +53,7 @@ export function EmailPreview({ item }: PlatformPreviewProps) {
                 <span className="text-[11px] shrink-0" style={{ color: '#6b7280' }}>3m</span>
               </div>
               <div className="text-[13px] font-medium" style={{ color: '#d1d5db' }}>{item.title}</div>
-              <div className="text-[12px] line-clamp-1" style={{ color: '#6b7280' }}>{body.slice(0, 80)}</div>
+              <div className="text-[12px] line-clamp-1" style={{ color: '#6b7280' }}>{preheader}</div>
             </div>
           </div>
 
@@ -112,7 +115,7 @@ export function EmailPreview({ item }: PlatformPreviewProps) {
           <div className="my-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }} />
 
           {/* Body */}
-          <div className="text-[14px] leading-[22px]" style={{ color: '#e5e7eb' }}>
+          <div className="text-[14px] leading-[22px] whitespace-pre-line break-words" style={{ color: '#e5e7eb' }}>
             <p>Hi [First Name],</p>
             <br />
             <p>{body}</p>

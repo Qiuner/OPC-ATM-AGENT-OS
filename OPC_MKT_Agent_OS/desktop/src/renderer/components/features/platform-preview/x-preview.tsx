@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { BrowserFrame } from './browser-frame';
 import type { PlatformPreviewProps } from './types';
-import { getAuthorName, getHandle } from './types';
+import { getAuthorName, getHandle, getAdaptedContent } from './types';
+import { stripMarkdown } from '@/lib/strip-markdown';
 
 function highlightEntities(text: string, linkColor: string) {
   const parts = text.split(/(#\w+|@\w+|https?:\/\/\S+)/g);
@@ -34,9 +35,10 @@ export function XPreview({ item }: PlatformPreviewProps) {
     ? { bg: '#000000', text: '#e7e9ea', secondary: '#71767b', border: 'rgba(255,255,255,0.08)', link: '#1d9bf0' }
     : { bg: '#ffffff', text: '#0f1419', secondary: '#536471', border: '#eff3f4', link: '#1d9bf0' };
 
-  const body = item.body ?? '';
+  const adapted = getAdaptedContent(item, 'X');
+  const body = stripMarkdown(adapted.body);
   const tweetText = body.slice(0, 260);
-  const tagsText = (item.tags ?? []).map((t) => `#${t}`).join(' ');
+  const tagsText = adapted.tags.map((t) => `#${t}`).join(' ');
   const fullText = tweetText + (tagsText ? `\n\n${tagsText}` : '');
 
   return (

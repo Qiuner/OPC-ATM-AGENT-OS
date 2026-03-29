@@ -33,6 +33,8 @@ import {
   type AgentExecuteRequest,
 } from './agent-engine'
 import { playSoundEffect, speak, playDirectSound, speakDirect, type SoundEvent } from './sound-notify'
+import { parseContentEnhanced, quickParseContent, adaptPlatformsOnly } from './content-parser'
+import { pipelineLog } from './pipeline-logger'
 import {
   executeOrchestrator,
   abortOrchestrator,
@@ -393,6 +395,7 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     const settings: SettingsData = {
       approval: appSettings.approval,
       email: appSettings.email,
+      debug: appSettings.debug,
     }
     return { success: true, data: settings }
   })
@@ -405,10 +408,14 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     if (partial.email) {
       setAppSettings({ email: partial.email })
     }
+    if (partial.debug) {
+      setAppSettings({ debug: partial.debug })
+    }
     const appSettings = getAppSettings()
     const settings: SettingsData = {
       approval: appSettings.approval,
       email: appSettings.email,
+      debug: appSettings.debug,
     }
     return { success: true, data: settings }
   })
@@ -529,22 +536,24 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
 
   // ── Submit content to Approval Center ──
 
-  handle(IPC.AGENT_SUBMIT_TO_REVIEW, (data: {
+  handle(IPC.AGENT_SUBMIT_TO_REVIEW, async (data: {
     agentId: string; prompt: string; result: string;
     title?: string; platform?: string; campaignId?: string;
     tags?: string[]; mediaUrls?: string[];
-  }): IpcResponse<{ taskId: string; contentId: string }> => {
+    preParsed?: { title: string; body: string; tags: string[]; imageUrls: string[]; platforms?: Record<string, unknown> };
+  }): Promise<IpcResponse<{ taskId: string; contentId: string }>> => {
     if (!data.result) {
       return { success: false, error: 'result is required' }
     }
     const now = nowISO()
-    const title = data.title || extractTitle(data.result) || data.prompt?.slice(0, 80) || 'Untitled'
+    const pp = data.preParsed
+    const tempTitle = pp?.title || data.title || extractTitle(data.result) || data.prompt?.slice(0, 80) || 'Untitled'
 
     const tasks = readCollection<Task>('tasks')
     const task: Task = {
       id: generateId('task'),
       campaign_id: data.campaignId || 'default',
-      title,
+      title: tempTitle,
       description: data.prompt || '',
       status: 'review',
       assignee_type: 'agent',
@@ -559,19 +568,25 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
 
     const contents = readCollection<Content>('contents')
     const platform = data.platform || (data.agentId === 'xhs-agent' ? 'xiaohongshu' : 'general')
+    const contentId = generateId('cnt')
+    const preParsedMediaUrls = pp?.imageUrls || []
+    const mergedMediaUrls = [...new Set([...(data.mediaUrls || []), ...preParsedMediaUrls])]
     const content: Content = {
-      id: generateId('cnt'),
+      id: contentId,
       task_id: task.id,
       campaign_id: data.campaignId || 'default',
-      title,
-      body: data.result,
+      title: tempTitle,
+      body: pp?.body || data.result,
       platform,
       status: 'review',
-      media_urls: data.mediaUrls || [],
+      media_urls: mergedMediaUrls,
       metadata: {
         agentId: data.agentId,
         prompt: data.prompt,
-        tags: data.tags || [],
+        tags: pp?.tags || data.tags || [],
+        parsed: !!pp,
+        rawBody: pp ? data.result : undefined,
+        ...(pp?.platforms && Object.keys(pp.platforms).length > 0 ? { platforms: pp.platforms } : {}),
       },
       created_by: `agent:${data.agentId}`,
       created_at: now,
@@ -583,8 +598,151 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
     contents.push(content)
     writeCollection('contents', contents)
 
-    console.log('[IPC] SUBMIT_TO_REVIEW: created task=%s content=%s', task.id, content.id)
-    return { success: true, data: { taskId: task.id, contentId: content.id } }
+    console.log('[IPC] SUBMIT_TO_REVIEW: created task=%s content=%s', task.id, contentId)
+
+    pipelineLog('submit_to_review', {
+      contentId,
+      taskId: task.id,
+      agentId: data.agentId,
+      platform,
+      rawResultLength: data.result.length,
+      rawResultPreview: data.result.slice(0, 500),
+      rawResultTail: data.result.slice(-500),
+      mediaUrlsFromAgent: data.mediaUrls || [],
+      hasTitleMarker: /标题[：:]/.test(data.result),
+      hasBodyMarker: /正文[：:]/.test(data.result),
+      hasTagMarker: /标签[：:]/.test(data.result),
+    })
+
+    // Background: when preParsed exists, platforms are already included — no extra work needed.
+    // When no preParsed, run full enhanced parse to extract everything.
+    if (pp) {
+      console.log('[IPC] SUBMIT_TO_REVIEW: preParsed with %d platforms, no background parse needed',
+        pp.platforms ? Object.keys(pp.platforms).length : 0)
+    } else {
+      // No preParsed — run full enhanced parse
+      parseContentEnhanced(data.result).then(parsed => {
+        try {
+          const allContents = readCollection<Content>('contents')
+          const idx = allContents.findIndex(c => c.id === contentId)
+          if (idx === -1) return
+
+          allContents[idx].title = parsed.title || allContents[idx].title
+          allContents[idx].body = parsed.body || allContents[idx].body
+
+          const existingMediaUrls = allContents[idx].media_urls || []
+          allContents[idx].media_urls = [...new Set([...existingMediaUrls, ...parsed.imageUrls])]
+
+          allContents[idx].metadata = {
+            ...allContents[idx].metadata,
+            tags: parsed.tags.length > 0 ? parsed.tags : (allContents[idx].metadata?.tags as string[] || []),
+            parsed: true,
+            rawBody: data.result,
+            platforms: Object.keys(parsed.platforms).length > 0 ? parsed.platforms : undefined,
+          }
+          allContents[idx].updated_at = nowISO()
+          writeCollection('contents', allContents)
+
+          const allTasks = readCollection<Task>('tasks')
+          const taskIdx = allTasks.findIndex(t => t.id === task.id)
+          if (taskIdx !== -1 && parsed.title) {
+            allTasks[taskIdx].title = parsed.title
+            allTasks[taskIdx].updated_at = nowISO()
+            writeCollection('tasks', allTasks)
+          }
+
+          console.log('[IPC] SUBMIT_TO_REVIEW: enhanced parse complete for %s — title="%s" platforms=%d images=%d',
+            contentId, parsed.title, Object.keys(parsed.platforms).length, parsed.imageUrls.length)
+        } catch (err) {
+          console.error('[IPC] SUBMIT_TO_REVIEW: background parse update failed:', err)
+        }
+      }).catch(err => {
+        console.error('[IPC] SUBMIT_TO_REVIEW: background parse failed:', err)
+      })
+    }
+
+    return { success: true, data: { taskId: task.id, contentId } }
+  })
+
+  // ── Quick Parse (content format recognition before submit) ──
+
+  handle(IPC.CONTENT_QUICK_PARSE, async (data: { rawText: string }): Promise<IpcResponse<{
+    title: string; body: string; tags: string[]; imageUrls: string[]
+    platforms: Record<string, unknown>
+  }>> => {
+    if (!data.rawText) {
+      return { success: false, error: 'rawText is required' }
+    }
+
+    // Mock mode: return instant structured data
+    if (isMockMode()) {
+      console.log('[IPC] MOCK quickParse — returning mock data instantly')
+      await new Promise(r => setTimeout(r, 1500)) // simulate brief delay
+      return { success: true, data: MOCK_QUICK_PARSE }
+    }
+
+    try {
+      pipelineLog('quick_parse_start', { rawTextLength: data.rawText.length })
+      const parsed = await quickParseContent(data.rawText)
+      pipelineLog('quick_parse_done', {
+        title: parsed.title,
+        bodyLength: parsed.body.length,
+        tags: parsed.tags,
+        imageUrls: parsed.imageUrls,
+      })
+      return { success: true, data: parsed }
+    } catch (err) {
+      pipelineLog('quick_parse_error', { error: String(err) }, 'error')
+      return { success: false, error: String(err) }
+    }
+  })
+
+  // ── Adapt Platforms (generate 7-platform adaptations after approval) ──
+
+  handle(IPC.CONTENT_ADAPT_PLATFORMS, async (data: { contentId: string }): Promise<IpcResponse<{
+    platforms: Record<string, unknown>
+  }>> => {
+    if (!data.contentId) {
+      return { success: false, error: 'contentId is required' }
+    }
+    try {
+      const allContents = readCollection<Content>('contents')
+      const content = allContents.find(c => c.id === data.contentId)
+      if (!content) {
+        return { success: false, error: `Content not found: ${data.contentId}` }
+      }
+
+      // Idempotent: if platforms already exist with data, return them
+      const existingPlatforms = (content.metadata as Record<string, unknown>)?.platforms as Record<string, unknown> | undefined
+      if (existingPlatforms && Object.keys(existingPlatforms).length > 0) {
+        pipelineLog('adapt_platforms_cached', { contentId: data.contentId, platformCount: Object.keys(existingPlatforms).length })
+        return { success: true, data: { platforms: existingPlatforms } }
+      }
+
+      pipelineLog('adapt_platforms_start', { contentId: data.contentId, bodyLength: content.body.length })
+      const platforms = await adaptPlatformsOnly(content.body)
+      pipelineLog('adapt_platforms_done', {
+        contentId: data.contentId,
+        platformKeys: Object.keys(platforms),
+        platformCount: Object.keys(platforms).length,
+      })
+
+      // Write back to content record
+      const idx = allContents.findIndex(c => c.id === data.contentId)
+      if (idx !== -1) {
+        allContents[idx].metadata = {
+          ...allContents[idx].metadata,
+          platforms,
+        }
+        allContents[idx].updated_at = nowISO()
+        writeCollection('contents', allContents)
+      }
+
+      return { success: true, data: { platforms } }
+    } catch (err) {
+      pipelineLog('adapt_platforms_error', { contentId: data.contentId, error: String(err) }, 'error')
+      return { success: false, error: String(err) }
+    }
   })
 
   // ── Publish content via script (直接调用 Playwright，不经过 Claude CLI) ──
@@ -1106,12 +1264,115 @@ export function registerIpcHandlers(_mainWindow?: BrowserWindow): void {
 
   // ── Orchestrator (CEO Multi-Agent) ──
 
+  // ── MOCK MODE: reads from Settings > Debug toggle ──
+  const isMockMode = (): boolean => getSettingValue('debug')?.mockCeoMode ?? false
+
+  // ── Mock data for testing ──
+  const MOCK_XHS_BODY = `上周有个做咨询的朋友来找我吐槽
+"写一篇小红书要3小时，一周才发2篇，数据还很差"
+
+我说你要不要看看我的后台？
+我一个人一周发12篇，覆盖3个平台
+每天花在营销上的时间不超过45分钟
+
+他不信，我当着他的面演示了一遍 👇
+
+传统做法 vs 我的Vibe Marketing做法
+
+📌 选题：翻竞品40分钟 → AI扫描爆款3分钟
+📌 写稿：硬写90分钟 → AI出稿+我加观点15分钟
+📌 配图：找图P图30分钟 → AI自动生成2分钟
+📌 分发：手动改格式45分钟 → 自动适配5分钟
+📌 复盘：手动看数据20分钟 → AI自动分析
+
+全流程：3小时45分钟 → 25分钟
+差了将近9倍 🚀
+
+但最关键的不是快
+是省下来的时间用来做产品、见客户、想策略
+营销从"负担"变成了后台自动运行的系统
+
+AI负责80%重复劳动
+剩下20%你来加经历、观点、判断
+这20%才是内容壁垒 💡
+
+你现在做营销最耗时的环节是什么？
+评论区聊聊，我帮你分析能不能用AI优化`
+
+  const MOCK_IMAGE_PATH = join(__dirname, '../../..', 'engine/output/vibe-marketing-cover.png')
+
+  const MOCK_QUICK_PARSE = {
+    title: 'Vibe Marketing效率提升9倍',
+    body: MOCK_XHS_BODY,
+    tags: ['VibeMarketing', 'AI营销', '一人公司', '营销效率', '氛围感营销'],
+    imageUrls: [MOCK_IMAGE_PATH],
+    platforms: {},
+  }
+
   handle(IPC.ORCHESTRATOR_EXECUTE, async (data: {
     prompt: string
     context?: Record<string, unknown>
   }): Promise<IpcResponse> => {
     if (!data.prompt) {
       return { success: false, error: 'prompt is required' }
+    }
+
+    // ── Mock CEO execution for testing ──
+    if (isMockMode()) {
+      const delay = (ms: number) => new Promise(r => setTimeout(r, ms))
+      const mockResult = `### 最终内容
+
+**标题：** Vibe Marketing效率提升9倍
+
+**正文（约500字）：**
+${MOCK_XHS_BODY}
+
+**标签：** #VibeMarketing# #AI营销# #一人公司# #营销效率# #氛围感营销#
+
+**封面图：** ${MOCK_IMAGE_PATH}
+
+✅ Brand Reviewer 审核通过，品牌调性一致`
+
+      console.log('[IPC] MOCK CEO MODE — simulating orchestrator execution')
+
+      // Simulate plan phase
+      broadcastToAll(IPC.ORCHESTRATOR_STATUS_CHANGE, { status: 'planning' })
+      await delay(500)
+      broadcastToAll(IPC.ORCHESTRATOR_PLAN, {
+        plan: '1. Growth Agent 选题研究\n2. XHS Agent 撰写小红书笔记\n3. Brand Reviewer 品牌风控审核',
+        agentIds: ['growth-agent', 'xhs-agent', 'brand-reviewer'],
+      })
+      const agentIds = ['ceo', 'xhs-agent', 'growth-agent', 'brand-reviewer']
+      setSettingValue('teamAgentIds', agentIds)
+      broadcastToAll(IPC.TEAM_AGENTS_CHANGED, agentIds)
+      await delay(300)
+
+      // Simulate sub-agent: growth-agent (增长营销)
+      broadcastToAll(IPC.ORCHESTRATOR_SUB_START, { agentId: 'growth-agent', name: '增长营销专家', task: '选题研究与热点分析' })
+      await delay(800)
+      broadcastToAll(IPC.ORCHESTRATOR_SUB_DONE, { agentId: 'growth-agent', result: '选题确认：Vibe Marketing效率对比，热度评分92' })
+      broadcastToAll(IPC.ORCHESTRATOR_PROGRESS, { done: 1, total: 3, running: ['xhs-agent'] })
+      await delay(300)
+
+      // Simulate sub-agent: xhs-agent (小红书创作)
+      broadcastToAll(IPC.ORCHESTRATOR_SUB_START, { agentId: 'xhs-agent', name: '小红书创作专家', task: '撰写 Vibe Marketing 小红书笔记' })
+      await delay(800)
+      broadcastToAll(IPC.ORCHESTRATOR_SUB_DONE, { agentId: 'xhs-agent', result: '笔记撰写完成，约500字，含封面图' })
+      broadcastToAll(IPC.ORCHESTRATOR_PROGRESS, { done: 2, total: 3, running: ['brand-reviewer'] })
+      await delay(300)
+
+      // Simulate sub-agent: brand-reviewer (品牌风控)
+      broadcastToAll(IPC.ORCHESTRATOR_SUB_START, { agentId: 'brand-reviewer', name: '品牌风控官', task: '审核品牌调性与合规性' })
+      await delay(600)
+      broadcastToAll(IPC.ORCHESTRATOR_SUB_DONE, { agentId: 'brand-reviewer', result: '品牌调性一致，无违规风险，通过' })
+      broadcastToAll(IPC.ORCHESTRATOR_PROGRESS, { done: 3, total: 3, running: [] })
+      await delay(200)
+
+      // Signal final result via orchestrator events (NOT agent stream events)
+      broadcastToAll(IPC.ORCHESTRATOR_RESULT, { result: mockResult })
+      broadcastToAll(IPC.ORCHESTRATOR_STATUS_CHANGE, { status: 'idle' })
+
+      return { success: true, data: { result: mockResult } }
     }
 
     // Execute orchestrator with event callbacks

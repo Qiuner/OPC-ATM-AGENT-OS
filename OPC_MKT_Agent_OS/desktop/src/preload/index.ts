@@ -124,6 +124,10 @@ const api = {
     },
     submitToReview: (data: Record<string, unknown>): Promise<IpcResponse> =>
       ipcRenderer.invoke(IPC.AGENT_SUBMIT_TO_REVIEW, data),
+    quickParse: (data: { rawText: string }): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.CONTENT_QUICK_PARSE, data),
+    adaptPlatforms: (data: { contentId: string }): Promise<IpcResponse> =>
+      ipcRenderer.invoke(IPC.CONTENT_ADAPT_PLATFORMS, data),
     publish: (data: Record<string, unknown>): Promise<IpcResponse> =>
       ipcRenderer.invoke(IPC.AGENT_PUBLISH, data),
     onPublishProgress: (callback: (data: { contentId: string; stage: string; message: string; detail?: string }) => void): (() => void) => {

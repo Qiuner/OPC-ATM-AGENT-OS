@@ -73,6 +73,8 @@ export const IPC = {
   AGENT_SUBMIT_TO_REVIEW: 'agent:submit-to-review',
   AGENT_PUBLISH: 'agent:publish',
   AGENT_PUBLISH_PROGRESS: 'agent:publish:progress',
+  CONTENT_QUICK_PARSE: 'agent:content:quick-parse',
+  CONTENT_ADAPT_PLATFORMS: 'agent:content:adapt-platforms',
 
   // ── Agent Events (main → renderer push) ──
   AGENT_EVENT: 'agent:event',

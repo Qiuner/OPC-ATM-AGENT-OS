@@ -93,6 +93,9 @@ export interface SettingsData {
     mode: 'auto' | 'manual'
     autoThreshold: number
   }
+  debug?: {
+    mockCeoMode: boolean
+  }
   [key: string]: unknown
 }
 

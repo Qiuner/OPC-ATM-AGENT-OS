@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 import {
   Dialog,
   DialogContent,
@@ -21,8 +22,43 @@ import {
   X,
   Trash2,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { getApi } from "@/lib/ipc";
 import type { Content, ApprovalDecision, ApprovalRecord } from "@/types";
+import { AIProcessingOverlay, type ProcessingStep } from "@/components/ui/ai-processing-overlay";
+
+// ── Local Image Component (loads via IPC readImage) ──
+
+function LocalImage({
+  path, className, alt, style, onClick,
+}: {
+  path: string; className?: string; alt?: string;
+  style?: React.CSSProperties; onClick?: () => void;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    if (path.startsWith("http")) { setSrc(path); return; }
+    let cancelled = false;
+    const api = getApi();
+    if (!api) { setErr(true); return; }
+    api.file.readImage(path).then((res) => {
+      if (cancelled) return;
+      if (res.success && res.data) setSrc((res.data as { dataUrl: string }).dataUrl);
+      else setErr(true);
+    }).catch(() => { if (!cancelled) setErr(true); });
+    return () => { cancelled = true; };
+  }, [path]);
+
+  if (err) return null;
+  if (!src) return (
+    <div className={className} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--muted)" }}>
+      <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--muted-foreground)" }} />
+    </div>
+  );
+  return <img src={src} alt={alt ?? ""} className={className} style={style} onClick={onClick} />;
+}
 
 // --- Pipeline Stage definitions ---
 type PipelineStageKey =
@@ -64,10 +100,13 @@ interface ApprovalItem {
   timeAgo: string;
   body: string;
   tags: string[];
+  mediaUrls: string[];
   risk: string | null;
   fromApi: boolean;
   pipelineStage: PipelineStageKey;
   brandScore: number;
+  metadata?: Record<string, unknown>;
+  _createdAt: string;
 }
 
 type TabKey = "all" | "pending" | "approved" | "rejected";
@@ -152,12 +191,15 @@ function mapContentToItem(content: Content): ApprovalItem {
     tags: Array.isArray(metadata?.tags)
       ? metadata.tags.filter((t): t is string => typeof t === "string")
       : [],
+    mediaUrls: content.media_urls || [],
     risk: riskText,
     fromApi: true,
     pipelineStage:
       metadata?.pipelineStage ??
       (decision === "approved" ? "approved" : "pending"),
     brandScore: metadata?.brandScore ?? 5,
+    metadata: content.metadata as Record<string, unknown> | undefined,
+    _createdAt: content.created_at,
   };
 }
 
@@ -178,6 +220,7 @@ interface DeleteConfirmState {
 }
 
 export function ApprovalPage(): React.JSX.Element {
+  const navigate = useNavigate();
   const [items, setItems] = useState<ApprovalItem[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -196,6 +239,9 @@ export function ApprovalPage(): React.JSX.Element {
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [dialogComment, setDialogComment] = useState("");
   const [dialogItemId, setDialogItemId] = useState<string | null>(null);
+
+  // Platform adaptation overlay state
+  const [isAdapting, setIsAdapting] = useState(false);
 
   // Bulk selection
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -432,12 +478,15 @@ export function ApprovalPage(): React.JSX.Element {
         );
         toast.error("Operation failed, please retry");
       } else {
-        toast.success(
-          dialogMode === "approve"
-            ? "Approved"
-            : "Rejected \u2014 sent back for revision"
-        );
         fetchApprovalHistory(dialogItemId);
+
+        // Platform adaptations are now generated at quickParse time (first parse step)
+        if (dialogMode === "approve") {
+          toast.success("Approved — ready for publishing");
+          navigate(`/publishing?contentId=${dialogItemId}`);
+        } else {
+          toast.success("Rejected \u2014 sent back for revision");
+        }
       }
     } catch {
       setItems((prev) =>
@@ -477,6 +526,11 @@ export function ApprovalPage(): React.JSX.Element {
       (item) => item.pipelineStage === activeStage
     );
   }
+
+  // Sort by newest first
+  filteredItems = [...filteredItems].sort(
+    (a, b) => new Date(b._createdAt).getTime() - new Date(a._createdAt).getTime()
+  );
 
   const toggleAllPending = () => {
     const pendingIds = filteredItems
@@ -632,7 +686,20 @@ export function ApprovalPage(): React.JSX.Element {
     : [];
 
   return (
-    <div className="space-y-5">
+    <div className="relative space-y-5">
+      {/* Platform Adaptation Overlay */}
+      <AIProcessingOverlay
+        visible={isAdapting}
+        title="AI 正在生成平台适配..."
+        subtitle="为 7 个平台生成差异化内容"
+        steps={[
+          { label: '小红书版本', status: isAdapting ? 'active' : 'pending' },
+          { label: 'X / Twitter 版本', status: 'pending' },
+          { label: 'LinkedIn 版本', status: 'pending' },
+          { label: 'TikTok / Meta / Email / Blog', status: 'pending' },
+        ]}
+      />
+
       {/* Header with Approval Mode Toggle */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Approval Center</h1>
@@ -822,8 +889,8 @@ export function ApprovalPage(): React.JSX.Element {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.key
-                ? "border-[#a78bfa] text-white"
-                : "border-transparent hover:text-white/80"
+                ? "border-[#a78bfa] text-[#a78bfa]"
+                : "border-transparent"
             }`}
             style={
               activeTab !== tab.key
@@ -897,7 +964,14 @@ export function ApprovalPage(): React.JSX.Element {
                   <span
                     className={`inline-block h-2 w-2 rounded-full shrink-0 ${DECISION_DOT[item.decision]}`}
                   />
-                  <span className="text-sm font-medium text-white truncate">
+                  {item.mediaUrls.length > 0 && (
+                    <LocalImage
+                      path={item.mediaUrls[0]}
+                      alt=""
+                      className="h-8 w-8 rounded object-cover shrink-0"
+                    />
+                  )}
+                  <span className="text-sm font-medium text-foreground truncate">
                     {item.title}
                   </span>
                   {item.fromApi && (
@@ -1054,11 +1128,49 @@ export function ApprovalPage(): React.JSX.Element {
             </div>
 
             <div className="flex-1 overflow-y-auto mb-4">
+              {/* Parsed status badge */}
+              {selected.metadata && (
+                <div className="mb-3">
+                  {(selected.metadata as Record<string, unknown>).parsed ? (
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>
+                      <Check className="h-3 w-3" /> AI Parsed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: 'rgba(234,179,8,0.15)', color: '#eab308' }}>
+                      <Loader2 className="h-3 w-3 animate-spin" /> Parsing...
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Image thumbnails — larger with count badge */}
+              {selected.mediaUrls.length > 0 && (
+                <div className="relative mb-4">
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {selected.mediaUrls.map((url, i) => (
+                      <LocalImage
+                        key={i}
+                        path={url}
+                        alt={`${selected.title} ${i + 1}`}
+                        className="h-40 w-40 rounded-xl object-cover shrink-0"
+                        style={{ border: '1px solid var(--border)' }}
+                      />
+                    ))}
+                  </div>
+                  {selected.mediaUrls.length > 1 && (
+                    <span className="absolute top-2 right-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}>
+                      {selected.mediaUrls.length} images
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Body — rendered as markdown */}
               <div
-                className="whitespace-pre-wrap text-sm leading-relaxed"
+                className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed [&_p]:mb-2 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_ul]:pl-4 [&_ol]:pl-4"
                 style={{ color: "var(--muted-foreground)" }}
               >
-                {selected.body}
+                <ReactMarkdown>{selected.body}</ReactMarkdown>
               </div>
 
               <div className="flex flex-wrap gap-2 mt-4">

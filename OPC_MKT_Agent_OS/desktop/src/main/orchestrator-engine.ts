@@ -10,7 +10,11 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { readFileSync, existsSync } from 'node:fs'
 import { BrowserWindow } from 'electron'
+import { IPC } from '../shared/ipc-channels'
+import { getApiKey } from './safe-storage'
+import { buildDesktopModeOverride } from './desktop-mode-overrides'
 
 // ── Types ──
 
@@ -67,11 +71,13 @@ interface AgentDef {
   skillFile: string
   model: string
   tools: string[]
+  /** MCP server names this agent needs access to */
+  allowedMcpServers?: string[]
 }
 
 const AGENT_REGISTRY: AgentDef[] = [
-  { id: 'ceo', name: 'CEO 营销总监', description: '营销团队总指挥，需求拆解、子 Agent 调度与质量终审', skillFile: '', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep', 'Bash', 'Agent'] },
-  { id: 'xhs-agent', name: '小红书创作专家', description: '端到端小红书营销：搜索竞品→分析爆款→内容创作→审查→发布', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'WebSearch'] },
+  { id: 'ceo', name: 'CEO 营销总监', description: '营销团队总指挥，需求拆解、子 Agent 调度与质量终审', skillFile: '', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep', 'Bash', 'Agent'], allowedMcpServers: ['xhs-data', 'image-gen', 'creatorflow'] },
+  { id: 'xhs-agent', name: '小红书创作专家', description: '端到端小红书营销：搜索竞品→分析爆款→内容创作→配图生成→审查→发布', skillFile: 'xhs.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'WebSearch'], allowedMcpServers: ['xhs-data', 'image-gen'] },
   { id: 'analyst-agent', name: '数据飞轮分析师', description: '分析内容表现数据，提炼胜出模式', skillFile: 'analyst.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep'] },
   { id: 'growth-agent', name: '增长营销专家', description: '选题研究、热点捕捉、竞品分析、发布策略', skillFile: 'growth.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Glob', 'Grep', 'Bash'] },
   { id: 'brand-reviewer', name: '品牌风控审查', description: '审查内容合规性与品牌调性一致性', skillFile: 'brand-reviewer.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Glob'] },
@@ -82,7 +88,7 @@ const AGENT_REGISTRY: AgentDef[] = [
   { id: 'seo-agent', name: 'SEO 专家', description: 'Technical & content SEO — keyword research, on-page optimization', skillFile: 'seo-expert.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep', 'Bash'] },
   { id: 'geo-agent', name: 'GEO 专家', description: 'Generative Engine Optimization — optimize content for AI search engines', skillFile: 'geo-expert.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep'] },
   { id: 'x-twitter-agent', name: 'X/Twitter 创作专家', description: '生成高互动率的推文和 Thread', skillFile: 'x-twitter.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob'] },
-  { id: 'visual-gen-agent', name: '视觉内容生成专家', description: 'AI 图片生成 + 营销视觉创作', skillFile: 'visual-gen.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob'] },
+  { id: 'visual-gen-agent', name: '视觉内容生成专家', description: 'AI 图片生成 + 营销视觉创作', skillFile: 'visual-gen.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob'], allowedMcpServers: ['image-gen'] },
   { id: 'strategist-agent', name: '营销策略师', description: '制定营销策略、内容战略、渠道规划', skillFile: 'strategist.SKILL.md', model: 'claude-sonnet-4-20250514', tools: ['Read', 'Write', 'Glob', 'Grep'] },
 ]
 
@@ -109,6 +115,42 @@ async function loadFile(path: string): Promise<string> {
   } catch {
     return ''
   }
+}
+
+/** 读取 engine/.env 文件，返回 key-value 对象 */
+function loadEnvFile(dir: string): Record<string, string> {
+  const envPath = join(dir, '.env')
+  if (!existsSync(envPath)) return {}
+  try {
+    const content = readFileSync(envPath, 'utf-8')
+    const result: Record<string, string> = {}
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const eqIdx = trimmed.indexOf('=')
+      if (eqIdx < 1) continue
+      const key = trimmed.slice(0, eqIdx).trim()
+      let value = trimmed.slice(eqIdx + 1).trim()
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1)
+      }
+      if (value) result[key] = value
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+/** Collect all unique MCP server names needed by any agent */
+function collectAllMcpServers(): string[] {
+  const servers = new Set<string>()
+  for (const agent of AGENT_REGISTRY) {
+    if (agent.allowedMcpServers) {
+      for (const s of agent.allowedMcpServers) servers.add(s)
+    }
+  }
+  return Array.from(servers)
 }
 
 // ── State Management ──
@@ -156,15 +198,19 @@ async function buildAgentsJson(): Promise<string> {
 
   for (const agent of AGENT_REGISTRY.filter(a => a.id !== 'ceo')) {
     const skill = agent.skillFile ? await loadFile(join(getSkillsDir(), agent.skillFile)) : ''
+    // Include MCP tool wildcards in the agent's tools list
+    const mcpTools = (agent.allowedMcpServers || []).map(s => `mcp__${s}__*`)
+    const desktopOverride = buildDesktopModeOverride(agent.id)
     agents[agent.id] = {
       description: agent.description,
       prompt: [
         `你是${agent.name}。${agent.description}`,
         skill && `## SOP\n${skill}`,
+        desktopOverride && `## Desktop 模式限制（优先级高于 SOP）\n${desktopOverride}`,
         brandVoice && `## 品牌调性\n${brandVoice}`,
         audience && `## 目标受众\n${audience}`,
       ].filter(Boolean).join('\n\n'),
-      tools: agent.tools,
+      tools: [...agent.tools, ...mcpTools],
     }
   }
   return JSON.stringify(agents)
@@ -317,14 +363,18 @@ export async function executeOrchestrator(
     return { success: false, error: msg }
   }
 
-  // Build CLI args
+  // Build CLI args — include MCP tool wildcards so sub-agents can use MCP tools
+  const mcpServerNames = collectAllMcpServers()
+  const mcpToolPatterns = mcpServerNames.map(s => `mcp__${s}__*`)
+  const mcpConfigPath = join(getEngineDir(), '.mcp.json')
   const args: string[] = [
     '-p',
     '--output-format', 'stream-json',
     '--verbose',
     '--permission-mode', 'acceptEdits',
+    '--mcp-config', mcpConfigPath,
     '--agents', agentsJson,
-    '--allowedTools', 'Read', 'Write', 'Glob', 'Grep', 'Bash', 'Agent',
+    '--allowedTools', 'Read', 'Write', 'Glob', 'Grep', 'Bash', 'Agent', ...mcpToolPatterns,
     '--', ceoPrompt,
   ]
 
@@ -346,7 +396,30 @@ export async function executeOrchestrator(
   delete cleanEnv.CLAUDE_CODE_ENTRYPOINT
   delete cleanEnv.CLAUDE_CODE_IS_AGENT
 
-  console.log('[Orchestrator] Spawning CEO claude CLI, cwd:', getEngineDir())
+  // Load .env from engine directory
+  const dotEnv = loadEnvFile(getEngineDir())
+  for (const [key, value] of Object.entries(dotEnv)) {
+    if (!cleanEnv[key]) {
+      cleanEnv[key] = value
+    }
+  }
+
+  // Inject API keys from keychain (higher priority than .env)
+  const keyMapping: Record<string, string> = {
+    'anthropic': 'ANTHROPIC_API_KEY',
+    'openai': 'OPENAI_API_KEY',
+    'google': 'GOOGLE_API_KEY',
+    'dashscope': 'DASHSCOPE_API_KEY',
+    'replicate': 'REPLICATE_API_TOKEN',
+  }
+  for (const [provider, envVar] of Object.entries(keyMapping)) {
+    const key = getApiKey(provider)
+    if (key) {
+      cleanEnv[envVar] = key
+    }
+  }
+
+  console.log('[Orchestrator] Spawning CEO claude CLI, cwd:', getEngineDir(), 'mcpTools:', mcpToolPatterns)
 
   try {
     activeProcess = spawn('claude', args, {

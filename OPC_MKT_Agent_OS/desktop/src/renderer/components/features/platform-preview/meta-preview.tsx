@@ -1,11 +1,13 @@
 import { BrowserFrame } from './browser-frame';
 import type { PlatformPreviewProps } from './types';
-import { getAuthorName } from './types';
+import { getAuthorName, getAdaptedContent } from './types';
+import { stripMarkdown } from '@/lib/strip-markdown';
 
 export function MetaPreview({ item }: PlatformPreviewProps) {
   const authorName = getAuthorName(item);
-  const body = item.body ?? '';
-  const tagsText = (item.tags ?? []).map((t) => `#${t}`).join(' ');
+  const adapted = getAdaptedContent(item, 'Meta');
+  const body = stripMarkdown(adapted.body);
+  const tagsText = adapted.tags.map((t) => `#${t}`).join(' ');
 
   return (
     <BrowserFrame url="facebook.com">
@@ -34,7 +36,7 @@ export function MetaPreview({ item }: PlatformPreviewProps) {
           </div>
 
           {/* Post body */}
-          <div className="px-4 pb-3 text-[15px] leading-[20px]" style={{ color: '#e4e6eb' }}>
+          <div className="px-4 pb-3 text-[15px] leading-[20px] whitespace-pre-line break-words" style={{ color: '#e4e6eb' }}>
             {body}
             {tagsText && (
               <span style={{ color: '#1877f2' }}> {tagsText}</span>

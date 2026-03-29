@@ -73,6 +73,8 @@ interface WindowApi {
     onStreamError(callback: (error: unknown) => void): () => void
     onEvent(callback: (event: unknown) => void): () => void
     submitToReview(data: Record<string, unknown>): Promise<IpcResponse<{ taskId: string; contentId: string }>>
+    quickParse(data: { rawText: string }): Promise<IpcResponse<{ title: string; body: string; tags: string[]; imageUrls: string[]; platforms: Record<string, unknown> }>>
+    adaptPlatforms(data: { contentId: string }): Promise<IpcResponse<{ platforms: Record<string, unknown> }>>
     publish(data: Record<string, unknown>): Promise<IpcResponse>
     onPublishProgress(callback: (data: { contentId: string; stage: string; message: string; detail?: string }) => void): () => void
   }

@@ -1,12 +1,14 @@
 import { PhoneFrame } from './phone-frame';
 import type { PlatformPreviewProps } from './types';
-import { getAuthorName, getHandle } from './types';
+import { getAuthorName, getHandle, getAdaptedContent } from './types';
+import { stripMarkdown } from '@/lib/strip-markdown';
 
 export function TikTokPreview({ item }: PlatformPreviewProps) {
   const authorName = getAuthorName(item);
   const handle = getHandle(item);
-  const body = item.body ?? '';
-  const tags = item.tags ?? [];
+  const adapted = getAdaptedContent(item, 'TikTok');
+  const body = stripMarkdown(adapted.body);
+  const tags = adapted.tags;
 
   return (
     <PhoneFrame>

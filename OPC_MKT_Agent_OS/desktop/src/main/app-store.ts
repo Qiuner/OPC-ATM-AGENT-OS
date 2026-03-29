@@ -76,6 +76,10 @@ interface AppSettings {
     voiceEnabled: boolean // TTS 语音播报
     voiceName: string     // macOS say voice name
   }
+  /** 调试开关 */
+  debug: {
+    mockCeoMode: boolean
+  }
 }
 
 const defaults: AppSettings = {
@@ -95,6 +99,9 @@ const defaults: AppSettings = {
     volume: 70,
     voiceEnabled: false,
     voiceName: 'Lili',
+  },
+  debug: {
+    mockCeoMode: false,
   },
 }
 
@@ -118,6 +125,7 @@ export function getAppSettings(): AppSettings {
     teamAgentIds: store.get('teamAgentIds'),
     platformAuth: store.get('platformAuth'),
     soundNotify: store.get('soundNotify'),
+    debug: store.get('debug'),
   }
 }
 

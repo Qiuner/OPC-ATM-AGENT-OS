@@ -1,11 +1,13 @@
 import { BrowserFrame } from './browser-frame';
 import type { PlatformPreviewProps } from './types';
-import { getAuthorName, DEFAULT_AUTHOR } from './types';
+import { getAuthorName, DEFAULT_AUTHOR, getAdaptedContent } from './types';
+import { stripMarkdown } from '@/lib/strip-markdown';
 
 export function LinkedInPreview({ item }: PlatformPreviewProps) {
   const authorName = getAuthorName(item);
-  const body = item.body ?? '';
-  const tagsText = (item.tags ?? []).map((t) => `#${t}`).join(' ');
+  const adapted = getAdaptedContent(item, 'LinkedIn');
+  const body = stripMarkdown(adapted.body);
+  const tagsText = adapted.tags.map((t) => `#${t}`).join(' ');
   const showMore = body.length > 200;
   const displayBody = showMore ? body.slice(0, 200) : body;
 
@@ -39,7 +41,7 @@ export function LinkedInPreview({ item }: PlatformPreviewProps) {
           </div>
 
           {/* Body */}
-          <div className="px-4 py-3 text-[14px] leading-[20px]" style={{ color: 'rgba(255,255,255,0.9)' }}>
+          <div className="px-4 py-3 text-[14px] leading-[20px] whitespace-pre-line break-words" style={{ color: 'rgba(255,255,255,0.9)' }}>
             {displayBody}
             {showMore && (
               <span className="text-[14px] font-semibold cursor-pointer" style={{ color: 'rgba(255,255,255,0.6)' }}>
