@@ -131,8 +131,8 @@ export function AnalyticsPage(): React.JSX.Element {
           onClick={() => setActiveTab("metrics")}
           className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
             activeTab === "metrics"
-              ? "bg-gradient-to-r from-[#a78bfa]/20 to-[#7c3aed]/20 text-white"
-              : "text-white/40 hover:text-white/60"
+              ? "bg-gradient-to-r from-[#a78bfa]/20 to-[#7c3aed]/20 text-foreground"
+              : "text-muted-foreground hover:text-foreground/60"
           }`}
           style={
             activeTab === "metrics"
@@ -147,8 +147,8 @@ export function AnalyticsPage(): React.JSX.Element {
           onClick={() => setActiveTab("learnings")}
           className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
             activeTab === "learnings"
-              ? "bg-gradient-to-r from-[#22d3ee]/20 to-[#06b6d4]/20 text-white"
-              : "text-white/40 hover:text-white/60"
+              ? "bg-gradient-to-r from-[#22d3ee]/20 to-[#06b6d4]/20 text-foreground"
+              : "text-muted-foreground hover:text-foreground/60"
           }`}
           style={
             activeTab === "learnings"
@@ -339,7 +339,7 @@ function MetricsTab({ config }: { config: AIConfigSlice }) {
               <select
                 value={selectedContentId}
                 onChange={(e) => setSelectedContentId(e.target.value)}
-                className="h-8 w-full rounded-lg px-2.5 py-1 text-sm text-white outline-none focus:ring-2 focus:ring-[#a78bfa]/50"
+                className="h-8 w-full rounded-lg px-2.5 py-1 text-sm text-foreground outline-none focus:ring-2 focus:ring-[#a78bfa]/50"
                 style={{
                   background: "var(--muted)",
                   border: "1px solid var(--border)",
@@ -396,7 +396,7 @@ function MetricsTab({ config }: { config: AIConfigSlice }) {
               提交数据
             </Button>
             {submitSuccess && (
-              <span className="flex items-center gap-1 text-sm text-[#22d3ee]">
+              <span className="flex items-center gap-1 text-sm text-[#0891b2] dark:text-[#22d3ee]">
                 <CheckCircle2 className="h-4 w-4" /> 提交成功
               </span>
             )}
@@ -721,15 +721,10 @@ function LearningsTab({ config: _config }: { config: AIConfigSlice }) {
                     ([platform, count]) => (
                       <span
                         key={platform}
-                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-                        style={{
-                          background: "rgba(167,139,250,0.1)",
-                          border: "1px solid rgba(167,139,250,0.2)",
-                          color: "#a78bfa",
-                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-[#6d28d9]/10 dark:bg-[#a78bfa]/10 border border-[#6d28d9]/20 dark:border-[#a78bfa]/20 text-[#6d28d9] dark:text-[#a78bfa]"
                       >
                         {platform}
-                        <span className="text-white/60">{count}</span>
+                        <span className="text-foreground/60">{count}</span>
                       </span>
                     )
                   )}
@@ -754,15 +749,10 @@ function LearningsTab({ config: _config }: { config: AIConfigSlice }) {
                   {Object.entries(summary.byAgent).map(([agent, count]) => (
                     <span
                       key={agent}
-                      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-                      style={{
-                        background: "rgba(34,211,238,0.1)",
-                        border: "1px solid rgba(34,211,238,0.2)",
-                        color: "#22d3ee",
-                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-[#0891b2]/10 dark:bg-[#22d3ee]/10 border border-[#0891b2]/20 dark:border-[#22d3ee]/20 text-[#0891b2] dark:text-[#22d3ee]"
                     >
                       {agent}
-                      <span className="text-white/60">{count}</span>
+                      <span className="text-foreground/60">{count}</span>
                     </span>
                   ))}
                 </div>
@@ -994,8 +984,7 @@ function LearningRecordCard({
             <div>
               <div className="flex items-center gap-1.5 mb-2">
                 <BarChart3
-                  className="h-3.5 w-3.5"
-                  style={{ color: "#22d3ee" }}
+                  className="h-3.5 w-3.5 text-[#0891b2] dark:text-[#22d3ee]"
                 />
                 <span
                   className="text-xs font-semibold"
@@ -1024,7 +1013,7 @@ function LearningRecordCard({
                     >
                       {item.label}
                     </div>
-                    <div className="text-sm font-semibold tabular-nums text-white">
+                    <div className="text-sm font-semibold tabular-nums text-foreground">
                       {item.value.toLocaleString()}
                     </div>
                   </div>
@@ -1038,8 +1027,7 @@ function LearningRecordCard({
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <Brain
-                  className="h-3.5 w-3.5"
-                  style={{ color: "#a78bfa" }}
+                  className="h-3.5 w-3.5 text-[#6d28d9] dark:text-[#a78bfa]"
                 />
                 <span
                   className="text-xs font-semibold"
@@ -1138,12 +1126,12 @@ function PromptPreview({ records }: { records: LearningRecord[] }) {
             </div>
             {successful.slice(0, 5).map((r) => (
               <div key={r.id} className="mb-1">
-                <span className="text-white/40">- </span>
+                <span className="text-foreground/40">- </span>
                 主题「{r.theme}」({r.platform}):{" "}
                 {r.learnings.slice(0, 100)}
                 {r.learnings.length > 100 ? "..." : ""}
                 {r.experimentResult && (
-                  <div className="ml-2 text-white/30">
+                  <div className="ml-2 text-foreground/30">
                     数据: 曝光{r.experimentResult.impressions} 互动
                     {r.experimentResult.comments + r.experimentResult.likes}{" "}
                     线索{r.experimentResult.leads}
@@ -1160,7 +1148,7 @@ function PromptPreview({ records }: { records: LearningRecord[] }) {
             </div>
             {failed.slice(0, 5).map((r) => (
               <div key={r.id} className="mb-1">
-                <span className="text-white/40">- </span>
+                <span className="text-foreground/40">- </span>
                 主题「{r.theme}」({r.platform}):{" "}
                 {r.learnings.slice(0, 100)}
                 {r.learnings.length > 100 ? "..." : ""}

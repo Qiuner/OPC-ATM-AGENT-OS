@@ -1,22 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
 import type { Content } from "@/types";
 import { getApi } from "@/lib/ipc";
-import { stripMarkdown } from "@/lib/strip-markdown";
-import { XPreview } from "@/components/features/platform-preview/x-preview";
-import { LinkedInPreview } from "@/components/features/platform-preview/linkedin-preview";
-import { TikTokPreview } from "@/components/features/platform-preview/tiktok-preview";
-import { MetaPreview } from "@/components/features/platform-preview/meta-preview";
-import { EmailPreview } from "@/components/features/platform-preview/email-preview";
-import { BlogPreview } from "@/components/features/platform-preview/blog-preview";
-import { XhsPreview } from "@/components/features/platform-preview/xhs-preview";
-import type { PlatformPreviewProps, PlatformKey } from "@/components/features/platform-preview/types";
-import {
-  ALL_PLATFORMS,
-  PLATFORM_LABELS,
-  PLATFORM_BRAND_COLORS,
-  PLATFORM_FORMATTERS,
-} from "@/components/features/platform-preview/types";
+import { PlatformPreviewModal } from "@/components/features/platform-preview";
+import { formatX } from "@/components/features/platform-preview/types";
 
 // --------------- Types ---------------
 
@@ -38,7 +24,6 @@ interface PublishItem {
   fromApi: boolean;
   platform: string;
   mediaUrls: string[];
-  metadata?: Record<string, unknown>;
 }
 
 type TabKey = "pending" | "exported" | "published";
@@ -50,16 +35,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "exported", label: "已导出" },
   { key: "published", label: "已发布" },
 ];
-
-const PREVIEW_COMPONENTS: Record<PlatformKey, React.ComponentType<PlatformPreviewProps>> = {
-  X: XPreview,
-  LinkedIn: LinkedInPreview,
-  TikTok: TikTokPreview,
-  Meta: MetaPreview,
-  Email: EmailPreview,
-  Blog: BlogPreview,
-  小红书: XhsPreview,
-};
 
 // --------------- Helpers ---------------
 
@@ -88,7 +63,6 @@ function mapContentToPublishItem(content: Content): PublishItem {
     fromApi: true,
     platform: content.platform || 'general',
     mediaUrls: content.media_urls || [],
-    metadata: content.metadata,
   };
 }
 
@@ -136,16 +110,6 @@ function itemToMarkdown(item: PublishItem): string {
   return lines.join("\n");
 }
 
-/** Map platform string from DB to PlatformKey for preview */
-function getDefaultPreviewPlatform(platformStr: string): PlatformKey {
-  if (platformStr === 'xiaohongshu') return '小红书';
-  if (platformStr === 'x' || platformStr === 'twitter') return 'X';
-  if (platformStr === 'linkedin') return 'LinkedIn';
-  if (platformStr === 'tiktok' || platformStr === 'douyin') return 'TikTok';
-  if (platformStr === 'meta' || platformStr === 'facebook') return 'Meta';
-  return '小红书'; // default
-}
-
 // --------------- Toast Component ---------------
 
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
@@ -169,13 +133,11 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 // --------------- Main Page ---------------
 
 export function PublishingPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<PublishItem[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [previewPlatform, setPreviewPlatform] = useState<PlatformKey>("小红书");
+  const [previewItem, setPreviewItem] = useState<PublishItem | null>(null);
   const [publishing, setPublishing] = useState<string | null>(null);
   const [publishProgress, setPublishProgress] = useState<{ stage: string; message: string } | null>(null);
   const [xhsLoggedIn, setXhsLoggedIn] = useState<boolean | null>(null);
@@ -197,8 +159,10 @@ export function PublishingPage() {
     const api = getApi();
     if (!api) return;
     const unsub = api.agent.onPublishProgress((data) => {
+      console.log('[Publishing] progress:', data.stage, data.message);
       setPublishProgress({ stage: data.stage, message: data.message });
       if (data.stage === 'done' || data.stage === 'error') {
+        // 3 秒后清除进度
         setTimeout(() => setPublishProgress(null), 3000);
       }
     });
@@ -209,6 +173,7 @@ export function PublishingPage() {
     const api = getApi();
     if (!api) return;
 
+    // 先检查登录态
     if (xhsLoggedIn === false) {
       setToast('请先在设置中完成小红书扫码登录');
       return;
@@ -216,15 +181,17 @@ export function PublishingPage() {
 
     setPublishing(item.id);
     setPublishProgress(null);
+    console.log('[Publishing] Starting XHS publish for:', item.id, item.title);
     try {
       const res = await api.agent.publish({
         contentId: item.id,
         title: item.title,
-        body: stripMarkdown(item.body || ''),
+        body: item.body || '',
         tags: item.tags || [],
         images: item.mediaUrls || [],
         platform: 'xiaohongshu',
       });
+      console.log('[Publishing] XHS publish result:', res);
       if (res.success) {
         setItems(prev => prev.map(i =>
           i.id === item.id ? { ...i, tab: 'published' as const } : i
@@ -232,6 +199,7 @@ export function PublishingPage() {
         setToast(`已发布到小红书: ${item.title}`);
       } else {
         const errMsg = (res as { error?: string }).error || '未知错误';
+        console.error('[Publishing] XHS publish failed:', errMsg);
         if (errMsg === 'XHS_NOT_LOGGED_IN') {
           setXhsLoggedIn(false);
           setToast('未登录小红书，请先在设置中完成扫码登录');
@@ -240,6 +208,7 @@ export function PublishingPage() {
         }
       }
     } catch (err) {
+      console.error('[Publishing] XHS publish error:', err);
       setToast(`发布失败: ${err instanceof Error ? err.message : '网络错误'}`);
     } finally {
       setPublishing(null);
@@ -256,6 +225,9 @@ export function PublishingPage() {
         api.contents.list({ status: "published" }),
       ]);
 
+      console.log('[Publishing] Fetched contents: approved=%d, published=%d',
+        approvedRes.data?.length ?? 0, publishedRes.data?.length ?? 0);
+
       const apiItems: PublishItem[] = [];
       if (approvedRes.success && approvedRes.data && approvedRes.data.length > 0) {
         apiItems.push(...approvedRes.data.map(mapContentToPublishItem));
@@ -270,38 +242,22 @@ export function PublishingPage() {
       }
 
       setItems(apiItems);
-      // Auto-select from query param or first item
-      const paramId = searchParams.get('contentId');
-      const target = paramId ? apiItems.find(i => i.id === paramId) : null;
-      if (target) {
-        setSelectedId(target.id);
-        setPreviewPlatform(getDefaultPreviewPlatform(target.platform));
-        // Clear query param after consuming
-        setSearchParams({}, { replace: true });
-      } else if (apiItems.length > 0 && !selectedId) {
-        setSelectedId(apiItems[0].id);
-        setPreviewPlatform(getDefaultPreviewPlatform(apiItems[0].platform));
-      }
     } catch (err) {
       console.error('[Publishing] Failed to fetch contents:', err);
     } finally {
       setLoading(false);
     }
-  }, [selectedId]);
+  }, []);
 
   useEffect(() => { fetchContents(); }, [fetchContents]);
 
-  const filteredItems = items
-    .filter((item) => item.tab === activeTab)
-    .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
+  const filteredItems = items.filter((item) => item.tab === activeTab);
 
   const tabCounts: Record<TabKey, number> = {
     pending: items.filter((i) => i.tab === "pending").length,
     exported: items.filter((i) => i.tab === "exported").length,
     published: items.filter((i) => i.tab === "published").length,
   };
-
-  const selectedItem = selectedId ? filteredItems.find(i => i.id === selectedId) : filteredItems[0] ?? null;
 
   const handleExportJson = (item: PublishItem) => {
     const exportData = {
@@ -348,12 +304,11 @@ export function PublishingPage() {
     setToast(`已批量导出 ${pendingItems.length} 项 (Markdown)`);
   };
 
-  const handleCopyFormatted = async () => {
-    if (!selectedItem) return;
-    const formatted = PLATFORM_FORMATTERS[previewPlatform](selectedItem);
+  const handleCopyToClipboard = async (item: PublishItem) => {
+    const text = formatX(item);
     try {
-      await navigator.clipboard.writeText(formatted);
-      setToast(`已复制 ${PLATFORM_LABELS[previewPlatform]} 格式文案`);
+      await navigator.clipboard.writeText(text);
+      setToast(`已复制: ${item.title}`);
     } catch {
       setToast("复制失败");
     }
@@ -392,12 +347,9 @@ export function PublishingPage() {
 
   const [openExportMenu, setOpenExportMenu] = useState<string | null>(null);
 
-  const PreviewComponent = selectedItem ? PREVIEW_COMPONENTS[previewPlatform] : null;
-
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Publishing Hub</h1>
         <div className="flex items-center gap-2">
           {loading && (
@@ -421,14 +373,13 @@ export function PublishingPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
+      <div className="flex items-center gap-1" style={{ borderBottom: "1px solid var(--border)" }}>
         {TABS.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => { setActiveTab(tab.key); setSelectedId(null); }}
+            onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.key ? "border-[#a78bfa] text-[#a78bfa]" : "border-transparent"
+              activeTab === tab.key ? "border-[#6d28d9] dark:border-[#a78bfa] text-foreground" : "border-transparent hover:text-foreground/80"
             }`}
             style={activeTab !== tab.key ? { color: "var(--muted-foreground)" } : undefined}
           >
@@ -440,191 +391,97 @@ export function PublishingPage() {
         ))}
       </div>
 
-      {/* Left-right split layout */}
-      <div className="flex gap-4 flex-1 min-h-0">
-        {/* ── Left: Content list (40%) ── */}
-        <div className="w-[40%] shrink-0 overflow-y-auto space-y-2 pr-1">
-          {filteredItems.length === 0 && (
-            <div className="flex h-40 items-center justify-center rounded-xl border-dashed" style={{ border: "1px dashed var(--border)" }}>
-              <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>暂无内容</span>
-            </div>
-          )}
-
-          {filteredItems.map((item) => {
-            const isSelected = selectedItem?.id === item.id;
-            return (
-              <div
-                key={item.id}
-                onClick={() => {
-                  setSelectedId(item.id);
-                  setPreviewPlatform(getDefaultPreviewPlatform(item.platform));
-                }}
-                className={`rounded-xl p-4 cursor-pointer transition-all ${
-                  isSelected ? 'ring-1 ring-[#a78bfa]/50' : 'hover:bg-white/[0.02]'
-                }`}
-                style={{
-                  background: isSelected ? 'var(--card)' : 'transparent',
-                  border: `1px solid ${isSelected ? 'var(--border)' : 'transparent'}`,
-                }}
-              >
-                {/* Title row */}
-                <div className="flex items-center gap-2 mb-1">
-                  {item.mediaUrls.length > 0 && (
-                    <img
-                      src={item.mediaUrls[0].startsWith('http') ? item.mediaUrls[0] : `file://${item.mediaUrls[0]}`}
-                      alt=""
-                      className="h-10 w-10 rounded-lg object-cover shrink-0"
-                      style={{ border: '1px solid var(--border)' }}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
+      <div className="space-y-4">
+        {filteredItems.map((item) => (
+          <div key={item.id} className="rounded-xl p-6" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
+                  {item.fromApi && (
+                    <span className="rounded bg-[#6d28d9]/15 dark:bg-[#a78bfa]/20 px-1.5 py-0.5 text-[10px] font-medium text-[#6d28d9] dark:text-[#a78bfa]">AI 生成</span>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-foreground truncate">{item.title}</h3>
-                      {item.fromApi && (
-                        <span className="rounded bg-[#a78bfa]/20 px-1 py-0.5 text-[9px] font-medium text-[#a78bfa] shrink-0">AI</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] mt-0.5 truncate" style={{ color: "var(--muted-foreground)" }}>
-                      {item.campaign} · {item.scheduledAt}
-                    </p>
-                  </div>
                 </div>
-
-                {/* Tags */}
+                <p className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>{item.campaign} · 计划发布：{item.scheduledAt}</p>
                 {item.tags && item.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {item.tags.slice(0, 4).map((tag) => (
-                      <span key={tag} className="rounded-full px-1.5 py-0.5 text-[9px]" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>#{tag}</span>
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {item.tags.map((tag) => (
+                      <span key={tag} className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}>#{tag}</span>
                     ))}
-                    {item.tags.length > 4 && (
-                      <span className="text-[9px] px-1" style={{ color: "var(--muted-foreground)" }}>+{item.tags.length - 4}</span>
-                    )}
-                  </div>
-                )}
-
-                {/* Actions row */}
-                <div className="flex items-center justify-between mt-3 pt-2" style={{ borderTop: '1px solid var(--border)' }}>
-                  <div className="relative">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setOpenExportMenu(openExportMenu === item.id ? null : item.id); }}
-                      className="h-7 rounded-md px-2 text-[11px] font-medium transition-colors hover:bg-white/5"
-                      style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
-                    >
-                      导出 ▾
-                    </button>
-                    {openExportMenu === item.id && (
-                      <div className="absolute left-0 top-8 z-40 w-36 rounded-lg py-1 shadow-lg" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-                        <button onClick={(e) => { e.stopPropagation(); handleExportJson(item); setOpenExportMenu(null); }} className="w-full px-3 py-1.5 text-left text-[11px] hover:bg-white/5 transition-colors" style={{ color: "var(--muted-foreground)" }}>JSON</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleExportMarkdown(item); setOpenExportMenu(null); }} className="w-full px-3 py-1.5 text-left text-[11px] hover:bg-white/5 transition-colors" style={{ color: "var(--muted-foreground)" }}>Markdown</button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {item.tab === "pending" && item.platform === "xiaohongshu" && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handlePublishToXhs(item); }}
-                        disabled={publishing === item.id || xhsLoggedIn === false}
-                        className="h-7 rounded-md px-2.5 text-[11px] font-medium text-white transition-colors disabled:opacity-50"
-                        style={{ background: xhsLoggedIn === false ? '#666' : 'linear-gradient(135deg, #FF2442, #FF6B81)' }}
-                        title={xhsLoggedIn === false ? '请先在设置中完成小红书扫码登录' : undefined}
-                      >
-                        {publishing === item.id ? '发布中...' : '发布小红书'}
-                      </button>
-                    )}
-                    {item.tab === "exported" && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleMarkPublished(item); }}
-                        className="h-7 rounded-md px-2.5 text-[11px] font-medium text-white transition-colors"
-                        style={{ background: "linear-gradient(135deg, #a78bfa, #7c3aed)" }}
-                      >
-                        标记已发布
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Publish progress */}
-                {publishing === item.id && publishProgress && (
-                  <div className="mt-2 text-[11px] truncate" style={{ color: publishProgress.stage === 'error' ? '#f87171' : 'var(--muted-foreground)' }}>
-                    {publishProgress.message}
                   </div>
                 )}
               </div>
-            );
-          })}
-        </div>
-
-        {/* ── Right: Platform preview (60%) ── */}
-        <div className="flex-1 flex flex-col min-h-0 rounded-xl" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-          {selectedItem ? (
-            <>
-              {/* Platform tab switcher */}
-              <div className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
-                <div className="flex flex-wrap gap-1">
-                  {ALL_PLATFORMS.map((p) => {
-                    const isActive = previewPlatform === p;
-                    const brandColor = PLATFORM_BRAND_COLORS[p];
-                    return (
-                      <button
-                        key={p}
-                        onClick={() => setPreviewPlatform(p)}
-                        className="rounded-md px-2.5 py-1 text-[11px] font-medium transition-all"
-                        style={
-                          isActive
-                            ? {
-                                background: `${brandColor}20`,
-                                color: brandColor,
-                                border: `1px solid ${brandColor}40`,
-                              }
-                            : {
-                                color: 'var(--muted-foreground)',
-                                border: '1px solid transparent',
-                              }
-                        }
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  onClick={handleCopyFormatted}
-                  className="h-7 rounded-md px-2.5 text-[11px] font-medium transition-colors hover:bg-white/5 shrink-0"
-                  style={{ border: '1px solid var(--border)', color: 'var(--muted-foreground)' }}
-                >
-                  复制文案
-                </button>
-              </div>
-
-              {/* Platform label */}
-              <div className="px-4 pt-2 pb-1 shrink-0">
-                <p className="text-[11px]" style={{ color: 'var(--muted-foreground)' }}>
-                  {PLATFORM_LABELS[previewPlatform]} · {selectedItem.title}
-                </p>
-              </div>
-
-              {/* Preview component */}
-              <div className="flex-1 overflow-y-auto px-4 pb-4">
-                <div className="flex justify-center py-4">
-                  <div key={`${selectedItem.id}-${previewPlatform}`} className="animate-in fade-in duration-200">
-                    {PreviewComponent && <PreviewComponent item={selectedItem} />}
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-                {filteredItems.length === 0 ? '暂无内容' : '选择左侧内容查看预览'}
-              </span>
+              <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{item.id}</span>
             </div>
-          )}
-        </div>
+
+            {item.body && (
+              <p className="text-sm mb-4 line-clamp-2" style={{ color: "var(--muted-foreground)" }}>{item.body}</p>
+            )}
+
+            <div>
+              {item.platforms.map((ps) => (
+                <div key={ps.platform} className="flex items-center justify-between py-3 last:border-0" style={{ borderBottom: "1px solid var(--border)" }}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm">{ps.ready ? "✅" : "⬜"}</span>
+                    <span className="text-sm font-medium w-16" style={{ color: "var(--muted-foreground)" }}>{ps.platform}</span>
+                    <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>{ps.format}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setPreviewItem(item)} className="h-7 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-white/5" style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}>预览</button>
+                    {ps.ready ? (
+                      <button onClick={() => handleCopyToClipboard(item)} className="h-7 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-white/5" style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}>复制</button>
+                    ) : (
+                      <button className="h-7 rounded-md px-2.5 text-xs font-medium text-[#0891b2] dark:text-[#22d3ee] transition-colors hover:bg-[#0891b2]/10 dark:hover:bg-[#22d3ee]/10" style={{ border: "1px solid rgba(34,211,238,0.3)" }}>生成</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 mt-4 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+              <div className="relative">
+                <button onClick={() => setOpenExportMenu(openExportMenu === item.id ? null : item.id)} className="h-8 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-white/5" style={{ border: "1px solid var(--border)", color: "var(--muted-foreground)" }}>导出 ▾</button>
+                {openExportMenu === item.id && (
+                  <div className="absolute right-0 top-9 z-40 w-40 rounded-lg py-1 shadow-lg" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+                    <button onClick={() => { handleExportJson(item); setOpenExportMenu(null); }} className="w-full px-3 py-2 text-left text-sm hover:bg-white/5 transition-colors" style={{ color: "var(--muted-foreground)" }}>JSON 导出</button>
+                    <button onClick={() => { handleExportMarkdown(item); setOpenExportMenu(null); }} className="w-full px-3 py-2 text-left text-sm hover:bg-white/5 transition-colors" style={{ color: "var(--muted-foreground)" }}>Markdown 导出</button>
+                  </div>
+                )}
+              </div>
+              {item.tab === "pending" && item.platform === "xiaohongshu" && (
+                <div className="flex items-center gap-2">
+                  {publishing === item.id && publishProgress && (
+                    <span className="text-xs max-w-[200px] truncate" style={{ color: publishProgress.stage === 'error' ? '#f87171' : 'var(--muted-foreground)' }}>
+                      {publishProgress.message}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => handlePublishToXhs(item)}
+                    disabled={publishing === item.id || xhsLoggedIn === false}
+                    className="h-8 rounded-lg px-3 text-sm font-medium text-white transition-colors disabled:opacity-50"
+                    style={{ background: xhsLoggedIn === false ? '#666' : 'linear-gradient(135deg, #FF2442, #FF6B81)' }}
+                    title={xhsLoggedIn === false ? '请先在设置中完成小红书扫码登录' : undefined}
+                  >
+                    {publishing === item.id ? '发布中...' : xhsLoggedIn === false ? '未登录小红书' : '发布到小红书'}
+                  </button>
+                </div>
+              )}
+              {item.tab === "exported" && (
+                <button onClick={() => handleMarkPublished(item)} className="h-8 rounded-lg px-3 text-sm font-medium text-white transition-colors" style={{ background: "linear-gradient(135deg, #a78bfa, #7c3aed)" }}>标记为已发布</button>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {filteredItems.length === 0 && (
+          <div className="flex h-40 items-center justify-center rounded-xl border-dashed" style={{ border: "1px dashed var(--border)" }}>
+            <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>暂无内容</span>
+          </div>
+        )}
       </div>
 
-      {toast && <Toast message={toast} onClose={() => setToast("")} />}
+      {previewItem && <PlatformPreviewModal item={previewItem} onClose={() => setPreviewItem(null)} />}
+      {toast && !previewItem && <Toast message={toast} onClose={() => setToast("")} />}
     </div>
   );
 }

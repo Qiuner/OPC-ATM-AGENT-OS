@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import ReactMarkdown from "react-markdown";
 import {
   Dialog,
   DialogContent,
@@ -22,43 +21,8 @@ import {
   X,
   Trash2,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { getApi } from "@/lib/ipc";
 import type { Content, ApprovalDecision, ApprovalRecord } from "@/types";
-import { AIProcessingOverlay, type ProcessingStep } from "@/components/ui/ai-processing-overlay";
-
-// ── Local Image Component (loads via IPC readImage) ──
-
-function LocalImage({
-  path, className, alt, style, onClick,
-}: {
-  path: string; className?: string; alt?: string;
-  style?: React.CSSProperties; onClick?: () => void;
-}) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [err, setErr] = useState(false);
-
-  useEffect(() => {
-    if (path.startsWith("http")) { setSrc(path); return; }
-    let cancelled = false;
-    const api = getApi();
-    if (!api) { setErr(true); return; }
-    api.file.readImage(path).then((res) => {
-      if (cancelled) return;
-      if (res.success && res.data) setSrc((res.data as { dataUrl: string }).dataUrl);
-      else setErr(true);
-    }).catch(() => { if (!cancelled) setErr(true); });
-    return () => { cancelled = true; };
-  }, [path]);
-
-  if (err) return null;
-  if (!src) return (
-    <div className={className} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--muted)" }}>
-      <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--muted-foreground)" }} />
-    </div>
-  );
-  return <img src={src} alt={alt ?? ""} className={className} style={style} onClick={onClick} />;
-}
 
 // --- Pipeline Stage definitions ---
 type PipelineStageKey =
@@ -100,13 +64,10 @@ interface ApprovalItem {
   timeAgo: string;
   body: string;
   tags: string[];
-  mediaUrls: string[];
   risk: string | null;
   fromApi: boolean;
   pipelineStage: PipelineStageKey;
   brandScore: number;
-  metadata?: Record<string, unknown>;
-  _createdAt: string;
 }
 
 type TabKey = "all" | "pending" | "approved" | "rejected";
@@ -121,7 +82,7 @@ const TABS: { key: TabKey; label: string }[] = [
 const PRIORITY_COLORS: Record<number, string> = {
   0: "text-red-400",
   1: "text-yellow-400",
-  2: "text-white/25",
+  2: "text-foreground/25",
 };
 
 const DECISION_DOT: Record<ApprovalDecision, string> = {
@@ -191,15 +152,12 @@ function mapContentToItem(content: Content): ApprovalItem {
     tags: Array.isArray(metadata?.tags)
       ? metadata.tags.filter((t): t is string => typeof t === "string")
       : [],
-    mediaUrls: content.media_urls || [],
     risk: riskText,
     fromApi: true,
     pipelineStage:
       metadata?.pipelineStage ??
       (decision === "approved" ? "approved" : "pending"),
     brandScore: metadata?.brandScore ?? 5,
-    metadata: content.metadata as Record<string, unknown> | undefined,
-    _createdAt: content.created_at,
   };
 }
 
@@ -220,7 +178,6 @@ interface DeleteConfirmState {
 }
 
 export function ApprovalPage(): React.JSX.Element {
-  const navigate = useNavigate();
   const [items, setItems] = useState<ApprovalItem[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -239,9 +196,6 @@ export function ApprovalPage(): React.JSX.Element {
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [dialogComment, setDialogComment] = useState("");
   const [dialogItemId, setDialogItemId] = useState<string | null>(null);
-
-  // Platform adaptation overlay state
-  const [isAdapting, setIsAdapting] = useState(false);
 
   // Bulk selection
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -478,15 +432,12 @@ export function ApprovalPage(): React.JSX.Element {
         );
         toast.error("Operation failed, please retry");
       } else {
+        toast.success(
+          dialogMode === "approve"
+            ? "Approved"
+            : "Rejected \u2014 sent back for revision"
+        );
         fetchApprovalHistory(dialogItemId);
-
-        // Platform adaptations are now generated at quickParse time (first parse step)
-        if (dialogMode === "approve") {
-          toast.success("Approved — ready for publishing");
-          navigate(`/publishing?contentId=${dialogItemId}`);
-        } else {
-          toast.success("Rejected \u2014 sent back for revision");
-        }
       }
     } catch {
       setItems((prev) =>
@@ -526,11 +477,6 @@ export function ApprovalPage(): React.JSX.Element {
       (item) => item.pipelineStage === activeStage
     );
   }
-
-  // Sort by newest first
-  filteredItems = [...filteredItems].sort(
-    (a, b) => new Date(b._createdAt).getTime() - new Date(a._createdAt).getTime()
-  );
 
   const toggleAllPending = () => {
     const pendingIds = filteredItems
@@ -686,20 +632,7 @@ export function ApprovalPage(): React.JSX.Element {
     : [];
 
   return (
-    <div className="relative space-y-5">
-      {/* Platform Adaptation Overlay */}
-      <AIProcessingOverlay
-        visible={isAdapting}
-        title="AI 正在生成平台适配..."
-        subtitle="为 7 个平台生成差异化内容"
-        steps={[
-          { label: '小红书版本', status: isAdapting ? 'active' : 'pending' },
-          { label: 'X / Twitter 版本', status: 'pending' },
-          { label: 'LinkedIn 版本', status: 'pending' },
-          { label: 'TikTok / Meta / Email / Blog', status: 'pending' },
-        ]}
-      />
-
+    <div className="space-y-5">
       {/* Header with Approval Mode Toggle */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Approval Center</h1>
@@ -743,7 +676,7 @@ export function ApprovalPage(): React.JSX.Element {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <span
-                className={`text-xs font-medium ${approvalMode === "auto" ? "text-[#a78bfa]" : ""}`}
+                className={`text-xs font-medium ${approvalMode === "auto" ? "text-[#6d28d9] dark:text-[#a78bfa]" : ""}`}
                 style={
                   approvalMode !== "auto"
                     ? { color: "var(--muted-foreground)" }
@@ -767,7 +700,7 @@ export function ApprovalPage(): React.JSX.Element {
                 />
               </button>
               <span
-                className={`text-xs font-medium ${approvalMode === "manual" ? "text-white" : ""}`}
+                className={`text-xs font-medium ${approvalMode === "manual" ? "text-foreground" : ""}`}
                 style={
                   approvalMode !== "manual"
                     ? { color: "var(--muted-foreground)" }
@@ -779,11 +712,7 @@ export function ApprovalPage(): React.JSX.Element {
             </div>
             {approvalMode === "auto" && (
               <span
-                className="text-[11px] rounded-md px-2 py-0.5"
-                style={{
-                  background: "rgba(167,139,250,0.08)",
-                  color: "#a78bfa",
-                }}
+                className="text-[11px] rounded-md px-2 py-0.5 bg-[#6d28d9]/10 dark:bg-[#a78bfa]/10 text-[#6d28d9] dark:text-[#a78bfa]"
               >
                 Score &ge; {autoThreshold} auto-approved
               </span>
@@ -829,7 +758,7 @@ export function ApprovalPage(): React.JSX.Element {
               }
             >
               <stage.icon
-                className={`size-4 ${activeStage === stage.key ? "text-[#a78bfa]" : ""}`}
+                className={`size-4 ${activeStage === stage.key ? "text-[#6d28d9] dark:text-[#a78bfa]" : ""}`}
                 style={
                   activeStage !== stage.key
                     ? { color: "var(--muted-foreground)" }
@@ -837,7 +766,7 @@ export function ApprovalPage(): React.JSX.Element {
                 }
               />
               <span
-                className={`text-xs ${activeStage === stage.key ? "text-white" : ""}`}
+                className={`text-xs ${activeStage === stage.key ? "text-foreground" : ""}`}
                 style={
                   activeStage !== stage.key
                     ? { color: "var(--muted-foreground)" }
@@ -849,13 +778,13 @@ export function ApprovalPage(): React.JSX.Element {
               <span
                 className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold ${
                   activeStage === stage.key
-                    ? "bg-[#a78bfa]/20 text-[#a78bfa]"
+                    ? "bg-[#6d28d9]/15 dark:bg-[#a78bfa]/20 text-[#6d28d9] dark:text-[#a78bfa]"
                     : stage.key === "pending" && stageCounts[stage.key] > 0
                       ? "bg-amber-500/20 text-amber-400"
                       : (stage.key === "approved" ||
                             stage.key === "published") &&
                           stageCounts[stage.key] > 0
-                        ? "bg-[#22d3ee]/20 text-[#22d3ee]"
+                        ? "bg-[#0891b2]/15 dark:bg-[#22d3ee]/20 text-[#0891b2] dark:text-[#22d3ee]"
                         : "dark:bg-white/[0.06] bg-black/[0.04] text-muted-foreground"
                 }`}
               >
@@ -889,8 +818,8 @@ export function ApprovalPage(): React.JSX.Element {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.key
-                ? "border-[#a78bfa] text-[#a78bfa]"
-                : "border-transparent"
+                ? "border-[#6d28d9] dark:border-[#a78bfa] text-foreground"
+                : "border-transparent hover:text-foreground/80"
             }`}
             style={
               activeTab !== tab.key
@@ -964,18 +893,11 @@ export function ApprovalPage(): React.JSX.Element {
                   <span
                     className={`inline-block h-2 w-2 rounded-full shrink-0 ${DECISION_DOT[item.decision]}`}
                   />
-                  {item.mediaUrls.length > 0 && (
-                    <LocalImage
-                      path={item.mediaUrls[0]}
-                      alt=""
-                      className="h-8 w-8 rounded object-cover shrink-0"
-                    />
-                  )}
                   <span className="text-sm font-medium text-foreground truncate">
                     {item.title}
                   </span>
                   {item.fromApi && (
-                    <span className="shrink-0 rounded bg-[#a78bfa]/20 px-1 py-0.5 text-[10px] font-medium text-[#a78bfa]">
+                    <span className="shrink-0 rounded bg-[#6d28d9]/15 dark:bg-[#a78bfa]/20 px-1 py-0.5 text-[10px] font-medium text-[#6d28d9] dark:text-[#a78bfa]">
                       AI
                     </span>
                   )}
@@ -984,14 +906,14 @@ export function ApprovalPage(): React.JSX.Element {
                       Risk
                     </span>
                   ) : (
-                    <span className="shrink-0 rounded bg-[#22d3ee]/20 px-1.5 py-0.5 text-[10px] font-medium text-[#22d3ee]">
+                    <span className="shrink-0 rounded bg-[#0891b2]/15 dark:bg-[#22d3ee]/20 px-1.5 py-0.5 text-[10px] font-medium text-[#0891b2] dark:text-[#22d3ee]">
                       Safe
                     </span>
                   )}
                   <span
                     className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                       item.brandScore >= 7
-                        ? "bg-[#22d3ee]/20 text-[#22d3ee]"
+                        ? "bg-[#0891b2]/15 dark:bg-[#22d3ee]/20 text-[#0891b2] dark:text-[#22d3ee]"
                         : item.brandScore >= 5
                           ? "bg-amber-500/20 text-amber-400"
                           : "bg-red-500/20 text-red-400"
@@ -1026,10 +948,10 @@ export function ApprovalPage(): React.JSX.Element {
                       e.stopPropagation();
                       openDialog("approve", item.id);
                     }}
-                    className="flex items-center justify-center size-7 rounded-md transition-colors hover:bg-[#22d3ee]/10"
+                    className="flex items-center justify-center size-7 rounded-md transition-colors hover:bg-[#0891b2]/10 dark:hover:bg-[#22d3ee]/10"
                     title="Approve"
                   >
-                    <Check className="size-4 text-[#22d3ee]" />
+                    <Check className="size-4 text-[#0891b2] dark:text-[#22d3ee]" />
                   </button>
                   <button
                     onClick={(e) => {
@@ -1100,14 +1022,14 @@ export function ApprovalPage(): React.JSX.Element {
                     Risk
                   </span>
                 ) : (
-                  <span className="inline-flex items-center rounded-md bg-[#22d3ee]/20 px-2 py-0.5 text-xs font-medium text-[#22d3ee]">
+                  <span className="inline-flex items-center rounded-md bg-[#0891b2]/15 dark:bg-[#22d3ee]/20 px-2 py-0.5 text-xs font-medium text-[#0891b2] dark:text-[#22d3ee]">
                     Safe
                   </span>
                 )}
                 <span
                   className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
                     selected.brandScore >= 7
-                      ? "bg-[#22d3ee]/20 text-[#22d3ee]"
+                      ? "bg-[#0891b2]/15 dark:bg-[#22d3ee]/20 text-[#0891b2] dark:text-[#22d3ee]"
                       : selected.brandScore >= 5
                         ? "bg-amber-500/20 text-amber-400"
                         : "bg-red-500/20 text-red-400"
@@ -1128,49 +1050,11 @@ export function ApprovalPage(): React.JSX.Element {
             </div>
 
             <div className="flex-1 overflow-y-auto mb-4">
-              {/* Parsed status badge */}
-              {selected.metadata && (
-                <div className="mb-3">
-                  {(selected.metadata as Record<string, unknown>).parsed ? (
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>
-                      <Check className="h-3 w-3" /> AI Parsed
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: 'rgba(234,179,8,0.15)', color: '#eab308' }}>
-                      <Loader2 className="h-3 w-3 animate-spin" /> Parsing...
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Image thumbnails — larger with count badge */}
-              {selected.mediaUrls.length > 0 && (
-                <div className="relative mb-4">
-                  <div className="flex gap-3 overflow-x-auto pb-2">
-                    {selected.mediaUrls.map((url, i) => (
-                      <LocalImage
-                        key={i}
-                        path={url}
-                        alt={`${selected.title} ${i + 1}`}
-                        className="h-40 w-40 rounded-xl object-cover shrink-0"
-                        style={{ border: '1px solid var(--border)' }}
-                      />
-                    ))}
-                  </div>
-                  {selected.mediaUrls.length > 1 && (
-                    <span className="absolute top-2 right-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}>
-                      {selected.mediaUrls.length} images
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Body — rendered as markdown */}
               <div
-                className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed [&_p]:mb-2 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_ul]:pl-4 [&_ol]:pl-4"
+                className="whitespace-pre-wrap text-sm leading-relaxed"
                 style={{ color: "var(--muted-foreground)" }}
               >
-                <ReactMarkdown>{selected.body}</ReactMarkdown>
+                {selected.body}
               </div>
 
               <div className="flex flex-wrap gap-2 mt-4">
@@ -1221,10 +1105,10 @@ export function ApprovalPage(): React.JSX.Element {
                   }}
                 >
                   <div className="flex items-start gap-2">
-                    <span className="text-[#22d3ee] text-sm mt-0.5">
+                    <span className="text-[#0891b2] dark:text-[#22d3ee] text-sm mt-0.5">
                       &#10003;
                     </span>
-                    <p className="text-sm text-[#22d3ee]">
+                    <p className="text-sm text-[#0891b2] dark:text-[#22d3ee]">
                       Safety check passed — no risks detected
                     </p>
                   </div>
@@ -1269,10 +1153,10 @@ export function ApprovalPage(): React.JSX.Element {
                             <span
                               className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                                 record.decision === "approved"
-                                  ? "bg-[#22d3ee]/20 text-[#22d3ee]"
+                                  ? "bg-[#0891b2]/15 dark:bg-[#22d3ee]/20 text-[#0891b2] dark:text-[#22d3ee]"
                                   : record.decision === "rejected"
                                     ? "bg-red-500/20 text-red-400"
-                                    : "bg-[#a78bfa]/20 text-[#a78bfa]"
+                                    : "bg-[#6d28d9]/15 dark:bg-[#a78bfa]/20 text-[#6d28d9] dark:text-[#a78bfa]"
                               }`}
                             >
                               {record.decision === "approved"

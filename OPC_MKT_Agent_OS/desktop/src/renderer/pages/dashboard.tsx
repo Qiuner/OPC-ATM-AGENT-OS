@@ -37,9 +37,9 @@ const statusColors: Record<string, string> = {
   review: 'bg-[rgba(251,191,36,0.10)] text-[#fbbf24]',
   approved: 'bg-[rgba(34,197,94,0.10)] text-[#22c55e]',
   rejected: 'bg-[rgba(239,68,68,0.10)] text-[#ef4444]',
-  published: 'bg-[rgba(167,139,250,0.10)] text-[#a78bfa]',
+  published: 'bg-[rgba(109,40,217,0.10)] dark:bg-[rgba(167,139,250,0.10)] text-[#6d28d9] dark:text-[#a78bfa]',
   backlog: 'bg-muted text-muted-foreground',
-  scheduled: 'bg-[rgba(34,211,238,0.10)] text-[#22d3ee]',
+  scheduled: 'bg-[rgba(8,145,178,0.10)] dark:bg-[rgba(34,211,238,0.10)] text-[#0891b2] dark:text-[#22d3ee]',
 }
 
 const statusLabels: Record<string, string> = {

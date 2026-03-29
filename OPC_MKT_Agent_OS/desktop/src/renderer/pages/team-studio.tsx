@@ -165,7 +165,67 @@ const TOOL_LABELS: Record<string, string> = {
   generate_image: "🎨 AI 生成图片",
 };
 
-// parseXhsStructuredContent removed — parsing now handled by backend Haiku parser (content-parser.ts)
+/** Structured content parsed from agent's Step 6 preview */
+interface ParsedContent {
+  title: string;
+  body: string;
+  tags: string[];
+}
+
+/** Parse XHS structured content from agent output (Step 6 format) */
+function parseXhsStructuredContent(text: string): ParsedContent | null {
+  if (!text.includes('待发布内容预览')) return null;
+
+  let title = '';
+  let body = '';
+  const tags: string[] = [];
+
+  const lines = text.split('\n');
+
+  // Extract title: "标题：<content>（<charcount>/20）" or "标题：<content>"
+  const titleLine = lines.find(l => /^标题[：:]/.test(l.trim()));
+  if (titleLine) {
+    title = titleLine.trim()
+      .replace(/^标题[：:]\s*/, '')
+      .replace(/[（(]\d+\/\d+[）)].*$/, '')
+      .trim();
+  }
+
+  // Extract body: everything between "正文：" and the char count line "（<n>/1000）" or next section marker
+  const bodyStartIdx = lines.findIndex(l => /^正文[：:]/.test(l.trim()));
+  if (bodyStartIdx !== -1) {
+    const bodyLines: string[] = [];
+    // Start from the line after "正文：" (or same line if content follows the colon)
+    const firstLine = lines[bodyStartIdx].trim().replace(/^正文[：:]\s*/, '');
+    if (firstLine) bodyLines.push(firstLine);
+
+    for (let i = bodyStartIdx + 1; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      // Stop at char count marker or next section
+      if (/^[（(]\d+\/\d+[）)]/.test(trimmed)) break;
+      if (/^(标签|配图|研究依据|自检结果)[：:]/.test(trimmed)) break;
+      if (/^【/.test(trimmed) && trimmed !== '【待发布内容预览】') break;
+      bodyLines.push(line);
+    }
+    body = bodyLines.join('\n').trim();
+  }
+
+  // Extract tags: "标签：#tag1 #tag2 #tag3" — supports both #tag# and #tag formats
+  const tagLine = lines.find(l => /^标签[：:]/.test(l.trim()));
+  if (tagLine) {
+    const tagMatches = tagLine.match(/#[\u4e00-\u9fa5a-zA-Z0-9_]+#?/g);
+    if (tagMatches) {
+      for (const t of tagMatches) {
+        const tag = t.replace(/#/g, '');
+        if (tag && !tags.includes(tag)) tags.push(tag);
+      }
+    }
+  }
+
+  if (!title && !body) return null;
+  return { title, body, tags };
+}
 
 /** Check if user message is a confirmation to publish */
 const CONFIRM_KEYWORDS = ['确认发布', '确认', '没问题', '可以发布', '可以', '好的', '发布吧', '通过', 'ok', 'OK', 'yes', 'Yes'];
@@ -234,7 +294,7 @@ interface PersistedState {
   activeTab: TabId;
   capturedImageUrls: string[];
   submittedToReview: boolean;
-  pendingContent: { title: string } | null;
+  pendingContent: ParsedContent | null;
 }
 
 function saveToSession(state: Partial<PersistedState>): void {
@@ -540,8 +600,7 @@ function AgentInfoBar({
         </div>
         <button
           onClick={onToggleSettings}
-          className="flex items-center justify-center h-8 w-8 rounded-lg transition-colors hover:bg-white/5"
-          style={{ color: settingsOpen ? "#a78bfa" : "var(--muted-foreground)" }}
+          className={`flex items-center justify-center h-8 w-8 rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${settingsOpen ? "text-[#6d28d9] dark:text-[#a78bfa]" : "text-muted-foreground"}`}
           title="Agent 设置"
         >
           <Settings className="h-4 w-4" />
@@ -552,12 +611,7 @@ function AgentInfoBar({
         {agent.capabilities.map((cap) => (
           <span
             key={cap}
-            className="text-[10px] px-2 py-0.5 rounded-full"
-            style={{
-              background: "rgba(167,139,250,0.08)",
-              color: "#a78bfa",
-              border: "1px solid rgba(167,139,250,0.15)",
-            }}
+            className="text-[10px] px-2 py-0.5 rounded-full bg-[#6d28d9]/10 dark:bg-[#a78bfa]/10 text-[#6d28d9] dark:text-[#a78bfa] border border-[#6d28d9]/15 dark:border-[#a78bfa]/15"
           >
             {cap}
           </span>
@@ -599,8 +653,7 @@ function AgentSettingsPanel({
           </label>
           <button
             onClick={onClose}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-white/5 transition-colors"
-            style={{ color: "#a78bfa" }}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-[#6d28d9] dark:text-[#a78bfa]"
           >
             <ChevronUp className="h-3 w-3" />
             收起
@@ -630,18 +683,13 @@ function AgentSettingsPanel({
           {agent.capabilities.map((cap) => (
             <span
               key={cap}
-              className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1"
-              style={{
-                background: "rgba(167,139,250,0.1)",
-                color: "#a78bfa",
-                border: "1px solid rgba(167,139,250,0.2)",
-              }}
+              className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1 bg-[#6d28d9]/10 dark:bg-[#a78bfa]/10 text-[#6d28d9] dark:text-[#a78bfa] border border-[#6d28d9]/20 dark:border-[#a78bfa]/20"
             >
               {cap}
             </span>
           ))}
           <button
-            className="text-xs px-2.5 py-1 rounded-full transition-colors hover:bg-white/5"
+            className="text-xs px-2.5 py-1 rounded-full transition-colors hover:bg-black/5 dark:hover:bg-white/5"
             style={{
               border: "1px dashed var(--border)",
               color: "var(--muted-foreground)",
@@ -660,12 +708,7 @@ function AgentSettingsPanel({
           恢复默认
         </button>
         <button
-          className="text-xs px-3 py-1.5 rounded-lg transition-colors"
-          style={{
-            background: "rgba(167,139,250,0.15)",
-            color: "#a78bfa",
-            border: "1px solid rgba(167,139,250,0.3)",
-          }}
+          className="text-xs px-3 py-1.5 rounded-lg transition-colors bg-[#6d28d9]/15 dark:bg-[#a78bfa]/15 text-[#6d28d9] dark:text-[#a78bfa] border border-[#6d28d9]/30 dark:border-[#a78bfa]/30"
         >
           保存
         </button>
@@ -835,14 +878,9 @@ function ChannelList({
               className={cn(
                 "flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200",
                 activeTab === id
-                  ? "text-foreground"
-                  : "text-[var(--muted-foreground)] hover:text-foreground/70 hover:bg-white/[0.03]"
+                  ? "text-[#6d28d9] dark:text-[#a78bfa] bg-[#6d28d9]/10 dark:bg-[#a78bfa]/10"
+                  : "text-[var(--muted-foreground)] hover:text-foreground/70 hover:bg-black/[0.03] dark:hover:bg-white/[0.03]"
               )}
-              style={
-                activeTab === id
-                  ? { background: "rgba(167,139,250,0.08)", color: "#a78bfa" }
-                  : {}
-              }
             >
               <Icon className="h-3 w-3" />
               {label}
@@ -1093,9 +1131,9 @@ function StatusIcon({ status }: { status: TaskStatus }) {
         />
       );
     case "running":
-      return <Loader2 className="h-4 w-4 animate-spin text-[#a78bfa]" />;
+      return <Loader2 className="h-4 w-4 animate-spin text-[#6d28d9] dark:text-[#a78bfa]" />;
     case "done":
-      return <CheckCircle className="h-4 w-4 text-[#22d3ee]" />;
+      return <CheckCircle className="h-4 w-4 text-[#0891b2] dark:text-[#22d3ee]" />;
     case "error":
       return <AlertCircle className="h-4 w-4 text-red-400" />;
   }
@@ -1133,13 +1171,7 @@ export function TeamStudioPage(): React.JSX.Element {
   const [hasSession, setHasSession] = useState(false);
   const [capturedImageUrls, setCapturedImageUrls] = useState<string[]>(restored?.capturedImageUrls || []);
   const [submittedToReview, setSubmittedToReview] = useState(restored?.submittedToReview || false);
-  const [pendingContent, setPendingContent] = useState<{ title: string } | null>(restored?.pendingContent || null);
-  const [contentReadyForPush, setContentReadyForPush] = useState<string | null>(null);
-  const [isQuickParsing, setIsQuickParsing] = useState(false);
-  const [quickParseResult, setQuickParseResult] = useState<{
-    title: string; body: string; tags: string[]; imageUrls: string[];
-    platforms?: Record<string, unknown>;
-  } | null>(null);
+  const [pendingContent, setPendingContent] = useState<ParsedContent | null>(restored?.pendingContent || null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Orchestrator (CEO Multi-Agent) state
@@ -1348,9 +1380,39 @@ export function TeamStudioPage(): React.JSX.Element {
 
       const unsubEnd = api.agent.onStreamEnd(() => {
         cleanup();
-        // Mark content ready → useEffect auto-triggers quickParse
-        if (resultContent) {
-          setContentReadyForPush(resultContent);
+        // Auto-detect structured content preview from remote agent output
+        const parsed = parseXhsStructuredContent(resultContent);
+        if (parsed) {
+          setPendingContent(parsed);
+          // 自动提交到审批中心（不再等用户确认）
+          (async () => {
+            try {
+              const platform = targetAgentId === 'xhs-agent' ? 'xiaohongshu' : 'general';
+              const res = await api.agent.submitToReview({
+                agentId: targetAgentId,
+                prompt: exec.prompt,
+                result: parsed.body,
+                title: parsed.title,
+                platform,
+                tags: parsed.tags,
+                mediaUrls: capturedImageUrls,
+              });
+              if (res.success) {
+                setSubmittedToReview(true);
+                setPendingContent(null);
+                setExec(prev => ({
+                  ...prev,
+                  logs: [...prev.logs, {
+                    id: createId(),
+                    timestamp: Date.now(),
+                    agentId: targetAgentId,
+                    type: 'result' as const,
+                    message: `✅ 内容已自动提交到审批中心：「${parsed.title}」`,
+                  }],
+                }));
+              }
+            } catch { /* silent */ }
+          })();
         }
         setExec((prev) => {
           const logEntries = [...prev.logs, {
@@ -1360,6 +1422,15 @@ export function TeamStudioPage(): React.JSX.Element {
             type: 'result' as const,
             message: `执行完成 (${toolCount} 次工具调用)`,
           }];
+          if (parsed) {
+            logEntries.push({
+              id: createId(),
+              timestamp: Date.now(),
+              agentId: targetAgentId,
+              type: 'info' as const,
+              message: `正在自动提交到审批中心：「${parsed.title}」...`,
+            });
+          }
           return {
             ...prev,
             isRunning: false,
@@ -1460,30 +1531,12 @@ export function TeamStudioPage(): React.JSX.Element {
     });
 
     const unsubResult = api.orchestrator.onResult((data) => {
-      // Extract final content using markers (same logic as JSX render)
-      const raw = data.result;
-      let finalContent = raw;
-      const markers = ['### 最终稿', '**正文：**', '**正文:**', '## 最终交付', '### 最终内容'];
-      for (const marker of markers) {
-        const idx = raw.indexOf(marker);
-        if (idx !== -1) {
-          finalContent = raw.slice(idx);
-          break;
-        }
-      }
-      finalContent = finalContent.replace(/^\d+→/gm, '').trim();
-
       setOrch((prev) => ({
         ...prev,
         isRunning: false,
         ceoStatus: "done",
         finalResult: data.result,
       }));
-
-      // Auto-trigger quickParse by marking content ready
-      if (finalContent) {
-        setContentReadyForPush(finalContent);
-      }
     });
 
     const unsubError = api.orchestrator.onError((data) => {
@@ -1614,7 +1667,37 @@ export function TeamStudioPage(): React.JSX.Element {
     const agent = AGENT_MAP.get(targetAgentId);
     const agentLabel = agent?.labelCn || targetAgentId;
 
-    // Note: auto-submit removed — quickParse auto-triggers via useEffect
+    // Auto-submit to approval center when user confirms and structured content is pending
+    if (pendingContent && !submittedToReview && isConfirmationMessage(prompt)) {
+      const ipcApi = getApi();
+      if (ipcApi) {
+        try {
+          const res = await ipcApi.agent.submitToReview({
+            agentId: targetAgentId,
+            prompt: exec.prompt,
+            result: pendingContent.body,
+            title: pendingContent.title,
+            platform: targetAgentId === 'xhs-agent' ? 'xiaohongshu' : 'general',
+            tags: pendingContent.tags,
+            mediaUrls: capturedImageUrls,
+          });
+          if (res.success) {
+            setSubmittedToReview(true);
+            setPendingContent(null);
+            setExec(prev => ({
+              ...prev,
+              logs: [...prev.logs, {
+                id: createId(),
+                timestamp: Date.now(),
+                agentId: targetAgentId,
+                type: 'result' as const,
+                message: `✅ 内容已自动提交到审批中心：「${pendingContent.title}」`,
+              }],
+            }));
+          }
+        } catch { /* continue with normal execution */ }
+      }
+    }
 
     // Mark as local execution and broadcast to popover
     execOriginRef.current = 'local';
@@ -1782,7 +1865,7 @@ export function TeamStudioPage(): React.JSX.Element {
           window.api?.chatSync?.send({ agentId: targetAgentId, role: 'assistant', content: resultContent, mode: 'exec' });
         }
         // Extract image paths from agent text output → bind to task
-        const imgPathRegex = /(?:文件(?:路径|保存在)|路径|saved?\s+(?:to|at))[:：]?\s*[`"]?([^\s`"]+\.(?:png|jpe?g|webp|gif|svg))[`"]?/gi;
+        const imgPathRegex = /(?:(?:文件|图片|封面|配图)?(?:路径|保存在|保存到|生成在)|saved?\s+(?:to|at)|output[:/])[:：]?\s*[`"]?([^\s`"]+\.(?:png|jpe?g|webp|gif|svg))[`"]?/gi;
         let imgMatch: RegExpExecArray | null;
         const foundPaths: string[] = [];
         while ((imgMatch = imgPathRegex.exec(resultContent)) !== null) {
@@ -1802,26 +1885,42 @@ export function TeamStudioPage(): React.JSX.Element {
             ),
           }));
         }
-        // Mark content ready → useEffect auto-triggers quickParse
-        if (resultContent) {
-          setContentReadyForPush(resultContent);
+        // Auto-detect structured content preview from agent output
+        const parsed = parseXhsStructuredContent(resultContent);
+        if (parsed) {
+          setPendingContent(parsed);
+          // 自动提交到审批中心（不再等用户确认）
+          (async () => {
+            try {
+              const platform = targetAgentId === 'xhs-agent' ? 'xiaohongshu' : 'general';
+              const res = await api.agent.submitToReview({
+                agentId: targetAgentId,
+                prompt: exec.prompt,
+                result: parsed.body,
+                title: parsed.title,
+                platform,
+                tags: parsed.tags,
+                mediaUrls: capturedImageUrls,
+              });
+              if (res.success) {
+                setSubmittedToReview(true);
+                setPendingContent(null);
+                setExec(prev => ({
+                  ...prev,
+                  logs: [...prev.logs, {
+                    id: createId(),
+                    timestamp: Date.now(),
+                    agentId: targetAgentId,
+                    type: 'result' as const,
+                    message: `✅ 内容已自动提交到审批中心：「${parsed.title}」`,
+                  }],
+                }));
+              }
+            } catch { /* silent */ }
+          })();
         }
-        setExec((prev) => ({
-          ...prev,
-          isRunning: false,
-          result: resultContent,
-          tasks: prev.tasks.map((t) =>
-            t.agentId === targetAgentId
-              ? {
-                  ...t,
-                  status: "done" as TaskStatus,
-                  progress: 100,
-                  currentTool: undefined,
-                  finishedAt: Date.now(),
-                }
-              : t
-          ),
-          logs: [
+        setExec((prev) => {
+          const logEntries = [
             ...prev.logs,
             {
               id: createId(),
@@ -1830,8 +1929,34 @@ export function TeamStudioPage(): React.JSX.Element {
               type: "result" as const,
               message: `执行完成 (${toolCount} 次工具调用)`,
             },
-          ],
-        }));
+          ];
+          if (parsed) {
+            logEntries.push({
+              id: createId(),
+              timestamp: Date.now(),
+              agentId: targetAgentId,
+              type: "info" as const,
+              message: `正在自动提交到审批中心：「${parsed.title}」...`,
+            });
+          }
+          return {
+            ...prev,
+            isRunning: false,
+            result: resultContent,
+            tasks: prev.tasks.map((t) =>
+              t.agentId === targetAgentId
+                ? {
+                    ...t,
+                    status: "done" as TaskStatus,
+                    progress: 100,
+                    currentTool: undefined,
+                    finishedAt: Date.now(),
+                  }
+                : t
+            ),
+            logs: logEntries,
+          };
+        });
       });
 
       const unsubError = api.agent.onStreamError(
@@ -2063,84 +2188,9 @@ export function TeamStudioPage(): React.JSX.Element {
     setOrch((prev) => ({ ...prev, isRunning: false, ceoStatus: "idle" }));
   };
 
-  // ── Quick Parse Flow (auto-triggered when agent completes) ──
-
-  const handlePrepareForPush = useCallback(async () => {
-    if (!contentReadyForPush) return;
-    const api = getApi();
-    if (!api) return;
-
-    setIsQuickParsing(true);
-    try {
-      const res = await api.agent.quickParse({ rawText: contentReadyForPush });
-      if (res.success && res.data) {
-        setQuickParseResult(res.data);
-      } else {
-        // Fallback: use raw content directly
-        setQuickParseResult({
-          title: exec.prompt?.slice(0, 40) || 'Untitled',
-          body: contentReadyForPush.slice(0, 2000),
-          tags: [],
-          imageUrls: [],
-        });
-      }
-    } catch {
-      setQuickParseResult({
-        title: exec.prompt?.slice(0, 40) || 'Untitled',
-        body: contentReadyForPush.slice(0, 2000),
-        tags: [],
-        imageUrls: [],
-      });
-    } finally {
-      setIsQuickParsing(false);
-    }
-  }, [contentReadyForPush, exec.prompt]);
-
-  const handleConfirmSubmit = useCallback(async () => {
-    if (!contentReadyForPush || !quickParseResult) return;
-    const api = getApi();
-    if (!api) return;
-
-    setPendingContent({ title: quickParseResult.title });
-    try {
-      const platform = execAgentId === 'xhs-agent' ? 'xiaohongshu' : 'general';
-      const res = await api.agent.submitToReview({
-        agentId: execAgentId,
-        prompt: exec.prompt,
-        result: contentReadyForPush,
-        platform,
-        mediaUrls: capturedImageUrls,
-        preParsed: quickParseResult,
-      });
-      if (res.success) {
-        setSubmittedToReview(true);
-        setPendingContent(null);
-        setContentReadyForPush(null);
-        setQuickParseResult(null);
-        setExec(prev => ({
-          ...prev,
-          logs: [...prev.logs, {
-            id: createId(),
-            timestamp: Date.now(),
-            agentId: execAgentId,
-            type: 'result' as const,
-            message: '✅ 内容已提交到审批中心',
-          }],
-        }));
-      }
-    } catch { /* silent */ }
-  }, [contentReadyForPush, quickParseResult, execAgentId, exec.prompt, capturedImageUrls]);
-
-  // Auto-trigger quickParse when agent completes (no manual button click needed)
-  useEffect(() => {
-    if (contentReadyForPush && !isQuickParsing && !quickParseResult && !submittedToReview) {
-      handlePrepareForPush();
-    }
-  }, [contentReadyForPush]); // eslint-disable-line react-hooks/exhaustive-deps
-
   return (
     <div
-      className="relative flex h-full -m-6"
+      className="flex h-full -m-6"
       style={{ background: "var(--background)" }}
     >
       {/* Channel List */}
@@ -2233,7 +2283,7 @@ export function TeamStudioPage(): React.JSX.Element {
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0",
                 teamLaunched
                   ? "text-red-400 hover:bg-red-500/10"
-                  : "text-[#22d3ee] hover:bg-[#22d3ee]/10"
+                  : "text-[#0891b2] dark:text-[#22d3ee] hover:bg-[#0891b2]/10 dark:hover:bg-[#22d3ee]/10"
               )}
               style={{
                 border: teamLaunched
@@ -2347,17 +2397,12 @@ export function TeamStudioPage(): React.JSX.Element {
                                 task.currentTool}
                             </span>
                           )}
-                          <span className="text-xs tabular-nums text-[#a78bfa]">
+                          <span className="text-xs tabular-nums text-[#6d28d9] dark:text-[#a78bfa]">
                             {task.progress}%
                           </span>
                           {task.toolCallCount > 0 && (
                             <span
-                              className="text-[10px] px-1.5 py-0.5 rounded"
-                              style={{
-                                background:
-                                  "rgba(167,139,250,0.1)",
-                                color: "#a78bfa",
-                              }}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-[#6d28d9]/10 dark:bg-[#a78bfa]/10 text-[#6d28d9] dark:text-[#a78bfa]"
                             >
                               {task.toolCallCount} tools
                             </span>
@@ -2405,80 +2450,16 @@ export function TeamStudioPage(): React.JSX.Element {
                       </div>
                     )}
 
-                    {/* Stage: AI parsing in progress */}
-                    {task.status === "done" && !quickParseResult && (isQuickParsing || contentReadyForPush) && !submittedToReview && (
-                      <div className="mt-3 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(167,139,250,0.3)' }}>
-                        <div className="px-4 py-4 flex items-center gap-3" style={{ background: "rgba(167,139,250,0.05)" }}>
-                          <Loader2 className="h-5 w-5 animate-spin text-[#a78bfa]" />
-                          <div>
-                            <div className="text-sm font-medium" style={{ color: '#a78bfa' }}>AI 正在处理内容</div>
-                            <div className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>识别内容格式、提取标题和配图...</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Final result card — only shown after quickParse completes */}
-                    {task.status === "done" && quickParseResult && !submittedToReview && (
-                      <div className="mt-3 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(34,211,238,0.3)' }}>
-                        <div className="px-4 py-3 flex items-center gap-2" style={{ background: "rgba(34,211,238,0.08)", borderBottom: "1px solid rgba(34,211,238,0.15)" }}>
-                          <CheckCircle className="h-4 w-4 text-[#22d3ee]" />
-                          <h4 className="text-sm font-semibold" style={{ color: "#22d3ee" }}>内容识别完成</h4>
-                        </div>
-                        <div className="p-4 space-y-3">
-                          <div className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
-                            {quickParseResult.title || 'Untitled'}
-                          </div>
-                          <div className="text-xs line-clamp-4" style={{ color: 'var(--muted-foreground)' }}>
-                            {quickParseResult.body.slice(0, 300)}{quickParseResult.body.length > 300 ? '...' : ''}
-                          </div>
-                          {quickParseResult.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {quickParseResult.tags.map((tag) => (
-                                <span key={tag} className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px]" style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>
-                                  #{tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {quickParseResult.imageUrls.length > 0 && (
-                            <div className="flex gap-2 pt-1">
-                              {quickParseResult.imageUrls.slice(0, 4).map((url, i) => (
-                                <img key={i} src={url.startsWith('http') ? url : `file://${url}`} alt={`配图 ${i + 1}`} className="h-16 w-16 rounded-lg object-cover" style={{ border: '1px solid var(--border)' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                              ))}
-                              {quickParseResult.imageUrls.length > 4 && (
-                                <div className="flex h-16 w-16 items-center justify-center rounded-lg text-xs" style={{ background: 'var(--muted)', border: '1px solid var(--border)', color: 'var(--muted-foreground)' }}>
-                                  +{quickParseResult.imageUrls.length - 4}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="px-4 py-3 flex justify-end" style={{ borderTop: '1px solid var(--border)', background: 'var(--muted)' }}>
-                          <button
-                            onClick={handleConfirmSubmit}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
-                            style={{ background: 'linear-gradient(135deg, #22d3ee, #06b6d4)' }}
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                            确认提交到审批
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Pending submit */}
                     {task.status === "done" && pendingContent && !submittedToReview && (
                       <div className="pt-3 mt-3 space-y-2" style={{ borderTop: '1px solid var(--border)' }}>
-                        <div className="flex items-center gap-2 text-xs" style={{ color: '#22d3ee' }}>
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          正在提交到审批中心：「{pendingContent.title}」...
+                        <div className="text-xs text-[#0891b2] dark:text-[#22d3ee]">
+                          正在自动提交到审批中心：「{pendingContent.title}」...
                         </div>
                       </div>
                     )}
 
                     {task.status === "done" && submittedToReview && (
-                      <div className="pt-3 mt-3 text-xs" style={{ borderTop: '1px solid var(--border)', color: '#22d3ee' }}>
+                      <div className="pt-3 mt-3 text-xs text-[#0891b2] dark:text-[#22d3ee]" style={{ borderTop: '1px solid var(--border)' }}>
                         ✅ 已发送到审批中心
                       </div>
                     )}
@@ -2637,7 +2618,7 @@ export function TeamStudioPage(): React.JSX.Element {
                         <span className="text-sm font-semibold" style={{ color: AGENT_COLORS.ceo.color }}>
                           CEO 营销总监
                         </span>
-                        <Loader2 className="h-4 w-4 animate-spin text-[#a78bfa]" />
+                        <Loader2 className="h-4 w-4 animate-spin text-[#6d28d9] dark:text-[#a78bfa]" />
                       </div>
                       <p className="text-xs text-[var(--muted-foreground)]">
                         {orch.ceoStatus === "planning" && "正在分析需求并制定执行计划..."}
@@ -2653,7 +2634,7 @@ export function TeamStudioPage(): React.JSX.Element {
               {/* Execution Plan */}
               {orch.plan && (
                 <div className="rounded-xl p-4" style={{ background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.2)" }}>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "#a78bfa" }}>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider mb-2 text-[#6d28d9] dark:text-[#a78bfa]">
                     执行计划
                   </h4>
                   <pre className="text-xs whitespace-pre-wrap" style={{ color: "var(--foreground)" }}>
@@ -2678,8 +2659,8 @@ export function TeamStudioPage(): React.JSX.Element {
                           <span className="text-sm font-semibold" style={{ color: ac.color }}>
                             {ac.name}
                           </span>
-                          {sa.status === "running" && <Loader2 className="h-4 w-4 animate-spin text-[#a78bfa]" />}
-                          {sa.status === "done" && <CheckCircle className="h-4 w-4 text-[#22d3ee]" />}
+                          {sa.status === "running" && <Loader2 className="h-4 w-4 animate-spin text-[#6d28d9] dark:text-[#a78bfa]" />}
+                          {sa.status === "done" && <CheckCircle className="h-4 w-4 text-[#0891b2] dark:text-[#22d3ee]" />}
                           {sa.status === "error" && <AlertCircle className="h-4 w-4 text-red-400" />}
                         </div>
                         <p className="text-xs text-[var(--muted-foreground)] truncate">{sa.task}</p>
@@ -2723,122 +2704,91 @@ export function TeamStudioPage(): React.JSX.Element {
                 </div>
               )}
 
-              {/* Stage: AI parsing in progress — shown after agent done but before final card */}
-              {orch.finalResult && !quickParseResult && (isQuickParsing || contentReadyForPush) && (
-                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(167,139,250,0.3)" }}>
-                  <div className="px-4 py-4 flex items-center gap-3" style={{ background: "rgba(167,139,250,0.05)" }}>
-                    <Loader2 className="h-5 w-5 animate-spin text-[#a78bfa]" />
-                    <div>
-                      <div className="text-sm font-medium" style={{ color: '#a78bfa' }}>AI 正在处理最终交付内容</div>
-                      <div className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>识别内容格式、提取标题和配图...</div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Final Result — extract final content and render cleanly */}
+              {orch.finalResult && (() => {
+                // Try to extract the final note content (after "最终稿" or "正文" marker)
+                const raw = orch.finalResult;
+                let finalContent = raw;
+                // Look for the actual content section
+                const markers = ['### 最终稿', '**正文：**', '**正文:**', '## 最终交付', '### 最终内容'];
+                for (const marker of markers) {
+                  const idx = raw.indexOf(marker);
+                  if (idx !== -1) {
+                    finalContent = raw.slice(idx);
+                    break;
+                  }
+                }
+                // Clean up line-number prefixes if present
+                finalContent = finalContent.replace(/^\d+→/gm, '').trim();
 
-              {/* Final Result — only shown after quickParse completes */}
-              {orch.finalResult && quickParseResult && (
-                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(34,211,238,0.3)" }}>
-                  {/* Header */}
-                  <div
-                    className="px-4 py-3 flex items-center justify-between"
-                    style={{ background: "rgba(34,211,238,0.08)", borderBottom: "1px solid rgba(34,211,238,0.15)" }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-[#22d3ee]" />
-                      <h4 className="text-sm font-semibold" style={{ color: "#22d3ee" }}>
-                        最终交付
-                      </h4>
-                    </div>
-                  </div>
-                  {/* Structured content from quickParse */}
-                  <div className="p-4 space-y-3">
-                    <div className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
-                      {quickParseResult.title || 'Untitled'}
-                    </div>
+                return (
+                  <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(34,211,238,0.3)" }}>
+                    {/* Header */}
                     <div
-                      className="text-sm leading-relaxed prose prose-sm prose-invert max-w-none max-h-[300px] overflow-y-auto [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                      className="px-4 py-3 flex items-center justify-between"
+                      style={{ background: "rgba(34,211,238,0.08)", borderBottom: "1px solid rgba(34,211,238,0.15)" }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-[#0891b2] dark:text-[#22d3ee]" />
+                        <h4 className="text-sm font-semibold text-[#0891b2] dark:text-[#22d3ee]">
+                          最终交付
+                        </h4>
+                      </div>
+                    </div>
+                    {/* Content */}
+                    <div
+                      className="p-4 text-sm leading-relaxed prose prose-sm prose-invert max-w-none max-h-[400px] overflow-y-auto [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                       style={{ color: "var(--foreground)" }}
                     >
-                      <Markdown>{quickParseResult.body}</Markdown>
+                      <Markdown>{finalContent}</Markdown>
                     </div>
-                    {quickParseResult.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {quickParseResult.tags.map((tag) => (
-                          <span key={tag} className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px]" style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {quickParseResult.imageUrls.length > 0 && (
-                      <div className="flex gap-2 pt-1">
-                        {quickParseResult.imageUrls.slice(0, 4).map((url, i) => (
-                          <img key={i} src={url.startsWith('http') ? url : `file://${url}`} alt={`配图 ${i + 1}`} className="h-16 w-16 rounded-lg object-cover" style={{ border: '1px solid var(--border)' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        ))}
-                        {quickParseResult.imageUrls.length > 4 && (
-                          <div className="flex h-16 w-16 items-center justify-center rounded-lg text-xs" style={{ background: 'var(--muted)', border: '1px solid var(--border)', color: 'var(--muted-foreground)' }}>
-                            +{quickParseResult.imageUrls.length - 4}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {/* Action buttons */}
-                  <div
-                    className="px-4 py-3 flex items-center justify-end gap-3"
-                    style={{ borderTop: "1px solid var(--border)", background: "var(--muted)" }}
-                  >
-                    <button
-                      onClick={() => {
-                        setOrchInput("请根据以上反馈修改优化内容");
-                        setQuickParseResult(null);
-                        setContentReadyForPush(null);
-                        setOrch((prev) => ({ ...prev, ceoStatus: "idle", finalResult: undefined }));
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-white/5"
-                      style={{ color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+                    {/* Action buttons */}
+                    <div
+                      className="px-4 py-3 flex items-center justify-end gap-3"
+                      style={{ borderTop: "1px solid var(--border)", background: "var(--muted)" }}
                     >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      重新修改
-                    </button>
-                    {!submittedToReview && (
+                      <button
+                        onClick={() => {
+                          setOrchInput("请根据以上反馈修改优化内容");
+                          setOrch((prev) => ({ ...prev, ceoStatus: "idle", finalResult: undefined }));
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-white/5"
+                        style={{ color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        重新修改
+                      </button>
                       <button
                         onClick={async () => {
                           const api = getApi();
-                          if (!api || !contentReadyForPush || !quickParseResult) return;
-                          setPendingContent({ title: quickParseResult.title });
-                          try {
-                            const res = await api.agent.submitToReview({
-                              agentId: "ceo",
-                              prompt: orch.prompt || "CEO 编排任务",
-                              result: contentReadyForPush,
-                              platform: "xiaohongshu",
-                              preParsed: quickParseResult,
-                            });
-                            if (res.success) {
-                              setSubmittedToReview(true);
-                              setPendingContent(null);
-                              setContentReadyForPush(null);
-                              setQuickParseResult(null);
-                              navigate("/approval");
-                            }
-                          } catch { /* silent */ }
+                          if (!api) return;
+                          // Save final delivery to Approval Center
+                          const content = finalContent;
+                          const taskPrompt = orch.prompt || "CEO 编排任务";
+                          const title = content.match(/\*\*标题[：:]\s*\*\*\s*(.+)/)?.[1]
+                            || content.match(/^#+\s*(.+)/m)?.[1]
+                            || taskPrompt.slice(0, 80);
+                          const res = await api.agent.saveResult({
+                            mode: "orchestrator",
+                            agentId: "ceo",
+                            prompt: taskPrompt,
+                            result: content,
+                            title: title.slice(0, 100),
+                            platform: "xiaohongshu",
+                          });
+                          if (res.success) {
+                            navigate("/approval");
+                          }
                         }}
-                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                        style={{
-                          background: "rgba(34,211,238,0.15)",
-                          color: "#22d3ee",
-                          border: "1px solid rgba(34,211,238,0.3)",
-                        }}
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors bg-[#0891b2]/15 dark:bg-[#22d3ee]/15 text-[#0891b2] dark:text-[#22d3ee] border border-[#0891b2]/30 dark:border-[#22d3ee]/30"
                       >
                         <Send className="h-3.5 w-3.5" />
-                        确认提交到审批
+                        准备推送
                       </button>
-                    )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Error */}
               {orch.error && (

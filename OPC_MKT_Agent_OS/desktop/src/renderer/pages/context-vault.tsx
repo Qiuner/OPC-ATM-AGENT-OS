@@ -99,27 +99,27 @@ const typeConfig: Record<
 > = {
   product: {
     icon: PackageIcon,
-    bgClass: "bg-[#a78bfa]/20",
-    textClass: "text-[#a78bfa]",
-    badgeClass: "bg-[#a78bfa]/20 text-[#a78bfa] border-transparent",
+    bgClass: "bg-[#6d28d9]/15 dark:bg-[#a78bfa]/20",
+    textClass: "text-[#6d28d9] dark:text-[#a78bfa]",
+    badgeClass: "bg-[#6d28d9]/15 dark:bg-[#a78bfa]/20 text-[#6d28d9] dark:text-[#a78bfa] border-transparent",
   },
   brand: {
     icon: PaletteIcon,
-    bgClass: "bg-[#a78bfa]/20",
-    textClass: "text-[#a78bfa]",
-    badgeClass: "bg-[#a78bfa]/20 text-[#a78bfa] border-transparent",
+    bgClass: "bg-[#6d28d9]/15 dark:bg-[#a78bfa]/20",
+    textClass: "text-[#6d28d9] dark:text-[#a78bfa]",
+    badgeClass: "bg-[#6d28d9]/15 dark:bg-[#a78bfa]/20 text-[#6d28d9] dark:text-[#a78bfa] border-transparent",
   },
   audience: {
     icon: UsersIcon,
-    bgClass: "bg-[#22d3ee]/20",
-    textClass: "text-[#22d3ee]",
-    badgeClass: "bg-[#22d3ee]/20 text-[#22d3ee] border-transparent",
+    bgClass: "bg-[#0891b2]/15 dark:bg-[#22d3ee]/20",
+    textClass: "text-[#0891b2] dark:text-[#22d3ee]",
+    badgeClass: "bg-[#0891b2]/15 dark:bg-[#22d3ee]/20 text-[#0891b2] dark:text-[#22d3ee] border-transparent",
   },
   content: {
     icon: FileTextIcon,
-    bgClass: "bg-orange-500/20",
-    textClass: "text-orange-400",
-    badgeClass: "bg-orange-500/20 text-orange-400 border-transparent",
+    bgClass: "bg-orange-600/15 dark:bg-orange-500/20",
+    textClass: "text-orange-600 dark:text-orange-400",
+    badgeClass: "bg-orange-600/15 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-transparent",
   },
 };
 
@@ -726,11 +726,11 @@ export function ContextVaultPage(): React.JSX.Element {
           className="flex items-center justify-between w-full"
         >
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-lg bg-[#a78bfa]/20">
-              <SettingsIcon className="size-4 text-[#a78bfa]" />
+            <div className="flex items-center justify-center size-9 rounded-lg bg-[#6d28d9]/15 dark:bg-[#a78bfa]/20">
+              <SettingsIcon className="size-4 text-[#6d28d9] dark:text-[#a78bfa]" />
             </div>
             <h2 className="text-lg font-semibold text-foreground">Brand Setup</h2>
-            <Badge className="bg-[#22d3ee]/20 text-[#22d3ee] border-transparent text-xs">
+            <Badge className="bg-[#0891b2]/15 dark:bg-[#22d3ee]/20 text-[#0891b2] dark:text-[#22d3ee] border-transparent text-xs">
               {brandTab === "product-url"
                 ? "Product URL"
                 : brandTab === "skills"
@@ -805,7 +805,7 @@ export function ContextVaultPage(): React.JSX.Element {
                     border: "1px solid rgba(167,139,250,0.15)",
                   }}
                 >
-                  <InfoIcon className="size-4 shrink-0 mt-0.5 text-[#a78bfa]" />
+                  <InfoIcon className="size-4 shrink-0 mt-0.5 text-[#6d28d9] dark:text-[#a78bfa]" />
                   <p
                     className="text-xs"
                     style={{ color: "var(--muted-foreground)" }}
@@ -868,7 +868,7 @@ export function ContextVaultPage(): React.JSX.Element {
                           {product.name}
                         </h3>
                         {product.price && (
-                          <p className="text-base font-bold text-[#a78bfa] mt-1">
+                          <p className="text-base font-bold text-[#6d28d9] dark:text-[#a78bfa] mt-1">
                             {product.price}
                           </p>
                         )}
@@ -1009,7 +1009,7 @@ export function ContextVaultPage(): React.JSX.Element {
                       border: "1px solid rgba(167,139,250,0.15)",
                     }}
                   >
-                    <InfoIcon className="size-4 shrink-0 mt-0.5 text-[#a78bfa]" />
+                    <InfoIcon className="size-4 shrink-0 mt-0.5 text-[#6d28d9] dark:text-[#a78bfa]" />
                     <p
                       className="text-xs"
                       style={{ color: "var(--muted-foreground)" }}
@@ -1205,7 +1205,7 @@ export function ContextVaultPage(): React.JSX.Element {
                                 e.stopPropagation();
                                 toggleExpand(asset.id);
                               }}
-                              className="ml-1 text-[#a78bfa] hover:text-[#c4b5fd] inline-flex items-center"
+                              className="ml-1 text-[#6d28d9] dark:text-[#a78bfa] hover:text-[#5b21b6] dark:hover:text-[#c4b5fd] inline-flex items-center"
                             >
                               {isExpanded ? (
                                 <>
@@ -1239,7 +1239,7 @@ export function ContextVaultPage(): React.JSX.Element {
                       {imgs.length > 0 && (
                         <Badge
                           variant="outline"
-                          className="bg-[#a78bfa]/10 text-[#a78bfa] border-[#a78bfa]/30"
+                          className="bg-[#6d28d9]/10 dark:bg-[#a78bfa]/10 text-[#6d28d9] dark:text-[#a78bfa] border-[#6d28d9]/30 dark:border-[#a78bfa]/30"
                         >
                           {imgs.length} 张素材
                         </Badge>
@@ -1268,7 +1268,7 @@ export function ContextVaultPage(): React.JSX.Element {
                         }
                         className={
                           status === "complete"
-                            ? "bg-[#22d3ee]/20 text-[#22d3ee] border-transparent"
+                            ? "bg-[#0891b2]/15 dark:bg-[#22d3ee]/20 text-[#0891b2] dark:text-[#22d3ee] border-transparent"
                             : "bg-amber-500/10 text-amber-400 border-amber-500/30"
                         }
                       >

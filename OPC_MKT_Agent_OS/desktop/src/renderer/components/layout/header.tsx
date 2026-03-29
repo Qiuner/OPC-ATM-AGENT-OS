@@ -205,7 +205,7 @@ function AgentHoverCard({
         className="mt-3 pt-3"
         style={{ borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.06)' }}
       >
-        <span className="text-xs text-[#a78bfa] hover:text-[#c4b5fd] cursor-pointer">
+        <span className="text-xs text-[#6d28d9] dark:text-[#a78bfa] hover:text-[#5b21b6] dark:hover:text-[#c4b5fd] cursor-pointer">
           {agent.status === 'offline' ? '启动 Agent' : '查看 Agent 详情'} →
         </span>
       </div>
@@ -501,7 +501,7 @@ export function Header(): React.JSX.Element {
             title={soundEnabled ? '关闭音效' : '开启音效'}
           >
             {soundEnabled ? (
-              <Volume2 className="h-[18px] w-[18px] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors" />
+              <Volume2 className="h-[18px] w-[18px] text-[#6d28d9] dark:text-[#a78bfa] hover:text-[#5b21b6] dark:hover:text-[#c4b5fd] transition-colors" />
             ) : (
               <VolumeX className="h-[18px] w-[18px] text-foreground/40 hover:text-foreground/70 transition-colors" />
             )}

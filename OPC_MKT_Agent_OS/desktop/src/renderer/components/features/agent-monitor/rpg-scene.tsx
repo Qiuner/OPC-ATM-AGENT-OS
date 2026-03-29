@@ -219,19 +219,18 @@ export function RPGScene({ agents, selectedAgent, onSelectAgent }: RPGSceneProps
                   )}
                 </div>
 
-                {/* Name tag — only on hover or selected */}
+                {/* Name tag — always visible */}
                 <div
-                  className="mt-0.5 px-1.5 py-px rounded-full text-center whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="mt-0.5 px-1.5 py-px rounded-full text-center whitespace-nowrap transition-opacity"
                   style={{
                     fontSize: 9,
                     fontWeight: 600,
                     color: '#fff',
                     background: `${agent.color}cc`,
                     letterSpacing: '0.02em',
-                    ...(isSelected ? { opacity: 1 } : {}),
                   }}
                 >
-                  {agent.nameEn}
+                  {agent.name}
                 </div>
               </div>
             );
