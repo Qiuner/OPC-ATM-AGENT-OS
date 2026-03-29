@@ -1,0 +1,8 @@
+# Agent team definitions (session-only, do not commit)
+.claude/agents/
+.gstack/
+
+# Dependencies & caches
+node_modules/
+.DS_Store
+.firecrawl/

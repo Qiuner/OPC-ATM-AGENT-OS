@@ -1,7 +1,4 @@
-'use client';
-
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import {
   ArrowRight, Download, Github, ChevronDown,
   Zap, LayoutDashboard, Send, BarChart3,
@@ -246,7 +243,7 @@ function Nav({ scrolled }: { scrolled: boolean }) {
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-white/5' : ''}`}>
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <img src="/landing/logo.png" alt="ATM OS" className="w-8 h-8 rounded-lg" />
+          <img src="/logo.png" alt="ATM OS" className="w-8 h-8 rounded-lg" />
           <span className="font-bold text-lg text-white">ATM OS</span>
         </div>
         <div className="hidden md:flex items-center gap-8 text-sm text-gray-400">
@@ -975,7 +972,7 @@ function FooterSection() {
     <footer className="border-t border-white/5 py-8">
       <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <img src="/landing/logo.png" alt="ATM OS" className="w-6 h-6 rounded-md" />
+          <img src="/logo.png" alt="ATM OS" className="w-6 h-6 rounded-md" />
           <span className="text-sm text-gray-500">ATM OS &middot; Agent-to-Marketing Operating System</span>
         </div>
         <p className="text-xs text-gray-600">Built with Claude Agent SDK &middot; Hackathon 2026</p>
@@ -987,19 +984,16 @@ function FooterSection() {
 /* ============================================================
    MAIN PAGE
    ============================================================ */
-function LandingContent() {
+export default function App() {
   const [scrolled, setScrolled] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const onScroll = () => setScrolled(el.scrollTop > 50);
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    const onScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-[10000] overflow-y-auto scroll-smooth" style={{ background: '#050508', color: '#fff' }}>
+    <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
       <Nav scrolled={scrolled} />
       <HeroSection />
@@ -1021,13 +1015,6 @@ function LandingContent() {
       <TestimonialsSection />
       <FinalCTASection />
       <FooterSection />
-    </div>
+    </>
   );
-}
-
-export default function LandingPage() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
-  return createPortal(<LandingContent />, document.body);
 }

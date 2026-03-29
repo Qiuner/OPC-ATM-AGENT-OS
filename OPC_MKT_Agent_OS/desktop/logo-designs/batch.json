@@ -1,0 +1,40 @@
+{
+  "jobs": 5,
+  "tasks": [
+    {
+      "id": "logo-minimalist",
+      "prompt": "Design a minimalist logo for 'OPC MKT', an AI-powered marketing automation platform. The logo should feature the letters 'O' as a clean geometric circle mark with subtle tech element. Use a refined blue (#3b82f6) as primary color on pure white background. Ultra-clean lines, generous whitespace, no gradients, no shadows. Modern sans-serif typography. The logo should feel premium, sophisticated, and Apple-like in its simplicity. Square format, centered composition.",
+      "image": "logo-minimalist.png",
+      "ar": "1:1",
+      "quality": "2k"
+    },
+    {
+      "id": "logo-tech",
+      "prompt": "Design a futuristic tech-style logo for 'OPC MKT', an AI marketing automation platform. Feature a stylized circuit-board or neural-network pattern forming the letter 'O', with data flow lines emanating outward. Color scheme: electric blue (#3b82f6) and deep purple (#7c3aed) on dark navy background (#0a0a1a). Glowing edges, subtle holographic feel. Modern bold sans-serif font for 'OPC MKT'. The logo should evoke cutting-edge AI technology and data intelligence. Square format.",
+      "image": "logo-tech.png",
+      "ar": "1:1",
+      "quality": "2k"
+    },
+    {
+      "id": "logo-gradient",
+      "prompt": "Design a vibrant gradient logo for 'OPC MKT', an AI marketing automation platform. The icon is a smooth, organic blob or abstract wave shape with a flowing gradient from blue (#3b82f6) through purple (#a78bfa) to soft cyan (#22d3ee). The shape suggests motion, growth, and transformation. Clean white background. Modern rounded sans-serif typography for 'OPC MKT' in dark charcoal. The overall feel should be friendly, modern, and dynamic like Notion or Linear logos. Square format, centered.",
+      "image": "logo-gradient.png",
+      "ar": "1:1",
+      "quality": "2k"
+    },
+    {
+      "id": "logo-geometric",
+      "prompt": "Design a geometric abstract logo for 'OPC MKT', an AI marketing automation platform. Construct the logo mark from precise geometric shapes: hexagons, triangles, or interlocking polygons that form a cohesive symbol suggesting interconnected systems and data flow. Use blue (#3b82f6) and purple (#a78bfa) with clean flat colors, no gradients. White background. Bold geometric sans-serif typography. The style should feel like a tech startup brand mark — structured, mathematical, balanced. Square format.",
+      "image": "logo-geometric.png",
+      "ar": "1:1",
+      "quality": "2k"
+    },
+    {
+      "id": "logo-handwritten",
+      "prompt": "Design an elegant handwritten-style logo for 'OPC MKT', an AI marketing automation platform. Feature a custom calligraphic or brush-script rendering of 'OPC' with 'MKT' in a clean complementary sans-serif below. The handwritten part should feel artisan and human-crafted, contrasting with the AI tech nature of the product. Primary color: deep indigo-purple (#6d28d9) with subtle blue (#3b82f6) accents. Cream/warm white background (#f8f6f1). The style should evoke creativity, warmth, and personal touch. Square format.",
+      "image": "logo-handwritten.png",
+      "ar": "1:1",
+      "quality": "2k"
+    }
+  ]
+}
