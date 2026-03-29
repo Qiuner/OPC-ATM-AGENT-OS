@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATM Agent OS — 你的 AI 营销军团</title>
+
+    <!-- Fonts: Clash Display (headings) + General Sans (body) from Fontshare -->
+    <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@200,300,400,500,600,700&f[]=general-sans@200,300,400,500,600,700&display=swap">
+
+    <style>
+        /* ===========================================
+           CSS CUSTOM PROPERTIES
+           Dark theme inspired by cotify.space
+           =========================================== */
+        :root {
+            --bg-primary: #030305;
+            --bg-secondary: #0a0b12;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.05);
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --border-accent: rgba(79, 125, 247, 0.2);
+            --text-primary: #f0f0f5;
+            --text-secondary: rgba(240, 240, 245, 0.55);
+            --text-muted: rgba(240, 240, 245, 0.28);
+            --accent-blue: #4f7df7;
+            --accent-purple: #a855f7;
+            --accent-cyan: #06b6d4;
+            --accent-green: #22c55e;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --gradient-main: linear-gradient(135deg, #4f7df7, #a855f7);
+            --gradient-text: linear-gradient(135deg, #6b9dfc, #c084fc);
+            --gradient-green: linear-gradient(135deg, #22c55e, #06b6d4);
+
+            --font-display: 'Clash Display', sans-serif;
+            --font-body: 'General Sans', sans-serif;
+
+            --title-size: clamp(3.5rem, 7.5vw, 6.5rem);
+            --h2-size: clamp(2.5rem, 5.5vw, 4rem);
+            --h3-size: clamp(1.6rem, 3vw, 2.2rem);
+            --subtitle-size: clamp(1.4rem, 2.8vw, 1.9rem);
+            --body-size: clamp(1.2rem, 2vw, 1.55rem);
+            --small-size: clamp(1rem, 1.6vw, 1.3rem);
+            --tag-size: clamp(0.9rem, 1.4vw, 1.1rem);
+
+            --slide-padding: clamp(1.5rem, 5vw, 5rem);
+            --content-gap: clamp(0.75rem, 2vw, 2rem);
+
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+            --duration-normal: 0.7s;
+        }
+
+        /* === RESET === */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* ===========================================
+           VIEWPORT-BASE (mandatory)
+           =========================================== */
+        html, body { height: 100%; overflow-x: hidden; }
+        html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+        .slide {
+            width: 100vw; height: 100vh; height: 100dvh;
+            overflow: hidden; scroll-snap-align: start;
+            display: flex; flex-direction: column; position: relative;
+        }
+        .slide-content {
+            flex: 1; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
+            max-height: 100%; overflow: hidden;
+            padding: var(--slide-padding);
+        }
+        @media (max-height: 700px) {
+            :root {
+                --slide-padding: clamp(0.75rem, 3vw, 2rem);
+                --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+                --title-size: clamp(2rem, 5vw, 3rem);
+                --h2-size: clamp(1.6rem, 3.5vw, 2.4rem);
+            }
+        }
+        @media (max-height: 600px) {
+            :root {
+                --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+                --title-size: clamp(1.8rem, 4.5vw, 2.5rem);
+                --body-size: clamp(0.9rem, 1.4vw, 1.1rem);
+            }
+            .nav-dots, .keyboard-hint, .decorative { display: none; }
+        }
+        @media (max-height: 500px) {
+            :root {
+                --slide-padding: clamp(0.4rem, 2vw, 1rem);
+                --title-size: clamp(1.5rem, 4vw, 2rem);
+                --h2-size: clamp(1.3rem, 3vw, 1.8rem);
+                --body-size: clamp(0.85rem, 1.2vw, 1rem);
+            }
+        }
+        @media (max-width: 600px) {
+            :root { --title-size: clamp(2rem, 9vw, 3rem); }
+            .two-col, .three-col, .pain-grid, .arch-row, .demo-screens, .tech-grid, .roadmap { grid-template-columns: 1fr !important; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; }
+            html { scroll-behavior: auto; }
+        }
+
+        /* === GLOBAL === */
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+        }
+        h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; line-height: 1.15; }
+
+        /* === UTILITIES === */
+        .gradient-text {
+            background: var(--gradient-text);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .gradient-green-text {
+            background: var(--gradient-green);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .text-secondary { color: var(--text-secondary); }
+        .text-muted { color: var(--text-muted); }
+        .text-center { text-align: center; }
+
+        /* === ANIMATIONS === */
+        .reveal {
+            opacity: 0; transform: translateY(22px);
+            transition: opacity var(--duration-normal) var(--ease-out-expo),
+                        transform var(--duration-normal) var(--ease-out-expo);
+        }
+        .slide.visible .reveal { opacity: 1; transform: translateY(0); }
+        .reveal:nth-child(1) { transition-delay: 0.05s; }
+        .reveal:nth-child(2) { transition-delay: 0.14s; }
+        .reveal:nth-child(3) { transition-delay: 0.23s; }
+        .reveal:nth-child(4) { transition-delay: 0.32s; }
+        .reveal:nth-child(5) { transition-delay: 0.41s; }
+        .reveal:nth-child(6) { transition-delay: 0.50s; }
+        .reveal:nth-child(7) { transition-delay: 0.59s; }
+
+        .reveal-scale {
+            opacity: 0; transform: scale(0.93);
+            transition: opacity var(--duration-normal) var(--ease-out-expo),
+                        transform var(--duration-normal) var(--ease-out-expo);
+        }
+        .slide.visible .reveal-scale { opacity: 1; transform: scale(1); }
+
+        /* Pulse glow for emphasis */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(79, 125, 247, 0.15); }
+            50% { box-shadow: 0 0 35px rgba(79, 125, 247, 0.3); }
+        }
+
+        /* === PROGRESS BAR === */
+        .progress-bar {
+            position: fixed; top: 0; left: 0; height: 2px;
+            background: var(--gradient-main); z-index: 1000;
+            transition: width 0.3s var(--ease-out-quart);
+        }
+
+        /* === NAV DOTS === */
+        .nav-dots {
+            position: fixed; right: clamp(12px, 2vw, 24px);
+            top: 50%; transform: translateY(-50%);
+            display: flex; flex-direction: column; gap: 8px; z-index: 1000;
+        }
+        .nav-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: rgba(255,255,255,0.15); border: none;
+            cursor: pointer; transition: all 0.3s ease; padding: 0;
+        }
+        .nav-dot.active {
+            background: var(--accent-blue);
+            box-shadow: 0 0 8px rgba(79, 125, 247, 0.5);
+            transform: scale(1.5);
+        }
+
+        /* === SLIDE NUMBER === */
+        .slide-num {
+            position: absolute;
+            bottom: clamp(10px, 1.5vw, 20px); right: clamp(12px, 3vw, 32px);
+            font-family: var(--font-display); font-size: var(--small-size);
+            color: var(--text-muted); letter-spacing: 0.05em;
+        }
+
+        /* === BACKGROUND ORBS === */
+        .orb {
+            position: absolute; border-radius: 50%; filter: blur(80px);
+            pointer-events: none; opacity: 0.35;
+        }
+        .orb-blue { background: radial-gradient(circle, rgba(79, 125, 247, 0.5), transparent 70%); }
+        .orb-purple { background: radial-gradient(circle, rgba(168, 85, 247, 0.4), transparent 70%); }
+        .orb-cyan { background: radial-gradient(circle, rgba(6, 182, 212, 0.3), transparent 70%); }
+        .grid-overlay {
+            position: absolute; inset: 0; pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        /* === SHARED CARD === */
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 12px; padding: clamp(12px, 1.5vw, 22px);
+        }
+
+        /* === BADGE / TAG === */
+        .badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: clamp(3px, 0.4vw, 6px) clamp(10px, 1.2vw, 16px);
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 100px; font-size: var(--tag-size);
+            color: var(--text-secondary); letter-spacing: 0.05em;
+        }
+        .badge-green {
+            background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);
+            color: var(--accent-green); font-weight: 600;
+        }
+
+        /* === KEYBOARD HINT === */
+        .keyboard-hint {
+            position: fixed; bottom: clamp(10px, 1.5vh, 18px); left: 50%; transform: translateX(-50%);
+            font-size: var(--tag-size); color: var(--text-muted);
+            display: flex; align-items: center; gap: 6px;
+            opacity: 0; transition: opacity 1s ease 2s; z-index: 999;
+        }
+        .keyboard-hint.show { opacity: 1; }
+        .kbd {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 2px 6px; background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+        }
+
+        /* ===========================================
+           SLIDE 1: HOOK
+           =========================================== */
+        .hook-slide .slide-content {
+            gap: var(--content-gap);
+        }
+        .hook-slide h1 {
+            font-size: clamp(2.2rem, 5vw, 4.2rem); font-weight: 700;
+            letter-spacing: -0.02em; max-width: min(95vw, 1100px);
+        }
+        .hook-sub {
+            font-size: var(--subtitle-size); color: var(--text-secondary);
+            max-width: 550px; line-height: 1.6;
+        }
+
+        /* ===========================================
+           SLIDE 2: PAIN POINTS
+           =========================================== */
+        .pain-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: clamp(8px, 1.2vw, 16px); margin-top: var(--content-gap);
+            max-width: min(95vw, 1000px); width: 100%;
+        }
+        .pain-card {
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 12px; padding: clamp(14px, 1.8vw, 26px);
+            display: flex; flex-direction: column; align-items: center; gap: clamp(6px, 0.6vw, 10px);
+            border-top: 2px solid var(--accent-red); text-align: center;
+        }
+        .pain-num {
+            font-family: var(--font-display); font-size: clamp(1.8rem, 3vw, 2.8rem);
+            font-weight: 700; color: rgba(239, 68, 68, 0.25); line-height: 1;
+        }
+        .pain-card h3 { font-size: var(--h2-size); font-weight: 700; }
+        .pain-card p { font-size: var(--body-size); color: var(--text-secondary); line-height: 1.5; }
+        .pain-bottom {
+            margin-top: var(--content-gap); text-align: center;
+            font-size: var(--body-size); color: var(--text-muted); font-style: italic;
+        }
+        .pain-bottom strong { color: var(--text-secondary); }
+
+        /* ===========================================
+           SLIDE 3: PRODUCT REVEAL
+           =========================================== */
+        .reveal-slide .slide-content {
+            gap: var(--content-gap);
+        }
+        .reveal-slide h1 {
+            font-size: clamp(1.8rem, 4.5vw, 3.8rem);
+            font-weight: 700; letter-spacing: -0.02em;
+        }
+        .solution-map {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: clamp(12px, 2vw, 24px); width: 100%; max-width: min(95vw, 1300px);
+            margin-top: clamp(4px, 0.8vh, 12px);
+        }
+        .solution-preview {
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 12px; padding: clamp(16px, 2vw, 32px);
+        }
+        .solution-preview .num {
+            font-family: var(--font-display); font-weight: 700;
+            font-size: var(--body-size); margin-bottom: 4px;
+        }
+        .solution-preview .num.c1 { color: var(--accent-blue); }
+        .solution-preview .num.c2 { color: var(--accent-purple); }
+        .solution-preview .num.c3 { color: var(--accent-cyan); }
+        .solution-preview h3 { font-size: var(--h3-size); font-weight: 600; margin-bottom: 2px; }
+        .solution-preview p { font-size: var(--body-size); color: var(--text-secondary); line-height: 1.4; }
+
+        /* ===========================================
+           SLIDE 4-6: FEATURE DEEP DIVES
+           =========================================== */
+        /* Feature slide: left-right grid layout with row alignment */
+        .feature-slide .slide-content {
+            gap: 0; justify-content: center; align-items: center;
+        }
+        .feature-layout {
+            display: grid; grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto auto auto;
+            column-gap: clamp(2rem, 4vw, 5rem);
+            row-gap: clamp(0.6rem, 1.2vw, 1.2rem);
+            align-items: start;
+            max-width: min(95vw, 1400px); width: 100%;
+        }
+        /* Row assignments: both sides share same rows */
+        .feat-row1-left  { grid-column: 1; grid-row: 1; }
+        .feat-row1-right { grid-column: 2; grid-row: 1; }
+        .feat-row2-left  { grid-column: 1; grid-row: 2; }
+        .feat-row2-right { grid-column: 2; grid-row: 2; }
+        .feat-row3-left  { grid-column: 1; grid-row: 3; }
+        .feat-row3-right { grid-column: 2; grid-row: 3; }
+        .feat-row4-left  { grid-column: 1; grid-row: 4; }
+        .feat-row4-right { grid-column: 2; grid-row: 4; }
+        @media (max-width: 900px) {
+            .feature-layout {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto;
+            }
+            .feature-layout > * { grid-column: 1 !important; grid-row: auto !important; }
+        }
+
+        /* Left: pain elements */
+        .pain-number {
+            font-family: var(--font-display); font-weight: 700;
+            font-size: var(--tag-size); text-transform: uppercase;
+            letter-spacing: 0.12em; align-self: center;
+        }
+        .pain-number.red { color: rgba(239, 68, 68, 0.7); }
+        .pain-title {
+            font-family: var(--font-display); font-weight: 700;
+            font-size: var(--h2-size); line-height: 1.15; color: var(--text-primary);
+        }
+        .pain-desc {
+            font-size: var(--body-size); line-height: 1.6; color: var(--text-secondary);
+        }
+        .pain-example {
+            padding: clamp(14px, 1.5vw, 22px); border-radius: 10px;
+            background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.1);
+            font-size: var(--body-size); line-height: 1.5; color: var(--text-secondary);
+        }
+        .pain-example .pain-example-label {
+            font-family: var(--font-display); font-weight: 600;
+            font-size: var(--tag-size); color: rgba(239, 68, 68, 0.6);
+            letter-spacing: 0.08em; margin-bottom: 6px;
+        }
+
+        /* Right: solution elements */
+        .solution-header {
+            display: flex; align-items: center; gap: clamp(10px, 1.2vw, 16px);
+        }
+        .feature-icon {
+            width: clamp(44px, 5vw, 64px); height: clamp(44px, 5vw, 64px);
+            border-radius: 14px; display: flex; align-items: center; justify-content: center;
+            font-size: clamp(1.5rem, 2.5vw, 2.2rem); flex-shrink: 0;
+        }
+        .feature-icon.blue { background: rgba(79, 125, 247, 0.15); }
+        .feature-icon.purple { background: rgba(168, 85, 247, 0.15); }
+        .feature-icon.cyan { background: rgba(6, 182, 212, 0.15); }
+        .solution-title {
+            font-family: var(--font-display); font-weight: 700;
+            font-size: var(--h2-size); line-height: 1.15;
+        }
+        .solution-subtitle {
+            font-size: var(--subtitle-size); color: var(--text-secondary); line-height: 1.5;
+        }
+        .feature-points {
+            display: flex; flex-direction: column; gap: clamp(6px, 0.8vh, 12px);
+            list-style: none; width: 100%; text-align: left;
+        }
+        .feature-points li {
+            display: flex; align-items: flex-start; gap: 10px;
+            font-size: var(--body-size); line-height: 1.5;
+        }
+        .feature-points li::before {
+            content: ''; flex-shrink: 0;
+            width: 7px; height: 7px; border-radius: 50%;
+            margin-top: 0.5em;
+        }
+        .feature-points.blue li::before { background: var(--accent-blue); }
+        .feature-points.purple li::before { background: var(--accent-purple); }
+        .feature-points.cyan li::before { background: var(--accent-cyan); }
+
+        /* Solution badges / extras */
+        .solution-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: clamp(10px, 1vw, 14px) clamp(16px, 1.8vw, 24px);
+            background: rgba(34, 197, 94, 0.06); border: 1px solid rgba(34, 197, 94, 0.15);
+            border-radius: 10px; font-size: var(--body-size); color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Flow diagram */
+        .flow-row {
+            display: flex; align-items: center; gap: clamp(4px, 0.6vw, 8px);
+            flex-wrap: wrap;
+        }
+        .flow-step {
+            padding: clamp(6px, 0.6vw, 10px) clamp(10px, 1.2vw, 16px);
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 10px; font-size: var(--small-size); white-space: nowrap;
+        }
+        .flow-step.highlight {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(79, 125, 247, 0.12));
+            border-color: var(--border-accent); color: var(--text-primary); font-weight: 600;
+        }
+        .flow-arrow { color: var(--text-muted); font-size: var(--body-size); }
+
+        /* Live badges */
+        .live-badges {
+            display: flex; gap: clamp(6px, 1vw, 12px); flex-wrap: wrap;
+        }
+        .live-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: clamp(8px, 0.8vw, 12px) clamp(16px, 1.8vw, 24px);
+            background: rgba(34, 197, 94, 0.06); border: 1px solid rgba(34, 197, 94, 0.15);
+            border-radius: 10px; font-size: var(--body-size); color: var(--text-primary);
+            font-weight: 500;
+        }
+        .live-dot {
+            width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+        }
+
+        /* Flywheel */
+        .flywheel {
+            display: flex; align-items: center;
+            gap: clamp(4px, 0.6vw, 8px); flex-wrap: wrap;
+        }
+        .flywheel-step {
+            padding: clamp(6px, 0.6vw, 10px) clamp(10px, 1.2vw, 16px);
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 10px; font-size: var(--small-size); text-align: center;
+        }
+        .flywheel-arrow { color: var(--accent-cyan); font-size: var(--body-size); }
+
+        .feature-quote {
+            font-size: var(--body-size); font-style: italic; color: var(--text-muted);
+        }
+        .feature-quote strong { color: var(--text-secondary); }
+
+        /* ===========================================
+           SLIDE 7: DEMO
+           =========================================== */
+        .demo-milestones {
+            display: grid; grid-template-columns: repeat(2, 1fr);
+            gap: clamp(6px, 1vw, 12px); margin-top: var(--content-gap);
+            max-width: min(90vw, 800px); width: 100%;
+        }
+        @media (max-width: 600px) { .demo-milestones { grid-template-columns: 1fr; } }
+        .milestone {
+            display: flex; align-items: center; gap: clamp(10px, 1.2vw, 16px);
+            padding: clamp(14px, 1.5vw, 22px);
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 12px; text-align: left;
+        }
+        .milestone-check {
+            flex-shrink: 0; width: clamp(28px, 3vw, 36px); height: clamp(28px, 3vw, 36px);
+            border-radius: 8px; background: rgba(34, 197, 94, 0.1);
+            color: var(--accent-green); display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: clamp(0.85rem, 1.3vw, 1.1rem);
+        }
+        .milestone h3 { font-size: var(--h3-size); font-weight: 600; }
+        .milestone p { font-size: var(--body-size); color: var(--text-secondary); }
+        .demo-cta {
+            margin-top: var(--content-gap); text-align: center;
+        }
+        .demo-btn {
+            display: inline-flex; align-items: center; gap: 10px;
+            padding: clamp(14px, 1.5vw, 20px) clamp(32px, 4vw, 52px);
+            background: var(--gradient-main); border: none; border-radius: 14px;
+            color: #fff; font-family: var(--font-display);
+            font-size: var(--h3-size); font-weight: 600;
+            cursor: pointer; animation: pulse-glow 3s infinite;
+        }
+
+        /* ===========================================
+           SLIDE 8: BUSINESS
+           =========================================== */
+        .biz-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: clamp(12px, 1.8vw, 22px); margin-top: var(--content-gap);
+            max-width: min(90vw, 900px); width: 100%; text-align: left;
+        }
+        @media (max-width: 768px) { .biz-grid { grid-template-columns: 1fr; } }
+        .biz-stats { display: flex; flex-direction: column; gap: clamp(6px, 0.8vh, 12px); }
+        .biz-stat {
+            padding: clamp(10px, 1.2vw, 16px);
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+        }
+        .biz-stat .val {
+            font-family: var(--font-display); font-weight: 700;
+            font-size: clamp(1.4rem, 2.8vw, 2.2rem);
+            background: var(--gradient-text);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .biz-stat .desc { font-size: var(--body-size); color: var(--text-secondary); margin-top: 2px; }
+        .pricing { display: flex; flex-direction: column; gap: clamp(5px, 0.7vh, 10px); }
+        .tier {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: clamp(10px, 1.2vw, 16px);
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+        }
+        .tier.pro {
+            border-color: var(--border-accent);
+            background: linear-gradient(135deg, rgba(79, 125, 247, 0.06), rgba(168, 85, 247, 0.06));
+        }
+        .tier-left h3 { font-size: var(--h3-size); font-weight: 600; }
+        .tier-left p { font-size: var(--body-size); color: var(--text-secondary); }
+        .tier-price {
+            font-family: var(--font-display); font-size: var(--h3-size);
+            font-weight: 700; color: var(--accent-blue);
+        }
+        .biz-path {
+            margin-top: var(--content-gap); text-align: center;
+            font-size: var(--small-size); color: var(--text-muted);
+        }
+
+        /* ===========================================
+           SLIDE 9: TECH + TEAM
+           =========================================== */
+        .tech-team-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: clamp(12px, 1.8vw, 22px); margin-top: var(--content-gap);
+            max-width: min(90vw, 900px); width: 100%; text-align: left;
+        }
+        @media (max-width: 768px) { .tech-team-grid { grid-template-columns: 1fr; } }
+        .tech-stack {
+            display: grid; grid-template-columns: repeat(2, 1fr);
+            gap: clamp(4px, 0.6vw, 8px);
+        }
+        .tech-item {
+            padding: clamp(8px, 1vw, 12px);
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+        }
+        .tech-item .label {
+            font-size: var(--small-size); color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+        }
+        .tech-item .val { font-size: var(--body-size); font-weight: 500; margin-top: 2px; }
+        .team-list {
+            display: flex; flex-direction: column; gap: clamp(4px, 0.5vh, 8px);
+            list-style: none;
+        }
+        .team-member {
+            display: flex; align-items: center; gap: clamp(8px, 1vw, 12px);
+            padding: clamp(8px, 1vw, 12px);
+            background: var(--bg-card); border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+        }
+        .team-avatar {
+            width: clamp(32px, 3.5vw, 42px); height: clamp(32px, 3.5vw, 42px);
+            border-radius: 10px; display: flex; align-items: center; justify-content: center;
+            font-size: clamp(0.9rem, 1.5vw, 1.2rem); flex-shrink: 0;
+        }
+        .team-member h3 { font-size: var(--h3-size); font-weight: 600; }
+        .team-member p { font-size: var(--body-size); color: var(--text-secondary); }
+        .team-member .role {
+            font-size: var(--small-size); font-weight: 600; color: var(--accent-blue);
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+
+        /* ===========================================
+           SLIDE 10: CLOSING
+           =========================================== */
+        .closing .slide-content {
+            gap: var(--content-gap);
+        }
+        .closing h1 {
+            font-size: var(--title-size); font-weight: 700; letter-spacing: -0.02em;
+        }
+        .closing-sub {
+            font-size: var(--subtitle-size); color: var(--text-secondary); max-width: 500px;
+        }
+        .closing-thanks {
+            font-size: var(--h3-size); color: var(--text-muted);
+            margin-top: clamp(4px, 1vh, 12px);
+        }
+        .closing-tags {
+            display: flex; gap: clamp(8px, 1.2vw, 16px); flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* === PARTICLES CANVAS === */
+        #particles { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <canvas id="particles"></canvas>
+    <div class="progress-bar" id="progressBar"></div>
+    <nav class="nav-dots" id="navDots" aria-label="Slide navigation"></nav>
+    <div class="keyboard-hint" id="keyboardHint">
+        <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> 翻页
+    </div>
+
+    <!-- =============================================
+         SLIDE 1: HOOK — 悬念开场
+         ============================================= -->
+    <section class="slide hook-slide" id="slide-0">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-blue" style="width:45vw;height:45vw;top:-15%;left:-10%;"></div>
+        <div class="orb orb-purple" style="width:35vw;height:35vw;bottom:-10%;right:-8%;"></div>
+        <div class="slide-content">
+            <div class="badge reveal">爱XIA创 AI 黑客松 · Agent 赛道</div>
+            <h1 class="reveal">AI 能写内容，但能帮你<span class="gradient-text">做好营销</span>吗？</h1>
+                写内容只是 <span style="font-size:1.6em;font-weight:600;">1</span>%<br>
+                从策略到发布到优化，<span style="font-size:1.6em;font-weight:600;">99</span>%没人帮你做
+        <span class="slide-num">01 / 10</span>
+    </section>
+
+    <!-- =============================================
+         SLIDE 2: 三大痛点
+         ============================================= -->
+    <section class="slide" id="slide-1">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-purple" style="width:25vw;height:25vw;top:5%;right:-5%;opacity:0.2;"></div>
+        <div class="slide-content">
+            <h1 class="reveal" style="font-size:var(--title-size);letter-spacing:-0.02em;">内容营销的 <span class="gradient-text">三个死结</span></h1>
+            <div class="pain-grid">
+                <div class="pain-card reveal">
+                    <div class="pain-num">01</div>
+                    <h3>AI 生成 <span style="color:#e53935;">=</span> 假大空</h3>
+                    <p>通用 AI 不了解你的产品、用户和案例，生成的内容千篇一律，没有真实参考，读者一眼看穿</p>
+                </div>
+                <div class="pain-card reveal">
+                    <div class="pain-num">02</div>
+                    <h3>写完了 <span style="color:#e53935;">≠</span> 发出去了</h3>
+                    <p>就算 AI 写好了，你还得登 5 个平台、逐个排版配图、复制粘贴点发布 —— 最累的活还是你干</p>
+                </div>
+                <div class="pain-card reveal">
+                    <div class="pain-num">03</div>
+                    <h3>发了 <span style="color:#e53935;">≠</span><br>发好了</h3>
+                    <p>发完就结束？不知道哪篇有效、哪篇浪费，没有数据反馈，下次还是盲猜，越做越累</p>
+                </div>
+            </div>
+            <p class="pain-bottom reveal" style="max-width: 900px; margin: 0 auto; white-space: nowrap;">
+                <strong style="font-size:1.15em; letter-spacing:0.01em;">"创业团队和中小企业最大的瓶颈，不是产品，是营销"</strong>
+            </p>
+        </div>
+        <span class="slide-num">02 / 10</span>
+    </section>
+
+    <!-- =============================================
+         SLIDE 3: 产品亮相 + 解法预览
+         ============================================= -->
+    <section class="slide reveal-slide" id="slide-2">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-blue" style="width:35vw;height:35vw;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.15;"></div>
+        <div class="slide-content">
+            <div class="badge reveal">🤖 AI Agent 营销操作系统</div>
+            <h1 class="reveal"><span class="gradient-text">ATM Agent OS</span></h1>
+            <p class="hook-sub reveal" style="margin-bottom:0;">你的 AI 营销军团 —— 三大核心能力，对应三个死结</p>
+            <div class="solution-map">
+                <div class="solution-preview reveal">
+                    <div class="num c1">痛点 01 →</div>
+                    <h3>上下文引擎</h3>
+                    <p>读懂你的产品和用户，生成有料的真实内容</p>
+                </div>
+                <div class="solution-preview reveal">
+                    <div class="num c2">痛点 02 →</div>
+                    <h3>全链路发布</h3>
+                    <p>不止写内容，直接帮你发到平台上</p>
+                </div>
+                <div class="solution-preview reveal">
+                    <div class="num c3">痛点 03 →</div>
+                    <h3>数据飞轮</h3>
+                    <p>越用越聪明，自动优化内容策略</p>
+                </div>
+            </div>
+            <p class="reveal text-muted" style="font-size:var(--small-size);margin-top:clamp(4px,0.5vh,8px);">
+                13 个专业 Agent · 基于 Claude Agent SDK · 多 Agent 协作架构
+            </p>
+        </div>
+        <span class="slide-num">03 / 10</span>
+    </section>
+
+    <!-- =============================================
+         SLIDE 4: 核心能力 ① 上下文引擎
+         ============================================= -->
+    <section class="slide feature-slide" id="slide-3">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-blue" style="width:25vw;height:25vw;bottom:5%;right:-5%;opacity:0.18;"></div>
+        <div class="slide-content">
+            <div class="feature-layout reveal">
+                <!-- Row 1: label -->
+                <div class="pain-number red feat-row1-left">⚡ 痛点 01</div>
+                <div class="solution-header feat-row1-right">
+                    <div class="feature-icon blue">📚</div>
+                    <h2 class="solution-title gradient-text">上下文引擎</h2>
+                </div>
+                <!-- Row 2: title / subtitle -->
+                <h2 class="pain-title feat-row2-left">AI 不了解你，<br>内容假大空</h2>
+                <p class="solution-subtitle feat-row2-right">AI 写内容，先要读懂你</p>
+                <!-- Row 3: desc / points -->
+                <p class="pain-desc feat-row3-left">通用 AI 对你的产品一无所知，写出来的内容千篇一律、空洞无物。</p>
+                <ul class="feature-points blue feat-row3-right">
+                    <li>导入<strong>产品文档、用户案例、历史爆款</strong>到 Context Vault</li>
+                    <li>Agent 创作前自动提取<strong>本地真实数据</strong>作为参考</li>
+                    <li>内容基于<strong>你的真实产品</strong>，不是千篇一律的废话</li>
+                </ul>
+                <!-- Row 4: example / badge -->
+                <div class="pain-example feat-row4-left">
+                    <div class="pain-example-label">❌ 通用 AI 输出</div>
+                    "我们的产品非常好用，欢迎体验！"<br>—— 谁都能说的废话
+                </div>
+                <div class="solution-badge feat-row4-right">✅ 基于真实案例 + 产品文档 → 有据可依、有料可写</div>
+            </div>
+        </div>
+        <span class="slide-num">04 / 10</span>
+    </section>
+
+    <!-- =============================================
+         SLIDE 5: 核心能力 ② 全链路发布 (BIGGEST WOW)
+         ============================================= -->
+    <section class="slide feature-slide" id="slide-4">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-purple" style="width:30vw;height:30vw;top:-5%;left:-5%;opacity:0.22;"></div>
+        <div class="orb orb-cyan" style="width:20vw;height:20vw;bottom:10%;right:5%;opacity:0.12;"></div>
+        <div class="slide-content">
+            <div class="feature-layout reveal">
+                <!-- Row 1: label -->
+                <div class="pain-number red feat-row1-left">⚡ 痛点 02</div>
+                <div class="solution-header feat-row1-right">
+                    <div class="feature-icon purple">🚀</div>
+                    <h2 class="solution-title gradient-text">全链路发布</h2>
+                </div>
+                <!-- Row 2: title / subtitle -->
+                <h2 class="pain-title feat-row2-left">写完了还得<br>手动登5个平台发</h2>
+                <p class="solution-subtitle feat-row2-right">不止写内容，我们帮你<strong style="color:var(--text-primary)">点"发送"</strong></p>
+                <!-- Row 3: desc / flow + points -->
+                <p class="pain-desc feat-row3-left">内容写好了，还要登录小红书、公众号、Twitter……逐个复制粘贴、排版、上传图片。80% 时间浪费在重复操作上。</p>
+                <div class="feat-row3-right" style="display:flex;flex-direction:column;gap:clamp(0.6rem,1vw,1rem);">
+                    <div class="flow-row">
+                        <span class="flow-step">信息提取</span>
+                        <span class="flow-arrow">→</span>
+                        <span class="flow-step">内容撰写</span>
+                        <span class="flow-arrow">→</span>
+                        <span class="flow-step">配图生成</span>
+                        <span class="flow-arrow">→</span>
+                        <span class="flow-step">排版适配</span>
+                        <span class="flow-arrow">→</span>
+                        <span class="flow-step highlight">发布 ✓</span>
+                    </div>
+                    <ul class="feature-points purple">
+                        <li><strong>Playwright 浏览器自动化 + 多 Agent 协作</strong></li>
+                        <li>不是生成草稿让你复制粘贴 —— 是<strong>真的帮你发出去</strong></li>
+                    </ul>
+                </div>
+                <!-- Row 4: example / badges -->
+                <div class="pain-example feat-row4-left">
+                    <div class="pain-example-label">❌ 现状</div>
+                    写 1 篇内容 → 登 5 个平台 → 分别排版 → 逐个发布
+                </div>
+                <div class="live-badges feat-row4-right">
+                    <span class="live-badge"><span class="live-dot"></span> 小红书全自动发布</span>
+                    <span class="live-badge"><span class="live-dot"></span> 微信公众号自动推文</span>
+                </div>
+            </div>
+        </div>
+        <span class="slide-num">05 / 10</span>
+    </section>
+
+    <!-- =============================================
+         SLIDE 6: 核心能力 ③ 数据飞轮
+         ============================================= -->
+    <section class="slide feature-slide" id="slide-5">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-cyan" style="width:28vw;height:28vw;top:10%;right:-8%;opacity:0.18;"></div>
+        <div class="slide-content">
+            <div class="feature-layout reveal">
+                <!-- Row 1: label -->
+                <div class="pain-number red feat-row1-left">⚡ 痛点 03</div>
+                <div class="solution-header feat-row1-right">
+                    <div class="feature-icon cyan">🔄</div>
+                    <h2 class="solution-title gradient-text">数据飞轮</h2>
+                </div>
+                <!-- Row 2: title / subtitle -->
+                <h2 class="pain-title feat-row2-left">发了不知道好不好，<br>下次还是盲猜</h2>
+                <p class="solution-subtitle feat-row2-right">越用越聪明，内容营销的<strong style="color:var(--text-primary)">取其精华</strong></p>
+                <!-- Row 3: desc / points -->
+                <p class="pain-desc feat-row3-left">发布后没有数据闭环，不知道哪些内容有效、哪些无效，每次都从零开始。</p>
+                <ul class="feature-points cyan feat-row3-right">
+                    <li>发布后基于<strong>阅读、互动、转化</strong>数据自动分析</li>
+                    <li><strong>强化好的、弱化差的</strong> → 整理成 SOP 和 Skills</li>
+                    <li>借助 <strong>A/B Test</strong> 持续优化标题、hook、发布时间</li>
+                </ul>
+                <!-- Row 4: example / flywheel -->
+                <div class="pain-example feat-row4-left">
+                    <div class="pain-example-label">❌ 现状</div>
+                    发了 → 看个点赞数 → 下次继续凭感觉<br>—— 永远无法沉淀方法论
+                </div>
+                <div class="feat-row4-right" style="display:flex;flex-direction:column;gap:clamp(0.4rem,0.8vw,0.8rem);">
+                    <div class="flywheel">
+                        <div class="flywheel-step">📝 创作</div>
+                        <span class="flywheel-arrow">→</span>
+                        <div class="flywheel-step">📤 发布</div>
+                        <span class="flywheel-arrow">→</span>
+                        <div class="flywheel-step">📊 数据回收</div>
+                        <span class="flywheel-arrow">→</span>
+                        <div class="flywheel-step">🧠 优化</div>
+                        <span class="flywheel-arrow">♻️</span>
+                    </div>
+                    <p class="feature-quote"><strong>"Agent 的 Skills 自动进化 —— 不是静态模板，是会学习的团队"</strong></p>
+                </div>
+            </div>
+        </div>
+        <span class="slide-num">06 / 10</span>
+    </section>
+
+    <!-- =============================================
+         SLIDE 7: DEMO + 已验证成果
+         ============================================= -->
+    <section class="slide" id="slide-6">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-blue" style="width:25vw;height:25vw;bottom:-5%;left:10%;opacity:0.15;"></div>
+        <div class="slide-content">
+            <h1 class="reveal" style="font-size:var(--title-size);letter-spacing:-0.02em;">不是概念，是<span class="gradient-green-text">已经跑通的产品</span></h1>
+            <div class="demo-milestones">
+                <div class="milestone reveal">
+                    <div class="milestone-check">✓</div>
+                    <div>
+                        <h3>小红书全自动发布</h3>
+                        <p>文+图，从选题到发帖全链路</p>
+                    </div>
+                </div>
+                <div class="milestone reveal">
+                    <div class="milestone-check">✓</div>
+                    <div>
+                        <h3>微信公众号自动推文</h3>
+                        <p>素材检索→改写→排版→推送发布</p>
+                    </div>
+                </div>
+                <div class="milestone reveal">
+                    <div class="milestone-check">✓</div>
+                    <div>
+                        <h3>Desktop + Web 双端</h3>
+                        <p>Electron 桌面端 + Web 端功能同步</p>
+                    </div>
+                </div>
+                <div class="milestone reveal">
+                    <div class="milestone-check">✓</div>
+                    <div>
+                        <h3>13 Agent 协同调度</h3>
+                        <p>CEO Agent 自主决策、分配、汇报</p>
+                    </div>
+                </div>
+            </div>
+            <div class="demo-cta reveal">
+                <div class="demo-btn">▶ 播放 Demo 视频</div>
+            </div>
+        </div>
+        <span class="slide-num">07 / 10</span>
+    </section>
+
+    <!-- =============================================
+         SLIDE 8: 商业模式
+         ============================================= -->
+    <section class="slide" id="slide-7">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-purple" style="width:30vw;height:30vw;top:-10%;right:-8%;opacity:0.2;"></div>
+        <div class="slide-content">
+            <h1 class="reveal" style="font-size:var(--title-size);letter-spacing:-0.02em;">5000 亿市场的 <span class="gradient-text">AI 入口</span></h1>
+            <div class="biz-grid">
+                <div class="biz-stats reveal">
+                    <div class="biz-stat">
+                        <div class="val">5000亿+</div>
+                        <div class="desc">中国内容营销市场规模</div>
+                    </div>
+                    <div class="biz-stat">
+                        <div class="val">8000万+</div>
+                        <div class="desc">创业者 / 小微企业 —— 没有营销团队</div>
+                    </div>
+                    <div class="biz-stat">
+                        <div class="val">4000万+</div>
+                        <div class="desc">中小企业 —— 营销人效亟需提升</div>
+                    </div>
+                </div>
+                <div class="reveal">
+                    <div class="pricing">
+                        <div class="tier">
+                            <div class="tier-left">
+                                <h3>Free</h3>
+                                <p>单 Agent 基础自动化</p>
+                            </div>
+                            <div class="tier-price">¥0</div>
+                        </div>
+                        <div class="tier pro">
+                            <div class="tier-left">
+                                <h3>Pro ⭐</h3>
+                                <p>全 Agent 团队 + 无限发布</p>
+                            </div>
+                            <div class="tier-price">¥299/月</div>
+                        </div>
+                        <div class="tier">
+                            <div class="tier-left">
+                                <h3>Enterprise</h3>
+                                <p>定制 Agent + API + 私有部署</p>
+                            </div>
+                            <div class="tier-price">定制</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <p class="biz-path reveal">
+                落地路径: 创作者 → 小微电商 → 中小企业营销部
+            </p>
+            <p class="biz-source reveal" style="font-size:var(--tag-size);color:var(--text-muted);text-align:center;margin-top:clamp(4px,0.5vh,8px);">
+                数据来源：艾瑞咨询《2024年中国内容营销行业研究报告》、国家市场监督管理总局企业登记数据
+            </p>
+        </div>
+        <span class="slide-num">08 / 10</span>
+    </section>
+
+    <!-- =============================================
+         SLIDE 9: 技术 + 团队
+         ============================================= -->
+    <section class="slide" id="slide-8">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-cyan" style="width:20vw;height:20vw;bottom:10%;left:-3%;opacity:0.12;"></div>
+        <div class="slide-content">
+            <h1 class="reveal" style="font-size:var(--title-size);letter-spacing:-0.02em;">技术过硬，<span class="gradient-text">团队靠谱</span></h1>
+            <div class="tech-team-grid">
+                <div class="reveal">
+                    <p class="text-secondary" style="font-size:var(--small-size);margin-bottom:clamp(6px,0.8vh,10px);font-weight:600;">技术栈</p>
+                    <div class="tech-stack">
+                        <div class="tech-item">
+                            <div class="label">Agent</div>
+                            <div class="val">Claude Agent SDK</div>
+                        </div>
+                        <div class="tech-item">
+                            <div class="label">前端</div>
+                            <div class="val">Next.js 16 + React 19</div>
+                        </div>
+                        <div class="tech-item">
+                            <div class="label">桌面端</div>
+                            <div class="val">Electron + shadcn/ui</div>
+                        </div>
+                        <div class="tech-item">
+                            <div class="label">数据库</div>
+                            <div class="val">Supabase PostgreSQL</div>
+                        </div>
+                        <div class="tech-item">
+                            <div class="label">自动化</div>
+                            <div class="val">Playwright 浏览器</div>
+                        </div>
+                        <div class="tech-item">
+                            <div class="label">工程</div>
+                            <div class="val">TS Strict · Monorepo</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="reveal">
+                    <p class="text-secondary" style="font-size:var(--small-size);margin-bottom:clamp(6px,0.8vh,10px);font-weight:600;">团队</p>
+                    <ul class="team-list">
+                        <li class="team-member">
+                            <div class="team-avatar" style="background:rgba(79,125,247,0.12);">👨‍💼</div>
+                            <div>
+                                <div class="role">PM</div>
+                                <h3>Jayden</h3>
+                                <p>AI 营销连续创业者</p>
+                            </div>
+                        </li>
+                        <li class="team-member">
+                            <div class="team-avatar" style="background:rgba(168,85,247,0.12);">👨‍💻</div>
+                            <div>
+                                <div class="role">前端</div>
+                                <h3>卢清</h3>
+                                <p>大厂开发工程师</p>
+                            </div>
+                        </li>
+                        <li class="team-member">
+                            <div class="team-avatar" style="background:rgba(6,182,212,0.12);">🧠</div>
+                            <div>
+                                <div class="role">算法</div>
+                                <h3>陈老师</h3>
+                                <p>大厂算法工程师</p>
+                            </div>
+                        </li>
+                        <li class="team-member">
+                            <div class="team-avatar" style="background:rgba(34,197,94,0.12);">⚡</div>
+                            <div>
+                                <div class="role">全栈</div>
+                                <h3>邱老师</h3>
+                                <p>GitHub 万星独立开发者</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <span class="slide-num">09 / 10</span>
+    </section>
+
+    <!-- =============================================
+         SLIDE 10: CLOSING
+         ============================================= -->
+    <section class="slide closing" id="slide-9">
+        <div class="grid-overlay"></div>
+        <div class="orb orb-blue" style="width:45vw;height:45vw;top:-15%;left:-10%;"></div>
+        <div class="orb orb-purple" style="width:40vw;height:40vw;bottom:-15%;right:-10%;"></div>
+        <div class="slide-content">
+            <div class="badge reveal">🤖 AI Marketing Agent OS</div>
+            <h1 class="reveal"><span class="gradient-text">ATM OS</span><br>你的 AI营销军团</h1>
+            <p class="closing-sub reveal">让每个团队都有自己的 AI 营销操作系统</p>
+            <div class="closing-tags reveal">
+                <span class="badge">📚 上下文引擎</span>
+                <span class="badge">🚀 全链路发布</span>
+                <span class="badge">🔄 数据飞轮</span>
+            </div>
+            <p class="closing-thanks reveal">谢谢各位评委！</p>
+        </div>
+        <span class="slide-num">10 / 10</span>
+    </section>
+
+    <!-- =============================================
+         JAVASCRIPT
+         ============================================= -->
+    <script>
+        class SlidePresentation {
+            constructor() {
+                this.slides = document.querySelectorAll('.slide');
+                this.currentSlide = 0;
+                this.isTransitioning = false;
+                this.totalSlides = this.slides.length;
+                this.setupObserver();
+                this.setupKeyboard();
+                this.setupTouch();
+                this.setupWheel();
+                this.setupProgress();
+                this.setupDots();
+                setTimeout(() => {
+                    const h = document.getElementById('keyboardHint');
+                    if (h) h.classList.add('show');
+                }, 500);
+            }
+            setupObserver() {
+                const obs = new IntersectionObserver(entries => {
+                    entries.forEach(e => {
+                        if (e.isIntersecting) {
+                            e.target.classList.add('visible');
+                            const idx = [...this.slides].indexOf(e.target);
+                            if (idx !== -1) { this.currentSlide = idx; this.updateUI(); }
+                        }
+                    });
+                }, { threshold: 0.5 });
+                this.slides.forEach(s => obs.observe(s));
+            }
+            setupKeyboard() {
+                document.addEventListener('keydown', e => {
+                    if (this.isTransitioning) return;
+                    const map = { ArrowRight: 1, ArrowDown: 1, ' ': 1, PageDown: 1,
+                                   ArrowLeft: -1, ArrowUp: -1, PageUp: -1 };
+                    if (map[e.key] !== undefined) { e.preventDefault(); this.go(this.currentSlide + map[e.key]); }
+                    if (e.key === 'Home') { e.preventDefault(); this.go(0); }
+                    if (e.key === 'End') { e.preventDefault(); this.go(this.totalSlides - 1); }
+                });
+            }
+            setupTouch() {
+                let sy = 0;
+                document.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
+                document.addEventListener('touchend', e => {
+                    if (this.isTransitioning) return;
+                    const dy = sy - e.changedTouches[0].clientY;
+                    if (Math.abs(dy) > 50) this.go(dy > 0 ? this.currentSlide + 1 : this.currentSlide - 1);
+                }, { passive: true });
+            }
+            setupWheel() {
+                let last = 0;
+                document.addEventListener('wheel', e => {
+                    const now = Date.now();
+                    if (now - last < 800 || this.isTransitioning) return;
+                    last = now;
+                    if (e.deltaY > 30) this.go(this.currentSlide + 1);
+                    else if (e.deltaY < -30) this.go(this.currentSlide - 1);
+                }, { passive: true });
+            }
+            go(idx) {
+                if (idx < 0 || idx >= this.totalSlides || idx === this.currentSlide) return;
+                this.isTransitioning = true;
+                this.currentSlide = idx;
+                this.slides[idx].scrollIntoView({ behavior: 'smooth' });
+                this.updateUI();
+                const hint = document.getElementById('keyboardHint');
+                if (hint) hint.style.opacity = '0';
+                setTimeout(() => { this.isTransitioning = false; }, 700);
+            }
+            setupProgress() {
+                this.bar = document.getElementById('progressBar');
+                this.updateUI();
+            }
+            setupDots() {
+                const c = document.getElementById('navDots');
+                if (!c) return;
+                this.slides.forEach((_, i) => {
+                    const d = document.createElement('button');
+                    d.className = 'nav-dot' + (i === 0 ? ' active' : '');
+                    d.setAttribute('aria-label', `Slide ${i + 1}`);
+                    d.addEventListener('click', () => this.go(i));
+                    c.appendChild(d);
+                });
+                this.dots = c.querySelectorAll('.nav-dot');
+            }
+            updateUI() {
+                if (this.bar) this.bar.style.width = ((this.currentSlide + 1) / this.totalSlides * 100) + '%';
+                if (this.dots) this.dots.forEach((d, i) => d.classList.toggle('active', i === this.currentSlide));
+            }
+        }
+
+        class Particles {
+            constructor(canvas) {
+                this.c = canvas; this.ctx = canvas.getContext('2d'); this.p = [];
+                this.resize(); this.init(); this.loop();
+                window.addEventListener('resize', () => this.resize());
+            }
+            resize() { this.c.width = innerWidth; this.c.height = innerHeight; }
+            init() {
+                const n = Math.min(35, Math.floor(innerWidth / 35));
+                for (let i = 0; i < n; i++) this.p.push({
+                    x: Math.random() * this.c.width, y: Math.random() * this.c.height,
+                    vx: (Math.random() - 0.5) * 0.25, vy: (Math.random() - 0.5) * 0.25,
+                    r: Math.random() * 1.2 + 0.4, a: Math.random() * 0.25 + 0.05
+                });
+            }
+            loop() {
+                this.ctx.clearRect(0, 0, this.c.width, this.c.height);
+                for (const p of this.p) {
+                    p.x += p.vx; p.y += p.vy;
+                    if (p.x < 0) p.x = this.c.width; if (p.x > this.c.width) p.x = 0;
+                    if (p.y < 0) p.y = this.c.height; if (p.y > this.c.height) p.y = 0;
+                    this.ctx.beginPath(); this.ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    this.ctx.fillStyle = `rgba(79,125,247,${p.a})`; this.ctx.fill();
+                }
+                for (let i = 0; i < this.p.length; i++)
+                    for (let j = i + 1; j < this.p.length; j++) {
+                        const dx = this.p[i].x - this.p[j].x, dy = this.p[i].y - this.p[j].y;
+                        const d = Math.sqrt(dx * dx + dy * dy);
+                        if (d < 110) {
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(this.p[i].x, this.p[i].y);
+                            this.ctx.lineTo(this.p[j].x, this.p[j].y);
+                            this.ctx.strokeStyle = `rgba(79,125,247,${0.035 * (1 - d / 110)})`;
+                            this.ctx.stroke();
+                        }
+                    }
+                requestAnimationFrame(() => this.loop());
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new SlidePresentation();
+            new Particles(document.getElementById('particles'));
+        });
+    </script>
+</body>
+</html>
